@@ -46,8 +46,8 @@ impl ASTNode for Function {
     fn emit(self) -> String {
         format!(
             "\
-             global _{0}\n\
-             _{0}:\n\
+             global {0}\n\
+             {0}:\n\
              {1} \
              ",
             self.name,
