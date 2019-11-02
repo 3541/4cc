@@ -1,4 +1,13 @@
 use peeking_take_while::PeekableExt;
+//use snafu::Snafu;
+
+/*#[derive(Debug, Snafu)]
+enum Error {
+    #[snafu(display("Expected {:?}. Found {}.", expected, found))]
+    UnmatchedToken { expected: Token, found: char },
+}
+
+type Result<T, E = Error> = std::result::Result<T, E>;*/
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
@@ -10,7 +19,13 @@ pub enum Token {
     Keyword(Keyword),
     Identifier(String),
     Literal(Literal),
+    Negative,
+    Complement,
+    Negation,
     Unidentified,
+    Addition,
+    Multiplication,
+    Division,
 }
 
 #[derive(Debug, PartialEq)]
@@ -53,10 +68,40 @@ pub fn lex(s: &str) -> Vec<Token> {
                 it.next();
                 Token::Semicolon
             }
+            '-' => {
+                it.next();
+                Token::Negative
+            }
+            '~' => {
+                it.next();
+                Token::Complement
+            }
+            '!' => {
+                it.next();
+                Token::Negation
+            }
+            '+' => {
+                it.next();
+                Token::Addition
+            }
+            '*' => {
+                it.next();
+                Token::Multiplication
+            }
+            '/' => {
+                it.next();
+                Token::Division
+            }
             'A'..='Z' | 'a'..='z' => {
                 match it
                     .by_ref()
-                    .peeking_take_while(|&c| (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
+                    .peeking_take_while(|&c| {
+                        (c >= 'A' && c <= 'Z')
+                            || (c >= 'a' && c <= 'z')
+                            || (c >= '0' && c <= '9')
+                            || c == '-'
+                            || c == '_'
+                    })
                     .collect::<String>()
                     .as_ref()
                 {
@@ -80,7 +125,6 @@ pub fn lex(s: &str) -> Vec<Token> {
         it.by_ref()
             .peeking_take_while(|&c| c == '\t' || c == ' ' || c == '\n')
             .last();
-        //        println!("Got {:?}", tok.last().unwrap());
     }
     tok
 }
