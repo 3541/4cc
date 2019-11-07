@@ -4,11 +4,18 @@ use super::lex::{Keyword, Literal, Token};
 
 #[derive(Debug, Snafu)]
 pub enum Error {
-    #[snafu(display("Expected {:?}. Found {:?} instead.", expected, found))]
+    #[snafu(display(
+        "Failed trying to parse a {}.\n\tExpected one of {:?}.\n\tFound {:?} instead.\n\tRemaining context: {:?}",
+        wanted,
+        expected,
+        found,
+        tokens
+    ))]
     UnexpectedToken {
-        wanted: ,
-        expected: Token,
+        wanted: &'static str,
+        expected: Vec<Token>,
         found: Token,
+        tokens: Vec<Token>,
     },
 
     InvalidSyntax,
@@ -42,17 +49,17 @@ struct Function {
 
 impl ASTNode for Function {
     fn parse<I: Iterator<Item = Token>>(t: &mut I) -> Result<Function> {
-        consume_token(t, Token::Keyword(Keyword::Int));
+        consume_token(t, Token::Keyword(Keyword::Int))?;
 
         if let Token::Identifier(name) = t.next().unwrap() {
-            consume_token(t, Token::OpenParenthesis);
-            consume_token(t, Token::CloseParenthesis);
-            consume_token(t, Token::OpenBrace);
+            consume_token(t, Token::OpenParenthesis)?;
+            consume_token(t, Token::CloseParenthesis)?;
+            consume_token(t, Token::OpenBrace)?;
             let ret = Function {
                 name,
                 body: Statement::parse(t)?,
             };
-            consume_token(t, Token::CloseBrace);
+            consume_token(t, Token::CloseBrace)?;
             return Ok(ret);
         }
 
@@ -80,13 +87,18 @@ enum Statement {
 impl ASTNode for Statement {
     fn parse<I: Iterator<Item = Token>>(t: &mut I) -> Result<Statement> {
         match t.next().unwrap() {
-            Token::Keyword(Keyword::Return) => {
-                consume_token(t, Token::Semicolon);
-                Ok(Statement::Return(Expression::parse(t)?))
-            }
+            Token::Keyword(Keyword::Return) => Ok(Statement::Return(match Expression::parse(t)? {
+                Expression::Null => Expression::Null,
+                e => {
+                    consume_token(t, Token::Semicolon)?;
+                    e
+                }
+            })),
             tok => Err(Error::UnexpectedToken {
-                expected: Token::Keyword(Keyword::Return),
+                wanted: "Statement",
+                expected: vec![Token::Keyword(Keyword::Return)],
                 found: tok,
+                tokens: t.collect(),
             }),
         }
     }
@@ -108,6 +120,7 @@ enum Expression {
     Constant(Constant),
     Unary(UnaryOperator, Box<Expression>),
     Binary(BinaryOperator, Box<Expression>, Box<Expression>),
+    Null,
 }
 
 impl ASTNode for Expression {
@@ -122,9 +135,21 @@ impl ASTNode for Expression {
             tok @ Token::Literal(_) => Ok(Expression::Constant(Constant::parse(
                 vec![tok].into_iter().by_ref(),
             )?)),
-            tok => panic!("Expected an expression"),
+            Token::Semicolon => Ok(Expression::Null),
+            tok => Err(Error::UnexpectedToken {
+                wanted: "Expression",
+                expected: vec![
+                    Token::Negative,
+                    Token::Negation,
+                    Token::Complement,
+                    Token::Literal(Literal::None),
+                ],
+                found: tok,
+                tokens: t.collect(),
+            }),
         }
     }
+
     fn emit(self) -> String {
         match self {
             Expression::Constant(c) => format!("mov rax, {}\n", c.emit()),
@@ -137,6 +162,7 @@ impl ASTNode for Expression {
                 op.emit()
             ),
             Expression::Binary(_, _, _) => unimplemented!(),
+            Expression::Null => String::from(""),
         }
     }
 }
@@ -148,9 +174,14 @@ enum Constant {
 
 impl ASTNode for Constant {
     fn parse<I: Iterator<Item = Token>>(t: &mut I) -> Result<Constant> {
-        match t.next() {
-            Some(Token::Literal(Literal::Int(i))) => Ok(Constant::Int(i)),
-            tok => panic!(format!("Expected a constant, got {:?}", tok)),
+        match t.next().unwrap() {
+            Token::Literal(Literal::Int(i)) => Ok(Constant::Int(i)),
+            tok => Err(Error::UnexpectedToken {
+                wanted: "Constant",
+                expected: vec![Token::Literal(Literal::Int(0))],
+                found: tok,
+                tokens: t.collect(),
+            }),
         }
     }
 
@@ -174,7 +205,12 @@ impl ASTNode for UnaryOperator {
             Token::Complement => Ok(UnaryOperator::Complement),
             Token::Negative => Ok(UnaryOperator::Negative),
             Token::Negation => Ok(UnaryOperator::Negation),
-            t => panic!(format!("Expected a unary operator, got {:?}", t)),
+            tok => Err(Error::UnexpectedToken {
+                wanted: "UnaryOperator",
+                expected: vec![Token::Complement, Token::Negation, Token::Negative],
+                found: tok,
+                tokens: t.collect(),
+            }),
         }
     }
 
@@ -208,7 +244,17 @@ impl ASTNode for BinaryOperator {
             Token::Negative => Ok(BinaryOperator::Subtraction),
             Token::Multiplication => Ok(BinaryOperator::Multiplication),
             Token::Division => Ok(BinaryOperator::Division),
-            tok => panic!(format!("Expected binary operator, got {:?}", tok)),
+            tok => Err(Error::UnexpectedToken {
+                wanted: "BinaryOperator",
+                expected: vec![
+                    Token::Addition,
+                    Token::Negative,
+                    Token::Multiplication,
+                    Token::Division,
+                ],
+                found: tok,
+                tokens: t.collect(),
+            }),
         }
     }
 
@@ -217,10 +263,17 @@ impl ASTNode for BinaryOperator {
     }
 }
 
-fn consume_token<I: Iterator<Item = Token>>(t: &mut I, tok: Token) {
+fn consume_token<I: Iterator<Item = Token>>(t: &mut I, tok: Token) -> Result<()> {
     let next = t.next().unwrap();
     if next != tok {
-        panic!(format!("Unexpected {:?}. Was expecting {:?}.", next, tok));
+        Err(Error::UnexpectedToken {
+            wanted: "",
+            expected: vec![tok],
+            found: next,
+            tokens: t.collect(),
+        })
+    } else {
+        Ok(())
     }
 }
 

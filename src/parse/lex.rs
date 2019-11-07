@@ -37,6 +37,8 @@ pub enum Keyword {
 #[derive(Debug, PartialEq)]
 pub enum Literal {
     Int(u32),
+    // For error purposes
+    None,
 }
 
 pub fn lex(s: &str) -> Vec<Token> {

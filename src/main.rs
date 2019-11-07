@@ -11,12 +11,19 @@ use std::process::Command;
 
 use parse::ast::ASTNode;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let args: Vec<String> = args().collect();
     let path = Path::new(&args[1]);
     let src = fs::read_to_string(path).unwrap();
     let tok = parse::lex(&src);
     println!("Tokens:\n{:#?}", tok);
+    match exec(tok, &path) {
+        Ok(_) => {}
+        Err(e) => eprintln!("{}", e),
+    };
+}
+
+fn exec(tok: Vec<parse::lex::Token>, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let ast = parse::parse(tok)?;
     println!("AST:\n{:#?}", ast);
     let out = ast.emit();
