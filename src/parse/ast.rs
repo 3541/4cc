@@ -1,6 +1,8 @@
 use itertools::{put_back, PutBack};
 use snafu::Snafu;
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use super::lex::{Keyword, Literal, Token};
 
 #[derive(Debug, Snafu)]
@@ -30,6 +32,29 @@ pub enum Error {
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
+
+/*struct LabelGenerator(usize);
+
+impl LabelGenerator {
+    fn new() -> LabelGenerator {
+        LabelGenerator(0)
+    }
+
+    fn get_label(&mut self) -> String {
+        let ret = format!("__ccgen{}", self.0);
+        self.0 += 1;
+        ret
+    }
+}
+
+lazy_static! {
+    static ref LABEL_GENERATOR: LabelGenerator = LabelGenerator::new()*/
+
+static LABEL_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+fn gen_label() -> String {
+    format!("__ccgen{}", LABEL_COUNT.fetch_add(1, Ordering::Relaxed))
+}
 
 pub trait ASTNode: Sized + std::fmt::Debug {
     fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Self>;
@@ -213,28 +238,61 @@ impl ASTNode for Expression {
                 })? {
                     Token::Addition => (
                         BinaryOperator::Addition,
-                        1,
+                        11,
                         Associativity::Left,
                         Token::Addition,
                     ),
                     Token::Negative => (
                         BinaryOperator::Subtraction,
-                        1,
+                        11,
                         Associativity::Left,
                         Token::Negative,
                     ),
                     Token::Multiplication => (
                         BinaryOperator::Multiplication,
-                        2,
+                        12,
                         Associativity::Left,
                         Token::Multiplication,
                     ),
                     Token::Division => (
                         BinaryOperator::Division,
-                        2,
+                        12,
                         Associativity::Left,
                         Token::Division,
                     ),
+                    Token::LessThan => (
+                        BinaryOperator::LessThan,
+                        9,
+                        Associativity::Left,
+                        Token::LessThan,
+                    ),
+                    Token::LessThanEqual => (
+                        BinaryOperator::LessThanEqual,
+                        9,
+                        Associativity::Left,
+                        Token::LessThan,
+                    ),
+                    Token::GreaterThan => (
+                        BinaryOperator::GreaterThan,
+                        9,
+                        Associativity::Left,
+                        Token::GreaterThan,
+                    ),
+                    Token::GreaterThanEqual => (
+                        BinaryOperator::GreaterThanEqual,
+                        9,
+                        Associativity::Left,
+                        Token::GreaterThanEqual,
+                    ),
+                    Token::Equal => (BinaryOperator::Equal, 8, Associativity::Left, Token::Equal),
+                    Token::NotEqual => (
+                        BinaryOperator::NotEqual,
+                        8,
+                        Associativity::Left,
+                        Token::NotEqual,
+                    ),
+                    Token::And => (BinaryOperator::And, 4, Associativity::Left, Token::And),
+                    Token::Or => (BinaryOperator::Or, 3, Associativity::Left, Token::Or),
                     tok => {
                         t.put_back(tok);
                         break;
@@ -270,7 +328,61 @@ impl ASTNode for Expression {
                 e.emit(),
                 op.emit()
             ),
-            Expression::Binary(_, _, _) => unimplemented!(),
+            Expression::Binary(op, e1, e2)
+                if op != BinaryOperator::And && op != BinaryOperator::Or =>
+            {
+                format!(
+                    "\
+                     {}\
+                     push rax\n\
+                     {}\
+                     pop rcx\n\
+                     {}\
+                     ",
+                    e1.emit(),
+                    e2.emit(),
+                    op.emit()
+                )
+            }
+            Expression::Binary(op, e1, e2) => match op {
+                BinaryOperator::And => format!(
+                    "\
+                     {0}\
+                     cmp rax, 0\n\
+                     jne {2}\n\
+                     jmp {3}\n\
+                     {2}:\n\
+                     {1}\
+                     cmp rax, 0\n\
+                     mov rax, 0\n\
+                     setne al\n\
+                     {3}:\n\
+                     ",
+                    e1.emit(),
+                    e2.emit(),
+                    gen_label(),
+                    gen_label()
+                ),
+                BinaryOperator::Or => format!(
+                    "\
+                     {0}\
+                     cmp rax, 0
+                     je {2}\n\
+                     jmp {3}\n\
+                     {2}:\n\
+                     {1}\
+                     cmp rax, 0\n\
+                     mov rax, 0\n\
+                     setne al\n\
+                     {3}:\n\
+                     ",
+                    e1.emit(),
+                    e2.emit(),
+                    gen_label(),
+                    gen_label()
+                ),
+                _ => panic!("invalid syntax"),
+            },
             Expression::Null => String::from(""),
         }
     }
@@ -338,12 +450,20 @@ impl ASTNode for UnaryOperator {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum BinaryOperator {
     Addition,
     Subtraction,
     Multiplication,
     Division,
+    LessThan,
+    LessThanEqual,
+    GreaterThan,
+    GreaterThanEqual,
+    Equal,
+    NotEqual,
+    And,
+    Or,
 }
 
 impl ASTNode for BinaryOperator {
@@ -368,7 +488,67 @@ impl ASTNode for BinaryOperator {
     }
 
     fn emit(self) -> String {
-        unimplemented!()
+        match self {
+            BinaryOperator::Addition => String::from("add rax, rcx\n"),
+            BinaryOperator::Subtraction => String::from(
+                "\
+                 sub rcx, rax\n\
+                 mov rax, rcx\n\
+                 ",
+            ),
+            BinaryOperator::Multiplication => String::from("imul rax, rcx\n"),
+            BinaryOperator::Division => String::from(
+                "\
+                 mov rbx, rax\n\
+                 mov rax, rcx\n\
+                 cqo\n\
+                 idiv rbx\n\
+                 ",
+            ),
+            BinaryOperator::LessThan => String::from(
+                "\
+                 cmp rcx, rax\n\
+                 mov rax, 0\n\
+                 setl al\n\
+                 ",
+            ),
+            BinaryOperator::LessThanEqual => String::from(
+                "\
+                 cmp rcx, rax\n\
+                 mov rax, 0\n\
+                 setle al\n\
+                 ",
+            ),
+            BinaryOperator::GreaterThan => String::from(
+                "\
+                 cmp rcx, rax\n\
+                 mov rax, 0\n\
+                 setg al\n\
+                 ",
+            ),
+            BinaryOperator::GreaterThanEqual => String::from(
+                "\
+                 cmp rcx, rax\n\
+                 mov rax, 0\n\
+                 setge al\n\
+                 ",
+            ),
+            BinaryOperator::Equal => String::from(
+                "\
+                 cmp rcx, rax\n\
+                 mov rax, 0\n\
+                 sete al\n\
+                 ",
+            ),
+            BinaryOperator::NotEqual => String::from(
+                "\
+                 cmp rcx, rax\n\
+                 mov rax, 0\n\
+                 setne al\n\
+                 ",
+            ),
+            _ => unimplemented!(),
+        }
     }
 }
 
