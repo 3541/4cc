@@ -1,4 +1,4 @@
-extern crate peeking_take_while;
+extern crate itertools;
 #[macro_use]
 extern crate snafu;
 
