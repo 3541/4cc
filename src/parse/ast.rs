@@ -1,4 +1,4 @@
-use itertools::PutBack;
+use itertools::{put_back, PutBack};
 use snafu::Snafu;
 
 use super::lex::{Keyword, Literal, Token};
@@ -32,7 +32,7 @@ pub enum Error {
 type Result<T, E = Error> = std::result::Result<T, E>;
 
 pub trait ASTNode: Sized + std::fmt::Debug {
-    fn parse<I: Iterator<Item = Token>>(t: &mut I) -> Result<Self>;
+    fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Self>;
     fn emit(self) -> String;
 }
 
@@ -40,7 +40,7 @@ pub trait ASTNode: Sized + std::fmt::Debug {
 pub struct Program(Function);
 
 impl ASTNode for Program {
-    fn parse<I: Iterator<Item = Token>>(t: &mut I) -> Result<Program> {
+    fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Program> {
         Ok(Program(Function::parse(t)?))
     }
 
@@ -56,7 +56,7 @@ struct Function {
 }
 
 impl ASTNode for Function {
-    fn parse<I: Iterator<Item = Token>>(t: &mut I) -> Result<Function> {
+    fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Function> {
         consume_token(t, Token::Keyword(Keyword::Int))?;
 
         if let Token::Identifier(name) = t.next().unwrap() {
@@ -93,7 +93,7 @@ enum Statement {
 }
 
 impl ASTNode for Statement {
-    fn parse<I: Iterator<Item = Token>>(t: &mut I) -> Result<Statement> {
+    fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Statement> {
         match t.next().ok_or(Error::UnexpectedEnd {
             wanted: "Statement",
         })? {
@@ -166,19 +166,21 @@ impl ASTNode for Expression {
         }
     }*/
 
-    fn parse<I: Iterator<Item = Token>>(t: &mut I) -> Result<Expression> {
-        fn parse_atom<I: Iterator<Item = Token>>(t: &mut I) -> Result<Expression> {
+    fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Expression> {
+        fn parse_atom<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Expression> {
             match t.next().ok_or(Error::UnexpectedEnd {
                 wanted: "Expression",
             })? {
                 tok @ Token::Negative | tok @ Token::Negation | tok @ Token::Complement => {
-                    let op = UnaryOperator::parse(vec![tok].into_iter().by_ref())?;
-                    let e = Expression::parse(t)?;
+                    t.put_back(tok);
+                    let op = UnaryOperator::parse(t)?;
+                    let e = parse_atom(t)?;
                     Ok(Expression::Unary(op, Box::new(e)))
                 }
-                tok @ Token::Literal(_) => Ok(Expression::Constant(Constant::parse(
-                    vec![tok].into_iter().by_ref(),
-                )?)),
+                tok @ Token::Literal(_) => {
+                    t.put_back(tok);
+                    Ok(Expression::Constant(Constant::parse(t)?))
+                }
                 Token::OpenParenthesis => {
                     let v = parse_expr(t, 1);
                     consume_token(t, Token::CloseParenthesis)?;
@@ -200,25 +202,47 @@ impl ASTNode for Expression {
         };
 
         fn parse_expr<I: Iterator<Item = Token>>(
-            t: &mut I,
+            t: &mut PutBack<I>,
             min_precedence: u8,
         ) -> Result<Expression> {
             let mut lhs = parse_atom(t)?;
 
             loop {
-                let (op, prec, assoc) = match t.next().ok_or(Error::UnexpectedEnd {
+                let (op, prec, assoc, pbtok) = match t.next().ok_or(Error::UnexpectedEnd {
                     wanted: "Expression",
                 })? {
-                    Token::Addition => (BinaryOperator::Addition, 1, Associativity::Left),
-                    Token::Negative => (BinaryOperator::Subtraction, 1, Associativity::Left),
-                    Token::Multiplication => {
-                        (BinaryOperator::Multiplication, 2, Associativity::Left)
+                    Token::Addition => (
+                        BinaryOperator::Addition,
+                        1,
+                        Associativity::Left,
+                        Token::Addition,
+                    ),
+                    Token::Negative => (
+                        BinaryOperator::Subtraction,
+                        1,
+                        Associativity::Left,
+                        Token::Negative,
+                    ),
+                    Token::Multiplication => (
+                        BinaryOperator::Multiplication,
+                        2,
+                        Associativity::Left,
+                        Token::Multiplication,
+                    ),
+                    Token::Division => (
+                        BinaryOperator::Division,
+                        2,
+                        Associativity::Left,
+                        Token::Division,
+                    ),
+                    tok => {
+                        t.put_back(tok);
+                        break;
                     }
-                    Token::Division => (BinaryOperator::Division, 2, Associativity::Left),
-                    tok => t.put_back(tok),
                 };
 
                 if prec < min_precedence {
+                    t.put_back(pbtok);
                     break;
                 }
 
@@ -258,7 +282,7 @@ enum Constant {
 }
 
 impl ASTNode for Constant {
-    fn parse<I: Iterator<Item = Token>>(t: &mut I) -> Result<Constant> {
+    fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Constant> {
         match t.next().unwrap() {
             Token::Literal(Literal::Int(i)) => Ok(Constant::Int(i)),
             tok => Err(Error::UnexpectedToken {
@@ -285,7 +309,7 @@ enum UnaryOperator {
 }
 
 impl ASTNode for UnaryOperator {
-    fn parse<I: Iterator<Item = Token>>(t: &mut I) -> Result<UnaryOperator> {
+    fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<UnaryOperator> {
         match t.next().unwrap() {
             Token::Complement => Ok(UnaryOperator::Complement),
             Token::Negative => Ok(UnaryOperator::Negative),
@@ -323,7 +347,7 @@ enum BinaryOperator {
 }
 
 impl ASTNode for BinaryOperator {
-    fn parse<I: Iterator<Item = Token>>(t: &mut I) -> Result<BinaryOperator> {
+    fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<BinaryOperator> {
         match t.next().unwrap() {
             Token::Addition => Ok(BinaryOperator::Addition),
             Token::Negative => Ok(BinaryOperator::Subtraction),
@@ -363,5 +387,5 @@ fn consume_token<I: Iterator<Item = Token>>(t: &mut I, tok: Token) -> Result<()>
 }
 
 pub fn parse(t: Vec<Token>) -> Result<Program> {
-    Program::parse(&mut t.into_iter())
+    Program::parse(&mut put_back(t.into_iter()))
 }
