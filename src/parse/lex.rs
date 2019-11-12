@@ -41,6 +41,7 @@ pub enum Token {
     LessThanEqual,
     GreaterThan,
     GreaterThanEqual,
+    Assign,
 }
 
 #[derive(Debug, PartialEq)]
@@ -95,7 +96,7 @@ pub fn lex(s: &str) -> Vec<Token> {
                 '=' => Token::Equal,
                 t => {
                     it.put_back(t);
-                    Token::Unidentified
+                    Token::Assign
                 }
             },
             '!' => match it.next().expect("Unexpected EOF") {

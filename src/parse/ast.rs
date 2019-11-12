@@ -456,6 +456,12 @@ enum BinaryOperator {
     Subtraction,
     Multiplication,
     Division,
+    Modulo,
+    BitAnd,
+    BitOr,
+    BitXor,
+    ShiftLeft,
+    ShiftRight,
     LessThan,
     LessThanEqual,
     GreaterThan,
@@ -473,6 +479,12 @@ impl ASTNode for BinaryOperator {
             Token::Negative => Ok(BinaryOperator::Subtraction),
             Token::Multiplication => Ok(BinaryOperator::Multiplication),
             Token::Division => Ok(BinaryOperator::Division),
+            Token::Modulo => Ok(BinaryOperator::Modulo),
+            Token::BitAnd => Ok(BinaryOperator::BitAnd),
+            Token::BitOr => Ok(BinaryOperator::BitOr),
+            Token::BitXor => Ok(BinaryOperator::BitXor),
+            Token::ShiftLeft => Ok(BinaryOperator::ShiftLeft),
+            Token::ShiftRight => Ok(BinaryOperator::ShiftRight),
             tok => Err(Error::UnexpectedToken {
                 wanted: "BinaryOperator",
                 expected: vec![
@@ -480,6 +492,12 @@ impl ASTNode for BinaryOperator {
                     Token::Negative,
                     Token::Multiplication,
                     Token::Division,
+                    Token::Modulo,
+                    Token::BitAnd,
+                    Token::BitOr,
+                    Token::BitXor,
+                    Token::ShiftLeft,
+                    Token::ShiftRight,
                 ],
                 found: tok,
                 tokens: t.collect(),
@@ -503,6 +521,45 @@ impl ASTNode for BinaryOperator {
                  mov rax, rcx\n\
                  cqo\n\
                  idiv rbx\n\
+                 ",
+            ),
+            BinaryOperator::Modulo => String::from(
+                "\
+                 mov rbx, rax\n\
+                 mov rax, rcx\n\
+                 cqo\n\
+                 idiv rbx\n\
+                 mov rax, rdx\n\
+                 ",
+            ),
+            BinaryOperator::BitAnd => String::from(
+                "\
+                 and rcx, rax
+                 mov rax, rcx
+                 ",
+            ),
+            BinaryOperator::BitOr => String::from(
+                "\
+                 or rcx, rax
+                 mov rax, rcx
+                 ",
+            ),
+            BinaryOperator::BitXor => String::from(
+                "\
+                 xor rcx, rax
+                 mov rax, rcx
+                 ",
+            ),
+            BinaryOperator::ShiftLeft => String::from(
+                "\
+                 shl rcx, rax
+                 mov rax, rcx
+                 ",
+            ),
+            BinaryOperator::ShiftRight => String::from(
+                "\
+                 shr rcx, rax
+                 mov rax, rcx
                  ",
             ),
             BinaryOperator::LessThan => String::from(
