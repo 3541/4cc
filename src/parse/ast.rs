@@ -77,7 +77,7 @@ impl ASTNode for Program {
 #[derive(Debug)]
 struct Function {
     name: String,
-    body: Statement,
+    body: Vec<Statement>,
 }
 
 impl ASTNode for Function {
@@ -88,12 +88,22 @@ impl ASTNode for Function {
             consume_token(t, Token::OpenParenthesis)?;
             consume_token(t, Token::CloseParenthesis)?;
             consume_token(t, Token::OpenBrace)?;
-            let ret = Function {
+            /*            let ret = Function {
                 name,
                 body: Statement::parse(t)?,
-            };
-            consume_token(t, Token::CloseBrace)?;
-            return Ok(ret);
+            };*/
+            let mut body = Vec::new();
+            loop {
+                let tok = t.next().unwrap();
+                if tok == Token::CloseBrace {
+                    break;
+                }
+
+                t.put_back(tok);
+                body.push(Statement::parse(t)?);
+            }
+
+            return Ok(Function { name, body });
         }
 
         Err(Error::InvalidSyntax)
@@ -107,7 +117,7 @@ impl ASTNode for Function {
              {1} \
              ",
             self.name,
-            self.body.emit()
+            self.body.into_iter().map(|s| s.emit()).collect::<String>()
         )
     }
 }
@@ -115,6 +125,8 @@ impl ASTNode for Function {
 #[derive(Debug)]
 enum Statement {
     Return(Expression),
+    Declaration(String, Option<Expression>),
+    Expression(Expression),
 }
 
 impl ASTNode for Statement {
@@ -140,6 +152,8 @@ impl ASTNode for Statement {
 
     fn emit(self) -> String {
         match self {
+            Statement::Declaration(_, _) => unimplemented!(),
+            Statement::Expression(e) => e.emit(),
             Statement::Return(e) => format!(
                 "\
                  {}\n\
@@ -153,8 +167,10 @@ impl ASTNode for Statement {
 #[derive(Debug)]
 enum Expression {
     Constant(Constant),
+    Var(String),
     Unary(UnaryOperator, Box<Expression>),
     Binary(BinaryOperator, Box<Expression>, Box<Expression>),
+    Assign(String, Box<Expression>),
     Null,
 }
 
@@ -232,67 +248,87 @@ impl ASTNode for Expression {
         ) -> Result<Expression> {
             let mut lhs = parse_atom(t)?;
 
+            enum Symb {
+                Bin(BinaryOperator),
+                Assign,
+            }
+
             loop {
                 let (op, prec, assoc, pbtok) = match t.next().ok_or(Error::UnexpectedEnd {
                     wanted: "Expression",
                 })? {
                     Token::Addition => (
-                        BinaryOperator::Addition,
+                        Symb::Bin(BinaryOperator::Addition),
                         11,
                         Associativity::Left,
                         Token::Addition,
                     ),
                     Token::Negative => (
-                        BinaryOperator::Subtraction,
+                        Symb::Bin(BinaryOperator::Subtraction),
                         11,
                         Associativity::Left,
                         Token::Negative,
                     ),
                     Token::Multiplication => (
-                        BinaryOperator::Multiplication,
+                        Symb::Bin(BinaryOperator::Multiplication),
                         12,
                         Associativity::Left,
                         Token::Multiplication,
                     ),
                     Token::Division => (
-                        BinaryOperator::Division,
+                        Symb::Bin(BinaryOperator::Division),
                         12,
                         Associativity::Left,
                         Token::Division,
                     ),
                     Token::LessThan => (
-                        BinaryOperator::LessThan,
+                        Symb::Bin(BinaryOperator::LessThan),
                         9,
                         Associativity::Left,
                         Token::LessThan,
                     ),
                     Token::LessThanEqual => (
-                        BinaryOperator::LessThanEqual,
+                        Symb::Bin(BinaryOperator::LessThanEqual),
                         9,
                         Associativity::Left,
                         Token::LessThan,
                     ),
                     Token::GreaterThan => (
-                        BinaryOperator::GreaterThan,
+                        Symb::Bin(BinaryOperator::GreaterThan),
                         9,
                         Associativity::Left,
                         Token::GreaterThan,
                     ),
                     Token::GreaterThanEqual => (
-                        BinaryOperator::GreaterThanEqual,
+                        Symb::Bin(BinaryOperator::GreaterThanEqual),
                         9,
                         Associativity::Left,
                         Token::GreaterThanEqual,
                     ),
-                    Token::Equal => (BinaryOperator::Equal, 8, Associativity::Left, Token::Equal),
+                    Token::Equal => (
+                        Symb::Bin(BinaryOperator::Equal),
+                        8,
+                        Associativity::Left,
+                        Token::Equal,
+                    ),
                     Token::NotEqual => (
-                        BinaryOperator::NotEqual,
+                        Symb::Bin(BinaryOperator::NotEqual),
                         8,
                         Associativity::Left,
                         Token::NotEqual,
                     ),
-                    Token::And => (BinaryOperator::And, 4, Associativity::Left, Token::And),
-                    Token::Or => (BinaryOperator::Or, 3, Associativity::Left, Token::Or),
+                    Token::And => (
+                        Symb::Bin(BinaryOperator::And),
+                        4,
+                        Associativity::Left,
+                        Token::And,
+                    ),
+                    Token::Or => (
+                        Symb::Bin(BinaryOperator::Or),
+                        3,
+                        Associativity::Left,
+                        Token::Or,
+                    ),
                     tok => {
                         t.put_back(tok);
                         break;
@@ -310,7 +346,15 @@ impl ASTNode for Expression {
                     prec
                 };
 
-                lhs = Expression::Binary(op, Box::new(lhs), Box::new(parse_expr(t, next_min)?));
+                let rhs = Box::new(parse_expr(t, next_min)?);
+                //                lhs = Expression::Binary(op, Box::new(lhs), Box::new(parse_expr(t, next_min)?));
+                lhs = match op {
+                    Symb::Bin(op) => Expression::Binary(op, Box::new(lhs), rhs),
+                    Assign => match lhs {
+                        Expression::Var(v) => Expression::Assign(v, rhs),
+                        e => Err(Error::InvalidSyntax)?,
+                    },
+                };
             }
             Ok(lhs)
         };
@@ -319,6 +363,8 @@ impl ASTNode for Expression {
 
     fn emit(self) -> String {
         match self {
+            Expression::Var(_) => unimplemented!(),
+            Expression::Assign(_, _) => unimplemented!(),
             Expression::Constant(c) => format!("mov rax, {}\n", c.emit()),
             Expression::Unary(op, e) => format!(
                 "\
