@@ -1,5 +1,5 @@
 [package]
-name = "cc"
+name = "3cc"
 version = "0.1.0"
 authors = ["alex"]
 edition = "2018"
