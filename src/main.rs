@@ -4,6 +4,7 @@ extern crate snafu;
 
 mod parse;
 
+use std::collections::HashMap;
 use std::env::args;
 use std::fs;
 use std::path::Path;
@@ -26,7 +27,7 @@ fn main() {
 fn exec(tok: Vec<parse::lex::Token>, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let ast = parse::parse(tok)?;
     println!("AST:\n{:#?}", ast);
-    let out = ast.emit();
+    let out = ast.emit(&mut HashMap::new(), 8);
     println!("Emitted:\n{}", out);
     fs::write("/tmp/t.asm", out).expect("Failed to write assembly out");
     println!(

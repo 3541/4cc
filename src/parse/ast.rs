@@ -1,6 +1,7 @@
 use itertools::{put_back, PutBack};
 use snafu::Snafu;
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::lex::{Keyword, Literal, Token};
@@ -33,23 +34,6 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
-/*struct LabelGenerator(usize);
-
-impl LabelGenerator {
-    fn new() -> LabelGenerator {
-        LabelGenerator(0)
-    }
-
-    fn get_label(&mut self) -> String {
-        let ret = format!("__ccgen{}", self.0);
-        self.0 += 1;
-        ret
-    }
-}
-
-lazy_static! {
-    static ref LABEL_GENERATOR: LabelGenerator = LabelGenerator::new()*/
-
 static LABEL_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 fn gen_label() -> String {
@@ -58,7 +42,7 @@ fn gen_label() -> String {
 
 pub trait ASTNode: Sized + std::fmt::Debug {
     fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Self>;
-    fn emit(self) -> String;
+    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: usize) -> String;
 }
 
 #[derive(Debug)]
@@ -69,8 +53,8 @@ impl ASTNode for Program {
         Ok(Program(Function::parse(t)?))
     }
 
-    fn emit(self) -> String {
-        self.0.emit()
+    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: usize) -> String {
+        self.0.emit(vmap, stack_index)
     }
 }
 
@@ -88,10 +72,6 @@ impl ASTNode for Function {
             consume_token(t, Token::OpenParenthesis)?;
             consume_token(t, Token::CloseParenthesis)?;
             consume_token(t, Token::OpenBrace)?;
-            /*            let ret = Function {
-                name,
-                body: Statement::parse(t)?,
-            };*/
             let mut body = Vec::new();
             loop {
                 let tok = t.next().unwrap();
@@ -109,15 +89,23 @@ impl ASTNode for Function {
         Err(Error::InvalidSyntax)
     }
 
-    fn emit(self) -> String {
+    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: usize) -> String {
         format!(
             "\
              global {0}\n\
              {0}:\n\
-             {1} \
+             push rbp\n\
+             mov rbp, rsp\n\
+             {1} \n\
+             mov esp, ebp\n\
+             pop rbp\n\
+             ret
              ",
             self.name,
-            self.body.into_iter().map(|s| s.emit()).collect::<String>()
+            self.body
+                .into_iter()
+                .map(|s| s.emit(vmap, stack_index))
+                .collect::<String>()
         )
     }
 }
@@ -131,34 +119,72 @@ enum Statement {
 
 impl ASTNode for Statement {
     fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Statement> {
-        match t.next().ok_or(Error::UnexpectedEnd {
-            wanted: "Statement",
-        })? {
+        match t.next().ok_or(Error::UnexpectedEnd { wanted: "Keyword" })? {
             Token::Keyword(Keyword::Return) => Ok(Statement::Return(match Expression::parse(t)? {
-                Expression::Null => Expression::Null,
+                //Expression::Null => Expression::Null,
                 e => {
                     consume_token(t, Token::Semicolon)?;
                     e
                 }
             })),
+            Token::Keyword(Keyword::Int) => match t.next().ok_or(Error::UnexpectedEnd {
+                wanted: "Statement",
+            })? {
+                Token::Identifier(s) => match t.next().ok_or(Error::UnexpectedEnd {
+                    wanted: "Identifier",
+                })? {
+                    Token::Semicolon => Ok(Statement::Declaration(s, None)),
+                    Token::Assign => {
+                        t.put_back(Token::Assign);
+                        let ret = Ok(Statement::Declaration(s, Some(Expression::parse(t)?)));
+                        consume_token(t, Token::Semicolon)?;
+                        ret
+                    }
+                    tok => Err(Error::UnexpectedToken {
+                        wanted: "Statement part",
+                        expected: vec![Token::Semicolon, Token::Assign],
+                        found: tok,
+                        tokens: t.collect(),
+                    }),
+                },
+                tok => Err(Error::UnexpectedToken {
+                    wanted: "Identifier",
+                    expected: vec![Token::Identifier(String::from("_"))],
+                    found: tok,
+                    tokens: t.collect(),
+                }),
+            },
+            tok @ Token::Identifier(_) => {
+                t.put_back(tok);
+                let ret = Ok(Statement::Expression(Expression::parse(t)?));
+                consume_token(t, Token::Semicolon)?;
+                ret
+            }
             tok => Err(Error::UnexpectedToken {
                 wanted: "Statement",
-                expected: vec![Token::Keyword(Keyword::Return)],
+                expected: vec![
+                    Token::Keyword(Keyword::Return),
+                    Token::Keyword(Keyword::Int),
+                    Token::Identifier(String::from("")),
+                ],
                 found: tok,
                 tokens: t.collect(),
             }),
         }
     }
 
-    fn emit(self) -> String {
+    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: usize) -> String {
         match self {
-            Statement::Declaration(_, _) => unimplemented!(),
-            Statement::Expression(e) => e.emit(),
+            //TODO: Stack index must be scoped to function...
+            Statement::Declaration(s, v) => {
+                vmap.insert(
+            },
+            Statement::Expression(e) => e.emit(vmap, stack_index),
             Statement::Return(e) => format!(
                 "\
                  {}\n\
                  ret",
-                e.emit()
+                e.emit(vmap, stack_index)
             ),
         }
     }
@@ -171,7 +197,7 @@ enum Expression {
     Unary(UnaryOperator, Box<Expression>),
     Binary(BinaryOperator, Box<Expression>, Box<Expression>),
     Assign(String, Box<Expression>),
-    Null,
+    //    Null,
 }
 
 #[derive(PartialEq)]
@@ -181,32 +207,6 @@ enum Associativity {
 }
 
 impl ASTNode for Expression {
-    /*    fn parse<I: Iterator<Item = Token>>(t: &mut I) -> Result<Expression> {
-        match t.next().unwrap() {
-            // FIXME: awful hack
-            tok @ Token::Negative | tok @ Token::Negation | tok @ Token::Complement => {
-                let op = UnaryOperator::parse(vec![tok].into_iter().by_ref())?;
-                let e = Expression::parse(t)?;
-                Ok(Expression::Unary(op, Box::new(e)))
-            }
-            tok @ Token::Literal(_) => Ok(Expression::Constant(Constant::parse(
-                vec![tok].into_iter().by_ref(),
-            )?)),
-            Token::Semicolon => Ok(Expression::Null),
-            tok => Err(Error::UnexpectedToken {
-                wanted: "Expression",
-                expected: vec![
-                    Token::Negative,
-                    Token::Negation,
-                    Token::Complement,
-                    Token::Literal(Literal::None),
-                ],
-                found: tok,
-                tokens: t.collect(),
-            }),
-        }
-    }*/
-
     fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Expression> {
         fn parse_atom<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Expression> {
             match t.next().ok_or(Error::UnexpectedEnd {
@@ -227,6 +227,7 @@ impl ASTNode for Expression {
                     consume_token(t, Token::CloseParenthesis)?;
                     v
                 }
+                Token::Identifier(s) => Ok(Expression::Var(s)),
                 tok => Err(Error::UnexpectedToken {
                     wanted: "Expression atom",
                     expected: vec![
@@ -329,6 +330,7 @@ impl ASTNode for Expression {
                         Associativity::Left,
                         Token::Or,
                     ),
+                    Token::Assign => (Symb::Assign, 1, Associativity::Right, Token::Assign),
                     tok => {
                         t.put_back(tok);
                         break;
@@ -350,9 +352,9 @@ impl ASTNode for Expression {
                 //                lhs = Expression::Binary(op, Box::new(lhs), Box::new(parse_expr(t, next_min)?));
                 lhs = match op {
                     Symb::Bin(op) => Expression::Binary(op, Box::new(lhs), rhs),
-                    Assign => match lhs {
+                    Symb::Assign => match lhs {
                         Expression::Var(v) => Expression::Assign(v, rhs),
-                        e => Err(Error::InvalidSyntax)?,
+                        _ => Err(Error::InvalidSyntax)?,
                     },
                 };
             }
@@ -361,18 +363,18 @@ impl ASTNode for Expression {
         parse_expr(t, 1)
     }
 
-    fn emit(self) -> String {
+    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: usize) -> String {
         match self {
             Expression::Var(_) => unimplemented!(),
             Expression::Assign(_, _) => unimplemented!(),
-            Expression::Constant(c) => format!("mov rax, {}\n", c.emit()),
+            Expression::Constant(c) => format!("mov rax, {}\n", c.emit(vmap, stack_index)),
             Expression::Unary(op, e) => format!(
                 "\
                  {} \
                  {} \
                  ",
-                e.emit(),
-                op.emit()
+                e.emit(vmap, stack_index),
+                op.emit(vmap, stack_index)
             ),
             Expression::Binary(op, e1, e2)
                 if op != BinaryOperator::And && op != BinaryOperator::Or =>
@@ -385,9 +387,9 @@ impl ASTNode for Expression {
                      pop rcx\n\
                      {}\
                      ",
-                    e1.emit(),
-                    e2.emit(),
-                    op.emit()
+                    e1.emit(vmap, stack_index),
+                    e2.emit(vmap, stack_index),
+                    op.emit(vmap, stack_index)
                 )
             }
             Expression::Binary(op, e1, e2) => match op {
@@ -404,8 +406,8 @@ impl ASTNode for Expression {
                      setne al\n\
                      {3}:\n\
                      ",
-                    e1.emit(),
-                    e2.emit(),
+                    e1.emit(vmap, stack_index),
+                    e2.emit(vmap, stack_index),
                     gen_label(),
                     gen_label()
                 ),
@@ -422,14 +424,14 @@ impl ASTNode for Expression {
                      setne al\n\
                      {3}:\n\
                      ",
-                    e1.emit(),
-                    e2.emit(),
+                    e1.emit(vmap, stack_index),
+                    e2.emit(vmap, stack_index),
                     gen_label(),
                     gen_label()
                 ),
                 _ => panic!("invalid syntax"),
             },
-            Expression::Null => String::from(""),
+            //Expression::Null => String::from(""),
         }
     }
 }
@@ -452,7 +454,7 @@ impl ASTNode for Constant {
         }
     }
 
-    fn emit(self) -> String {
+    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: usize) -> String {
         match self {
             Constant::Int(i) => i.to_string(),
         }
@@ -481,7 +483,7 @@ impl ASTNode for UnaryOperator {
         }
     }
 
-    fn emit(self) -> String {
+    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: usize) -> String {
         match self {
             UnaryOperator::Negative => String::from("neg rax\n"),
             UnaryOperator::Complement => String::from("not rax\n"),
@@ -551,7 +553,7 @@ impl ASTNode for BinaryOperator {
         }
     }
 
-    fn emit(self) -> String {
+    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: usize) -> String {
         match self {
             BinaryOperator::Addition => String::from("add rax, rcx\n"),
             BinaryOperator::Subtraction => String::from(
