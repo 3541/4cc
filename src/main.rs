@@ -38,7 +38,7 @@ fn exec(tok: Vec<parse::lex::Token>, path: &Path) -> Result<(), Box<dyn std::err
             .arg("-o /tmp/t.o")
             .output()?
     );
-    println!(
+    /*    println!(
         "{:?}",
         Command::new("ld")
             .arg("-dynamic-linker")
@@ -54,6 +54,18 @@ fn exec(tok: Vec<parse::lex::Token>, path: &Path) -> Result<(), Box<dyn std::err
                 path.file_stem().unwrap().to_str().unwrap()
             ))
             .output()?
+    );*/
+    println!(
+        "{:?}",
+        Command::new("gcc")
+            .arg("/tmp/t.o")
+            .arg(format!(
+                "-o{}/{}",
+                path.parent().unwrap().to_str().unwrap(),
+                path.file_stem().unwrap().to_str().unwrap()
+            ))
+            .output()?
     );
+
     Ok(())
 }

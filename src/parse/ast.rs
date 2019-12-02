@@ -458,7 +458,7 @@ impl ASTNode for Expression {
                 BinaryOperator::Or => Ok(format!(
                     "\
                      {0}\
-                     cmp rax, 0
+                     cmp rax, 0\n\
                      je {2}\n\
                      jmp {3}\n\
                      {2}:\n\
