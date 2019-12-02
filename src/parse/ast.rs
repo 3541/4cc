@@ -1,4 +1,4 @@
-use itertools::{put_back, PutBack};
+use itertools::{put_back_n, PutBackN};
 use snafu::Snafu;
 
 use std::collections::HashMap;
@@ -34,6 +34,11 @@ pub enum Error {
     DuplicateDeclaration {
         var: String,
     },
+
+    #[snafu(display("Use of undeclared variable {}.", var))]
+    UndeclaredVariable {
+        var: String,
+    },
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -45,7 +50,7 @@ fn gen_label() -> String {
 }
 
 pub trait ASTNode: Sized + std::fmt::Debug {
-    fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Self>;
+    fn parse<I: Iterator<Item = Token>>(t: &mut PutBackN<I>) -> Result<Self>;
     fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: &mut usize) -> Result<String>;
 }
 
@@ -53,7 +58,7 @@ pub trait ASTNode: Sized + std::fmt::Debug {
 pub struct Program(Function);
 
 impl ASTNode for Program {
-    fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Program> {
+    fn parse<I: Iterator<Item = Token>>(t: &mut PutBackN<I>) -> Result<Program> {
         Ok(Program(Function::parse(t)?))
     }
 
@@ -69,7 +74,7 @@ struct Function {
 }
 
 impl ASTNode for Function {
-    fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Function> {
+    fn parse<I: Iterator<Item = Token>>(t: &mut PutBackN<I>) -> Result<Function> {
         consume_token(t, Token::Keyword(Keyword::Int))?;
 
         if let Token::Identifier(name) = t.next().unwrap() {
@@ -102,8 +107,9 @@ impl ASTNode for Function {
              push rbp\n\
              mov rbp, rsp\n\
              {1} \n\
-             mov esp, ebp\n\
+             mov rsp, rbp\n\
              pop rbp\n\
+             mov rax, 0\n\
              ret
              ",
             self.name,
@@ -123,7 +129,7 @@ enum Statement {
 }
 
 impl ASTNode for Statement {
-    fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Statement> {
+    fn parse<I: Iterator<Item = Token>>(t: &mut PutBackN<I>) -> Result<Statement> {
         match t.next().ok_or(Error::UnexpectedEnd { wanted: "Keyword" })? {
             Token::Keyword(Keyword::Return) => Ok(Statement::Return(match Expression::parse(t)? {
                 //Expression::Null => Expression::Null,
@@ -141,6 +147,7 @@ impl ASTNode for Statement {
                     Token::Semicolon => Ok(Statement::Declaration(s, None)),
                     Token::Assign => {
                         t.put_back(Token::Assign);
+                        t.put_back(Token::Identifier(s.clone()));
                         let ret = Ok(Statement::Declaration(s, Some(Expression::parse(t)?)));
                         consume_token(t, Token::Semicolon)?;
                         ret
@@ -165,6 +172,12 @@ impl ASTNode for Statement {
                 consume_token(t, Token::Semicolon)?;
                 ret
             }
+            tok @ Token::Literal(_) => {
+                t.put_back(tok);
+                let ret = Statement::Expression(Expression::parse(t)?);
+                consume_token(t, Token::Semicolon)?;
+                Ok(ret)
+            }
             tok => Err(Error::UnexpectedToken {
                 wanted: "Statement",
                 expected: vec![
@@ -184,13 +197,26 @@ impl ASTNode for Statement {
                 if vmap.contains_key(&s) {
                     Err(Error::DuplicateDeclaration { var: s })
                 } else {
-                    unimplemented!()
+                    vmap.insert(s, *stack_index);
+                    *stack_index += 8;
+                    match v {
+                        Some(e) => Ok(format!(
+                            "\
+                             {}\n\
+                             push rax\n\
+                             ",
+                            e.emit(vmap, stack_index)?
+                        )),
+                        None => Ok(String::from("")),
+                    }
                 }
             }
             Statement::Expression(e) => e.emit(vmap, stack_index),
             Statement::Return(e) => Ok(format!(
                 "\
                  {}\n\
+                 mov rsp, rbp\n\
+                 pop rbp\n\
                  ret",
                 e.emit(vmap, stack_index)?
             )),
@@ -215,8 +241,8 @@ enum Associativity {
 }
 
 impl ASTNode for Expression {
-    fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Expression> {
-        fn parse_atom<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Expression> {
+    fn parse<I: Iterator<Item = Token>>(t: &mut PutBackN<I>) -> Result<Expression> {
+        fn parse_atom<I: Iterator<Item = Token>>(t: &mut PutBackN<I>) -> Result<Expression> {
             match t.next().ok_or(Error::UnexpectedEnd {
                 wanted: "Expression",
             })? {
@@ -252,7 +278,7 @@ impl ASTNode for Expression {
         };
 
         fn parse_expr<I: Iterator<Item = Token>>(
-            t: &mut PutBack<I>,
+            t: &mut PutBackN<I>,
             min_precedence: u8,
         ) -> Result<Expression> {
             let mut lhs = parse_atom(t)?;
@@ -373,8 +399,18 @@ impl ASTNode for Expression {
 
     fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: &mut usize) -> Result<String> {
         match self {
-            Expression::Var(_) => unimplemented!(),
-            Expression::Assign(_, _) => unimplemented!(),
+            Expression::Var(s) => Ok(format!(
+                "mov rax, [rbp - {}]\n",
+                vmap.get(&s).ok_or(Error::UndeclaredVariable { var: s })?
+            )),
+            Expression::Assign(v, e) => Ok(format!(
+                "\
+                 {}\
+                 mov [rbp - {}], rax\n\
+                 ",
+                e.emit(vmap, stack_index)?,
+                vmap.get(&v).ok_or(Error::UndeclaredVariable { var: v })?
+            )),
             Expression::Constant(c) => Ok(format!("mov rax, {}\n", c.emit(vmap, stack_index)?)),
             Expression::Unary(op, e) => Ok(format!(
                 "\
@@ -450,7 +486,7 @@ enum Constant {
 }
 
 impl ASTNode for Constant {
-    fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Constant> {
+    fn parse<I: Iterator<Item = Token>>(t: &mut PutBackN<I>) -> Result<Constant> {
         match t.next().unwrap() {
             Token::Literal(Literal::Int(i)) => Ok(Constant::Int(i)),
             tok => Err(Error::UnexpectedToken {
@@ -477,7 +513,7 @@ enum UnaryOperator {
 }
 
 impl ASTNode for UnaryOperator {
-    fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<UnaryOperator> {
+    fn parse<I: Iterator<Item = Token>>(t: &mut PutBackN<I>) -> Result<UnaryOperator> {
         match t.next().unwrap() {
             Token::Complement => Ok(UnaryOperator::Complement),
             Token::Negative => Ok(UnaryOperator::Negative),
@@ -529,7 +565,7 @@ enum BinaryOperator {
 }
 
 impl ASTNode for BinaryOperator {
-    fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<BinaryOperator> {
+    fn parse<I: Iterator<Item = Token>>(t: &mut PutBackN<I>) -> Result<BinaryOperator> {
         match t.next().unwrap() {
             Token::Addition => Ok(BinaryOperator::Addition),
             Token::Negative => Ok(BinaryOperator::Subtraction),
@@ -680,5 +716,5 @@ fn consume_token<I: Iterator<Item = Token>>(t: &mut I, tok: Token) -> Result<()>
 }
 
 pub fn parse(t: Vec<Token>) -> Result<Program> {
-    Program::parse(&mut put_back(t.into_iter()))
+    Program::parse(&mut put_back_n(t.into_iter()))
 }
