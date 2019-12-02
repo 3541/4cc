@@ -21,7 +21,6 @@ pub enum Error {
         found: Token,
         tokens: Vec<Token>,
     },
-
     InvalidSyntax,
     #[snafu(display(
         "Failed trying to parse a {}.\n\tEncountered end of token stream instead.",
@@ -29,6 +28,11 @@ pub enum Error {
     ))]
     UnexpectedEnd {
         wanted: &'static str,
+    },
+
+    #[snafu(display("Duplicate declaration of {}.", var))]
+    DuplicateDeclaration {
+        var: String,
     },
 }
 
@@ -42,7 +46,7 @@ fn gen_label() -> String {
 
 pub trait ASTNode: Sized + std::fmt::Debug {
     fn parse<I: Iterator<Item = Token>>(t: &mut PutBack<I>) -> Result<Self>;
-    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: usize) -> String;
+    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: &mut usize) -> Result<String>;
 }
 
 #[derive(Debug)]
@@ -53,7 +57,7 @@ impl ASTNode for Program {
         Ok(Program(Function::parse(t)?))
     }
 
-    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: usize) -> String {
+    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: &mut usize) -> Result<String> {
         self.0.emit(vmap, stack_index)
     }
 }
@@ -89,8 +93,9 @@ impl ASTNode for Function {
         Err(Error::InvalidSyntax)
     }
 
-    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: usize) -> String {
-        format!(
+    fn emit(self, vmap: &mut HashMap<String, usize>, _stack_index: &mut usize) -> Result<String> {
+        let mut stack_index = 8;
+        Ok(format!(
             "\
              global {0}\n\
              {0}:\n\
@@ -104,9 +109,9 @@ impl ASTNode for Function {
             self.name,
             self.body
                 .into_iter()
-                .map(|s| s.emit(vmap, stack_index))
-                .collect::<String>()
-        )
+                .map(|s| s.emit(vmap, &mut stack_index))
+                .collect::<Result<String>>()?
+        ))
     }
 }
 
@@ -173,19 +178,22 @@ impl ASTNode for Statement {
         }
     }
 
-    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: usize) -> String {
+    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: &mut usize) -> Result<String> {
         match self {
-            //TODO: Stack index must be scoped to function...
             Statement::Declaration(s, v) => {
-                vmap.insert(
-            },
+                if vmap.contains_key(&s) {
+                    Err(Error::DuplicateDeclaration { var: s })
+                } else {
+                    unimplemented!()
+                }
+            }
             Statement::Expression(e) => e.emit(vmap, stack_index),
-            Statement::Return(e) => format!(
+            Statement::Return(e) => Ok(format!(
                 "\
                  {}\n\
                  ret",
-                e.emit(vmap, stack_index)
-            ),
+                e.emit(vmap, stack_index)?
+            )),
         }
     }
 }
@@ -363,23 +371,23 @@ impl ASTNode for Expression {
         parse_expr(t, 1)
     }
 
-    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: usize) -> String {
+    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: &mut usize) -> Result<String> {
         match self {
             Expression::Var(_) => unimplemented!(),
             Expression::Assign(_, _) => unimplemented!(),
-            Expression::Constant(c) => format!("mov rax, {}\n", c.emit(vmap, stack_index)),
-            Expression::Unary(op, e) => format!(
+            Expression::Constant(c) => Ok(format!("mov rax, {}\n", c.emit(vmap, stack_index)?)),
+            Expression::Unary(op, e) => Ok(format!(
                 "\
                  {} \
                  {} \
                  ",
-                e.emit(vmap, stack_index),
-                op.emit(vmap, stack_index)
-            ),
+                e.emit(vmap, stack_index)?,
+                op.emit(vmap, stack_index)?
+            )),
             Expression::Binary(op, e1, e2)
                 if op != BinaryOperator::And && op != BinaryOperator::Or =>
             {
-                format!(
+                Ok(format!(
                     "\
                      {}\
                      push rax\n\
@@ -387,13 +395,13 @@ impl ASTNode for Expression {
                      pop rcx\n\
                      {}\
                      ",
-                    e1.emit(vmap, stack_index),
-                    e2.emit(vmap, stack_index),
-                    op.emit(vmap, stack_index)
-                )
+                    e1.emit(vmap, stack_index)?,
+                    e2.emit(vmap, stack_index)?,
+                    op.emit(vmap, stack_index)?
+                ))
             }
             Expression::Binary(op, e1, e2) => match op {
-                BinaryOperator::And => format!(
+                BinaryOperator::And => Ok(format!(
                     "\
                      {0}\
                      cmp rax, 0\n\
@@ -406,12 +414,12 @@ impl ASTNode for Expression {
                      setne al\n\
                      {3}:\n\
                      ",
-                    e1.emit(vmap, stack_index),
-                    e2.emit(vmap, stack_index),
+                    e1.emit(vmap, stack_index)?,
+                    e2.emit(vmap, stack_index)?,
                     gen_label(),
                     gen_label()
-                ),
-                BinaryOperator::Or => format!(
+                )),
+                BinaryOperator::Or => Ok(format!(
                     "\
                      {0}\
                      cmp rax, 0
@@ -424,11 +432,11 @@ impl ASTNode for Expression {
                      setne al\n\
                      {3}:\n\
                      ",
-                    e1.emit(vmap, stack_index),
-                    e2.emit(vmap, stack_index),
+                    e1.emit(vmap, stack_index)?,
+                    e2.emit(vmap, stack_index)?,
                     gen_label(),
                     gen_label()
-                ),
+                )),
                 _ => panic!("invalid syntax"),
             },
             //Expression::Null => String::from(""),
@@ -454,9 +462,9 @@ impl ASTNode for Constant {
         }
     }
 
-    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: usize) -> String {
+    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: &mut usize) -> Result<String> {
         match self {
-            Constant::Int(i) => i.to_string(),
+            Constant::Int(i) => Ok(i.to_string()),
         }
     }
 }
@@ -483,8 +491,8 @@ impl ASTNode for UnaryOperator {
         }
     }
 
-    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: usize) -> String {
-        match self {
+    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: &mut usize) -> Result<String> {
+        Ok(match self {
             UnaryOperator::Negative => String::from("neg rax\n"),
             UnaryOperator::Complement => String::from("not rax\n"),
             UnaryOperator::Negation => String::from(
@@ -494,7 +502,7 @@ impl ASTNode for UnaryOperator {
                  sete al \n\
                  ",
             ),
-        }
+        })
     }
 }
 
@@ -553,8 +561,8 @@ impl ASTNode for BinaryOperator {
         }
     }
 
-    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: usize) -> String {
-        match self {
+    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: &mut usize) -> Result<String> {
+        Ok(match self {
             BinaryOperator::Addition => String::from("add rax, rcx\n"),
             BinaryOperator::Subtraction => String::from(
                 "\
@@ -653,7 +661,7 @@ impl ASTNode for BinaryOperator {
                  ",
             ),
             _ => unimplemented!(),
-        }
+        })
     }
 }
 
