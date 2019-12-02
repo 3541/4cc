@@ -104,11 +104,21 @@ impl ASTNode for Function {
             "\
              global {0}\n\
              {0}:\n\
+             push rbx \n\
              push rbp\n\
+             push r12\n\
+             push r13\n\
+             push r14\n\
+             push r15\n\
              mov rbp, rsp\n\
              {1} \n\
              mov rsp, rbp\n\
+             pop r15\n\
+             pop r14\n\
+             pop r13\n\
+             pop r12\n\
              pop rbp\n\
+             pop rbx\n\
              mov rax, 0\n\
              ret
              ",
@@ -216,7 +226,12 @@ impl ASTNode for Statement {
                 "\
                  {}\n\
                  mov rsp, rbp\n\
+                 pop r15\n\
+                 pop r14\n\
+                 pop r13\n\
+                 pop r12\n\
                  pop rbp\n\
+                 pop rbx\n\
                  ret",
                 e.emit(vmap, stack_index)?
             )),
