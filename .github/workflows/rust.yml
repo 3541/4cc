@@ -9,6 +9,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
+    - name: Update Rust stable
+      run: rustup toolchain update --no-self-update stable
     - name: Build
       run: cargo build --verbose
     - name: Run tests
