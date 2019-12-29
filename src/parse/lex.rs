@@ -42,6 +42,16 @@ pub enum Token {
     GreaterThan,
     GreaterThanEqual,
     Assign,
+    AssignAdd,
+    AssignMul,
+    AssignDiv,
+    AssignSub,
+    AssignMod,
+    AssignAnd,
+    AssignOr,
+    AssignXor,
+    AssignShiftLeft,
+    AssignShiftRight,
 }
 
 #[derive(Debug, PartialEq)]
@@ -71,15 +81,52 @@ pub fn lex(s: &str) -> Vec<Token> {
             '(' => Token::OpenParenthesis,
             ')' => Token::CloseParenthesis,
             ';' => Token::Semicolon,
-            '-' => Token::Negative,
+            '-' => match it.next().expect("Unexpected EOF") {
+                '=' => Token::AssignSub,
+                t => {
+                    it.put_back(t);
+                    Token::Negative
+                }
+            },
             '~' => Token::Complement,
-            '+' => Token::Addition,
-            '*' => Token::Multiplication,
-            '/' => Token::Division,
-            '%' => Token::Modulo,
-            '^' => Token::BitXor,
+            '+' => match it.next().expect("Unexpected EOF") {
+                '=' => Token::AssignAdd,
+                t => {
+                    it.put_back(t);
+                    Token::Addition
+                }
+            },
+            '*' => match it.next().expect("Unexpected EOF") {
+                '=' => Token::AssignMul,
+                t => {
+                    it.put_back(t);
+                    Token::Multiplication
+                }
+            },
+            '/' => match it.next().expect("Unexpected EOF") {
+                '=' => Token::AssignDiv,
+                t => {
+                    it.put_back(t);
+                    Token::Division
+                }
+            },
+            '%' => match it.next().expect("Unexpected EOF") {
+                '=' => Token::AssignMod,
+                t => {
+                    it.put_back(t);
+                    Token::Modulo
+                }
+            },
+            '^' => match it.next().expect("Unexpected EOF") {
+                '=' => Token::AssignXor,
+                t => {
+                    it.put_back(t);
+                    Token::BitXor
+                }
+            },
             '&' => match it.next().expect("Unexpected EOF") {
                 '&' => Token::And,
+                '=' => Token::AssignAnd,
                 t => {
                     it.put_back(t);
                     Token::BitAnd
@@ -87,6 +134,7 @@ pub fn lex(s: &str) -> Vec<Token> {
             },
             '|' => match it.next().expect("Unexpected EOF") {
                 '|' => Token::Or,
+                '=' => Token::AssignOr,
                 t => {
                     it.put_back(t);
                     Token::BitOr
@@ -108,7 +156,13 @@ pub fn lex(s: &str) -> Vec<Token> {
             },
             '<' => match it.next().expect("Unexpected EOF") {
                 '=' => Token::LessThanEqual,
-                '<' => Token::ShiftLeft,
+                '<' => match it.next().expect("Unexpected EOF") {
+                    '=' => Token::AssignShiftLeft,
+                    t => {
+                        it.put_back(t);
+                        Token::ShiftLeft
+                    }
+                },
                 t => {
                     it.put_back(t);
                     Token::LessThan
@@ -116,7 +170,13 @@ pub fn lex(s: &str) -> Vec<Token> {
             },
             '>' => match it.next().expect("Unexpected EOF") {
                 '=' => Token::GreaterThanEqual,
-                '>' => Token::ShiftRight,
+                '>' => match it.next().expect("Unexpected EOF") {
+                    '=' => Token::AssignShiftRight,
+                    t => {
+                        it.put_back(t);
+                        Token::ShiftRight
+                    }
+                },
                 t => {
                     it.put_back(t);
                     Token::GreaterThan

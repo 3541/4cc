@@ -1,5 +1,5 @@
 extern crate itertools;
-#[macro_use]
+//#[macro_use]
 extern crate snafu;
 
 mod parse;

@@ -239,7 +239,7 @@ impl ASTNode for Statement {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Expression {
     Constant(Constant),
     Var(String),
@@ -300,7 +300,7 @@ impl ASTNode for Expression {
 
             enum Symb {
                 Bin(BinaryOperator),
-                Assign,
+                Assign(Option<Token>),
             }
 
             loop {
@@ -379,7 +379,68 @@ impl ASTNode for Expression {
                         Associativity::Left,
                         Token::Or,
                     ),
-                    Token::Assign => (Symb::Assign, 1, Associativity::Right, Token::Assign),
+                    Token::Assign => (Symb::Assign(None), 1, Associativity::Right, Token::Assign),
+                    Token::AssignAdd => (
+                        Symb::Assign(Some(Token::AssignAdd)),
+                        1,
+                        Associativity::Right,
+                        Token::AssignAdd,
+                    ),
+                    Token::AssignSub => (
+                        Symb::Assign(Some(Token::AssignSub)),
+                        1,
+                        Associativity::Right,
+                        Token::AssignSub,
+                    ),
+                    Token::AssignDiv => (
+                        Symb::Assign(Some(Token::AssignDiv)),
+                        1,
+                        Associativity::Right,
+                        Token::AssignDiv,
+                    ),
+                    Token::AssignMul => (
+                        Symb::Assign(Some(Token::AssignMul)),
+                        1,
+                        Associativity::Right,
+                        Token::AssignMul,
+                    ),
+                    Token::AssignMod => (
+                        Symb::Assign(Some(Token::AssignMod)),
+                        1,
+                        Associativity::Right,
+                        Token::AssignMod,
+                    ),
+                    Token::AssignAnd => (
+                        Symb::Assign(Some(Token::AssignAnd)),
+                        1,
+                        Associativity::Right,
+                        Token::AssignAnd,
+                    ),
+                    Token::AssignOr => (
+                        Symb::Assign(Some(Token::AssignOr)),
+                        1,
+                        Associativity::Right,
+                        Token::AssignOr,
+                    ),
+                    Token::AssignXor => (
+                        Symb::Assign(Some(Token::AssignXor)),
+                        1,
+                        Associativity::Right,
+                        Token::AssignXor,
+                    ),
+                    Token::AssignShiftLeft => (
+                        Symb::Assign(Some(Token::AssignShiftLeft)),
+                        1,
+                        Associativity::Right,
+                        Token::AssignShiftLeft,
+                    ),
+                    Token::AssignShiftRight => (
+                        Symb::Assign(Some(Token::AssignShiftRight)),
+                        1,
+                        Associativity::Right,
+                        Token::AssignShiftRight,
+                    ),
+
                     tok => {
                         t.put_back(tok);
                         break;
@@ -401,8 +462,21 @@ impl ASTNode for Expression {
                 //                lhs = Expression::Binary(op, Box::new(lhs), Box::new(parse_expr(t, next_min)?));
                 lhs = match op {
                     Symb::Bin(op) => Expression::Binary(op, Box::new(lhs), rhs),
-                    Symb::Assign => match lhs {
-                        Expression::Var(v) => Expression::Assign(v, rhs),
+                    Symb::Assign(s) => match lhs {
+//                        Expression::Var(v) => Expression::Assign(v, rhs),
+                        Expression::Var(v) => Expression::Assign(v.clone(), s.map_or_else(|| rhs.clone(), |s| Box::new(Expression::Binary(match s {
+                            Token::AssignAdd => BinaryOperator::Addition,
+                            Token::AssignSub => BinaryOperator::Subtraction,
+                            Token::AssignMul => BinaryOperator::Multiplication,
+                            Token::AssignDiv => BinaryOperator::Division,
+                            Token::AssignMod => BinaryOperator::Modulo,
+                            Token::AssignAnd => BinaryOperator::BitAnd,
+                            Token::AssignOr => BinaryOperator::BitOr,
+                            Token::AssignXor => BinaryOperator::BitXor,
+                            Token::AssignShiftLeft => BinaryOperator::ShiftLeft,
+                            Token::AssignShiftRight => BinaryOperator::ShiftRight,
+                            _ => panic!("Invalid compound assignment type... Should be unreachable."),
+                        }, Box::new(Expression::Var(v.clone())), rhs.clone())))),
                         _ => Err(Error::InvalidSyntax)?,
                     },
                 };
@@ -495,7 +569,7 @@ impl ASTNode for Expression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 enum Constant {
     Int(u32),
 }
@@ -513,14 +587,14 @@ impl ASTNode for Constant {
         }
     }
 
-    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: &mut usize) -> Result<String> {
+    fn emit(self, _vmap: &mut HashMap<String, usize>, _stack_index: &mut usize) -> Result<String> {
         match self {
             Constant::Int(i) => Ok(i.to_string()),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 enum UnaryOperator {
     Negative,
     Complement,
@@ -542,7 +616,7 @@ impl ASTNode for UnaryOperator {
         }
     }
 
-    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: &mut usize) -> Result<String> {
+    fn emit(self, _vmap: &mut HashMap<String, usize>, _stack_index: &mut usize) -> Result<String> {
         Ok(match self {
             UnaryOperator::Negative => String::from("neg rax\n"),
             UnaryOperator::Complement => String::from("not rax\n"),
@@ -557,7 +631,7 @@ impl ASTNode for UnaryOperator {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 enum BinaryOperator {
     Addition,
     Subtraction,
@@ -612,7 +686,7 @@ impl ASTNode for BinaryOperator {
         }
     }
 
-    fn emit(self, vmap: &mut HashMap<String, usize>, stack_index: &mut usize) -> Result<String> {
+    fn emit(self, _vmap: &mut HashMap<String, usize>, _stack_index: &mut usize) -> Result<String> {
         Ok(match self {
             BinaryOperator::Addition => String::from("add rax, rcx\n"),
             BinaryOperator::Subtraction => String::from(
