@@ -26,7 +26,8 @@ tests = {
     'gt_gt',
     'ge_lt',
     'ge_eq',
-    'ge_gt'
+    'ge_gt',
+    'multiple_stmts',
   ]
 }
 

@@ -64,8 +64,12 @@ static Vertex* parse_recover(Parser* parser) {
     if (parser->error_depth++ >= PARSE_ERRORS_MAX)
         return NULL;
 
-    while (lex_peek(parser->lexer).type != TOK_LIT_NUM)
-        lex_next(parser->lexer);
+    Token next = lex_next(parser->lexer);
+    while (next.type != TOK_SEMI && next.type != TOK_EOF)
+        next = lex_next(parser->lexer);
+
+    if (next.type == TOK_EOF)
+        return NULL;
 
     return parse(parser);
 }
@@ -181,13 +185,58 @@ static Vertex* parse_expr(Parser* parser, uint8_t precedence) {
     return lhs;
 }
 
+static Vertex* parse_expr_stmt(Parser* parser) {
+    assert(parser);
+
+    Vertex* expr = parse_expr(parser, 0);
+    Token   next = lex_next(parser->lexer);
+    if (next.type != TOK_SEMI) {
+        parse_error(parser, next, "Expected a semicolon.");
+        return parse_recover(parser);
+    }
+
+    return vertex_expr_stmt_new(parse_span_merge(expr->span, next.lexeme), expr);
+}
+
+static Vertex* parse_stmt(Parser* parser) {
+    assert(parser);
+
+    return parse_expr_stmt(parser);
+}
+
 Vertex* parse(Parser* parser) {
     assert(parser);
 
-    Vertex* ret = parse_expr(parser, 0);
+    A3_SLL(stmts, Vertex) stmts;
+    A3_SLL_INIT(&stmts);
+
+    Vertex* current = parse_stmt(parser);
+    if (!current)
+        return NULL;
+    A3_SLL_PUSH(&stmts, current, link);
+
+    Token next = lex_peek(parser->lexer);
+    while (next.type != TOK_EOF && next.type != TOK_ERR) {
+        Vertex* v = parse_stmt(parser);
+        if (!v)
+            break;
+        A3_SLL_INSERT_AFTER(current, v, link);
+
+        next    = lex_peek(parser->lexer);
+        current = v;
+    }
+    next = lex_peek(parser->lexer);
+
+    if (next.type == TOK_ERR)
+        return NULL;
+
+    if (next.type != TOK_EOF) {
+        parse_error(parser, next, "Expected end of file.");
+        return NULL;
+    }
 
     if (!parser->status)
         return NULL;
 
-    return ret;
+    return A3_SLL_HEAD(&stmts);
 }

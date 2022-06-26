@@ -155,6 +155,14 @@ static void gen_unary_op(AstVisitor* visitor, Vertex* op) {
     }
 }
 
+static void gen_expr_stmt(AstVisitor* visitor, Vertex* stmt) {
+    assert(visitor);
+    assert(stmt);
+    assert(stmt->type == V_STMT && stmt->stmt_type == STMT_EXPR_STMT);
+
+    vertex_visit(visitor, stmt->expr);
+}
+
 bool gen(A3CString src, Vertex* root) {
     Generator gen = { .src = src, .stack_depth = 0, .status = GEN_OK };
 
@@ -164,10 +172,11 @@ bool gen(A3CString src, Vertex* root) {
 
     vertex_visit(
         &(AstVisitor) {
-            .ctx            = &gen,
-            .visit_lit      = gen_lit,
-            .visit_bin_op   = gen_bin_op,
-            .visit_unary_op = gen_unary_op,
+            .ctx             = &gen,
+            .visit_lit       = gen_lit,
+            .visit_bin_op    = gen_bin_op,
+            .visit_unary_op  = gen_unary_op,
+            .visit_expr_stmt = gen_expr_stmt,
         },
         root);
     assert(!gen.stack_depth);

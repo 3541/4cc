@@ -11,6 +11,7 @@
 
 #include <assert.h>
 
+#include <a3/sll.h>
 #include <a3/str.h>
 #include <a3/util.h>
 
@@ -40,6 +41,15 @@ Vertex* vertex_lit_num_new(A3CString span, int64_t num) {
     return ret;
 }
 
+Vertex* vertex_expr_stmt_new(A3CString span, Vertex* expr) {
+    assert(expr);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .span = span, .type = V_STMT, .stmt_type = STMT_EXPR_STMT, .expr = expr };
+
+    return ret;
+}
+
 void vertex_visit(AstVisitor* visitor, Vertex* vertex) {
     assert(visitor);
     assert(vertex);
@@ -53,5 +63,16 @@ void vertex_visit(AstVisitor* visitor, Vertex* vertex) {
         break;
     case V_UNARY_OP:
         visitor->visit_unary_op(visitor, vertex);
+        break;
+    case V_STMT:
+        switch (vertex->stmt_type) {
+        case STMT_EXPR_STMT:
+            visitor->visit_expr_stmt(visitor, vertex);
+            break;
+        }
+
+        if (A3_SLL_NEXT(vertex, link))
+            vertex_visit(visitor, A3_SLL_NEXT(vertex, link));
+        break;
     }
 }

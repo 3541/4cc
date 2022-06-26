@@ -213,6 +213,16 @@ static Token lex_paren(Lexer* lexer) {
     }
 }
 
+static Token lex_semi(Lexer* lexer) {
+    assert(lexer);
+
+    A3CString lexeme = lex_consume_one(lexer, A3_CS("semicolon"), A3_CS(";"));
+    if (!a3_string_cptr(lexeme))
+        return lex_recover(lexer);
+
+    return (Token) { .type = TOK_SEMI, .lexeme = lexeme };
+}
+
 Token lex_peek(Lexer* lexer) {
     assert(lexer);
 
@@ -246,6 +256,9 @@ Token lex_peek(Lexer* lexer) {
     case '(':
     case ')':
         lexer->peek = lex_paren(lexer);
+        break;
+    case ';':
+        lexer->peek = lex_semi(lexer);
         break;
     default:
         if (isdigit(next)) {

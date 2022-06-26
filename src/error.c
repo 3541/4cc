@@ -15,8 +15,24 @@
 #include <a3/str.h>
 #include <a3/util.h>
 
+A3_FORMAT_FN(2, 0)
+static void verror_at_eof(A3CString src, char* fmt, va_list args) {
+    assert(src.ptr);
+
+    fputs("Error: At EOF: ", stderr);
+    vfprintf(stderr, fmt, args);
+    fputc('\n', stderr);
+}
+
 A3_FORMAT_FN(3, 0)
 void verror_at(A3CString src, A3CString highlight, char* fmt, va_list args) {
+    assert(src.ptr);
+
+    if (!highlight.ptr) {
+        verror_at_eof(src, fmt, args);
+        return;
+    }
+
     assert(a3_string_cptr(highlight) >= a3_string_cptr(src));
 
     int offset = (int)(a3_string_cptr(highlight) - a3_string_cptr(src));

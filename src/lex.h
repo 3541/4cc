@@ -15,7 +15,16 @@
 
 #define LEX_ERRORS_MAX 512
 
-typedef enum TokenType { TOK_OP, TOK_LPAREN, TOK_RPAREN, TOK_LIT_NUM, TOK_EOF, TOK_ERR } TokenType;
+typedef enum TokenType {
+    TOK_OP,
+    TOK_LPAREN,
+    TOK_RPAREN,
+    TOK_LIT_NUM,
+    TOK_SEMI,
+    TOK_EOF,
+    TOK_ERR
+} TokenType;
+
 typedef enum OpType {
     TOK_OP_PLUS,
     TOK_OP_MINUS,
