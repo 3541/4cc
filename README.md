@@ -1,5 +1,5 @@
 # 4cc
-A hobby C compiler.
+A hobby C compiler (formerly `3cc`).
 
 Somewhat based on [chibicc](https://github.com/rui314/chibicc), but mostly just in terms of implementation order and general approach.
 
