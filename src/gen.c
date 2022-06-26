@@ -93,6 +93,43 @@ static void gen_bin_op(AstVisitor* visitor, Vertex* op) {
         puts("cqo\n"
              "idiv rdi");
         break;
+    case OP_EQ:
+    case OP_NE:
+    case OP_LT:
+    case OP_LE:
+    case OP_GT:
+    case OP_GE: {
+        puts("cmp rax, rdi");
+
+        char* insn;
+        switch (op->bin_op_type) {
+        case OP_EQ:
+            insn = "sete";
+            break;
+        case OP_NE:
+            insn = "setne";
+            break;
+        case OP_LT:
+            insn = "setl";
+            break;
+        case OP_LE:
+            insn = "setle";
+            break;
+        case OP_GT:
+            insn = "setg";
+            break;
+        case OP_GE:
+            insn = "setge";
+            break;
+        default:
+            A3_UNREACHABLE();
+        }
+
+        printf("%s al\n"
+               "movzx rax, al\n",
+               insn);
+        break;
+    }
     default: {
         Generator* gen = visitor->ctx;
         gen->status    = GEN_ERR;

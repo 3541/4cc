@@ -80,16 +80,27 @@ static A3CString parse_span_merge(A3CString lhs, A3CString rhs) {
 
 static BinOpType parse_bin_op(OpType type) {
     switch (type) {
-    case OP_PLUS:
+    case TOK_OP_PLUS:
         return OP_ADD;
-    case OP_MINUS:
+    case TOK_OP_MINUS:
         return OP_SUB;
-    case OP_STAR:
+    case TOK_OP_STAR:
         return OP_MUL;
-    case OP_SLASH:
+    case TOK_OP_SLASH:
         return OP_DIV;
-        break;
-    case OP_COUNT:
+    case TOK_OP_EQ_EQ:
+        return OP_EQ;
+    case TOK_OP_BANG_EQ:
+        return OP_NE;
+    case TOK_OP_LT:
+        return OP_LT;
+    case TOK_OP_LT_EQ:
+        return OP_LE;
+    case TOK_OP_GT:
+        return OP_GT;
+    case TOK_OP_GT_EQ:
+        return OP_GE;
+    case TOK_OP_COUNT:
         A3_UNREACHABLE();
     }
 
@@ -98,9 +109,9 @@ static BinOpType parse_bin_op(OpType type) {
 
 static UnaryOpType parse_unary_op(OpType type) {
     switch (type) {
-    case OP_PLUS:
+    case TOK_OP_PLUS:
         return OP_UNARY_ADD;
-    case OP_MINUS:
+    case TOK_OP_MINUS:
         return OP_NEG;
     default:
         A3_PANIC("Not a unary operator.");
@@ -110,16 +121,16 @@ static UnaryOpType parse_unary_op(OpType type) {
 static Vertex* parse_expr(Parser* parser, uint8_t precedence) {
     assert(parser);
 
-    static uint8_t PREFIX_PRECEDENCE[OP_COUNT] = {
-        [OP_PLUS]  = 5,
-        [OP_MINUS] = 5,
+    static uint8_t PREFIX_PRECEDENCE[TOK_OP_COUNT] = {
+        [TOK_OP_PLUS]  = 5,
+        [TOK_OP_MINUS] = 5,
     };
 
-    static uint8_t INFIX_PRECEDENCE[OP_COUNT][2] = {
-        [OP_PLUS]  = { 1, 2 },
-        [OP_MINUS] = { 1, 2 },
-        [OP_STAR]  = { 3, 4 },
-        [OP_SLASH] = { 3, 4 },
+    static uint8_t INFIX_PRECEDENCE[TOK_OP_COUNT][2] = {
+        [TOK_OP_PLUS]  = { 1, 2 },
+        [TOK_OP_MINUS] = { 1, 2 },
+        [TOK_OP_STAR]  = { 3, 4 },
+        [TOK_OP_SLASH] = { 3, 4 },
     };
 
     Vertex* lhs = NULL;

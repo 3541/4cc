@@ -155,19 +155,42 @@ static Token lex_lit_num(Lexer* lexer) {
 static Token lex_op(Lexer* lexer) {
     assert(lexer);
 
-    A3CString lexeme = lex_consume_one(lexer, A3_CS("binary operator"), A3_CS("+-*/"));
+    A3CString lexeme = lex_consume_one(lexer, A3_CS("binary operator"), A3_CS("+-*/=!<>"));
     if (!a3_string_cptr(lexeme))
         return lex_recover(lexer);
 
-    switch (a3_string_cptr(lexeme)[0]) {
+    switch (lexeme.ptr[0]) {
     case '+':
-        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = OP_PLUS };
+        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_PLUS };
     case '-':
-        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = OP_MINUS };
+        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_MINUS };
     case '*':
-        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = OP_STAR };
+        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_STAR };
     case '/':
-        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = OP_SLASH };
+        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_SLASH };
+    case '=':
+        if (!lex_consume_one(lexer, A3_CS("relational equality"), A3_CS("=")).ptr)
+            return lex_recover(lexer);
+        lexeme.len++;
+        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_EQ_EQ };
+    case '!':
+        if (!lex_consume_one(lexer, A3_CS("relational inequality"), A3_CS("=")).ptr)
+            return lex_recover(lexer);
+        lexeme.len++;
+        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_BANG_EQ };
+    case '<':
+        if (lexeme.ptr[1] != '=')
+            return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_LT };
+        lexeme.len++;
+        lex_consume_any(lexer, 1);
+        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_LT_EQ };
+    case '>':
+        if (lexeme.ptr[1] != '=') {
+            return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_GT };
+        }
+        lexeme.len++;
+        lex_consume_any(lexer, 1);
+        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_GT_EQ };
     default:
         A3_UNREACHABLE();
     }
@@ -214,6 +237,10 @@ Token lex_peek(Lexer* lexer) {
     case '-':
     case '*':
     case '/':
+    case '<':
+    case '>':
+    case '=':
+    case '!':
         lexer->peek = lex_op(lexer);
         break;
     case '(':

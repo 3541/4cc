@@ -16,7 +16,19 @@
 #define LEX_ERRORS_MAX 512
 
 typedef enum TokenType { TOK_OP, TOK_LPAREN, TOK_RPAREN, TOK_LIT_NUM, TOK_EOF, TOK_ERR } TokenType;
-typedef enum OpType { OP_PLUS, OP_MINUS, OP_STAR, OP_SLASH, OP_COUNT } OpType;
+typedef enum OpType {
+    TOK_OP_PLUS,
+    TOK_OP_MINUS,
+    TOK_OP_STAR,
+    TOK_OP_SLASH,
+    TOK_OP_EQ_EQ,
+    TOK_OP_BANG_EQ,
+    TOK_OP_LT,
+    TOK_OP_LT_EQ,
+    TOK_OP_GT,
+    TOK_OP_GT_EQ,
+    TOK_OP_COUNT
+} OpType;
 
 typedef struct Token {
     TokenType type;

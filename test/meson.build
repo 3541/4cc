@@ -10,7 +10,23 @@ tests = {
     'paren',
     'unary_minus',
     'unary_plus',
-    'double_unary_minus'
+    'double_unary_minus',
+    'eq_ne',
+    'eq_eq',
+    'ne_ne',
+    'ne_eq',
+    'lt_lt',
+    'lt_eq',
+    'lt_gt',
+    'le_lt',
+    'le_eq',
+    'le_gt',
+    'gt_lt',
+    'gt_eq',
+    'gt_gt',
+    'ge_lt',
+    'ge_eq',
+    'ge_gt'
   ]
 }
 

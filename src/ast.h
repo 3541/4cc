@@ -19,7 +19,18 @@ typedef enum VertexType {
     V_LIT,
 } VertexType;
 
-typedef enum BinOpType { OP_ADD, OP_SUB, OP_MUL, OP_DIV } BinOpType;
+typedef enum BinOpType {
+    OP_ADD,
+    OP_SUB,
+    OP_MUL,
+    OP_DIV,
+    OP_EQ,
+    OP_NE,
+    OP_LT,
+    OP_LE,
+    OP_GT,
+    OP_GE
+} BinOpType;
 typedef enum UnaryOpType { OP_UNARY_ADD, OP_NEG } UnaryOpType;
 
 typedef enum LiteralType { LIT_NUM } LiteralType;
