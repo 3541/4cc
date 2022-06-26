@@ -8,16 +8,16 @@
         "utils": "utils"
       },
       "locked": {
-        "lastModified": 1655558609,
-        "narHash": "sha256-34PUzMtQEKqC/U/BKysEUafXTHHhfXsi58YEpS2PvFE=",
+        "lastModified": 1655897904,
+        "narHash": "sha256-XXJiX4IF8RPZnm8lxzLQ9DwtkofOsXEzo5wMGGeL8Yk=",
         "owner": "3541",
         "repo": "liba3",
-        "rev": "63d65cabfba590db04d469874eff31bbefdf8d7d",
+        "rev": "2d39450eaee3dd1ad116f2dbc23027a8b5e75d28",
         "type": "github"
       },
       "original": {
         "owner": "3541",
-        "ref": "v0.4.0",
+        "ref": "v0.4.1",
         "repo": "liba3",
         "type": "github"
       }
