@@ -24,6 +24,15 @@ Vertex* vertex_bin_op_new(A3CString span, BinOpType type, Vertex* lhs, Vertex* r
     return ret;
 }
 
+Vertex* vertex_unary_op_new(A3CString span, UnaryOpType type, Vertex* operand) {
+    assert(operand);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .span = span, .type = V_UNARY_OP, .unary_op_type = type, .operand = operand };
+
+    return ret;
+}
+
 Vertex* vertex_lit_num_new(A3CString span, int64_t num) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret = (Vertex) { .span = span, .type = V_LIT, .lit_type = LIT_NUM, .lit_num = num };
@@ -42,5 +51,7 @@ void vertex_visit(AstVisitor* visitor, Vertex* vertex) {
     case V_BIN_OP:
         visitor->visit_bin_op(visitor, vertex);
         break;
+    case V_UNARY_OP:
+        visitor->visit_unary_op(visitor, vertex);
     }
 }

@@ -102,14 +102,31 @@ static void gen_bin_op(AstVisitor* visitor, Vertex* op) {
     }
 }
 
+static void gen_unary_op(AstVisitor* visitor, Vertex* op) {
+    assert(visitor);
+    assert(op);
+    assert(op->type == V_UNARY_OP);
+
+    vertex_visit(visitor, op->operand);
+
+    switch (op->unary_op_type) {
+    case OP_UNARY_ADD:
+        break;
+    case OP_NEG:
+        puts("neg rax");
+        break;
+    }
+}
+
 bool gen(A3CString src, Vertex* root) {
     Generator gen = { .src = src, .stack_depth = 0, .status = GEN_OK };
 
     vertex_visit(
         &(AstVisitor) {
-            .ctx          = &gen,
-            .visit_lit    = gen_lit,
-            .visit_bin_op = gen_bin_op,
+            .ctx            = &gen,
+            .visit_lit      = gen_lit,
+            .visit_bin_op   = gen_bin_op,
+            .visit_unary_op = gen_unary_op,
         },
         root);
     assert(!gen.stack_depth);

@@ -78,8 +78,42 @@ static A3CString parse_span_merge(A3CString lhs, A3CString rhs) {
     return a3_cstring_new(lhs.ptr, lhs.len + rhs.len + ((size_t)(rhs.ptr - lhs.ptr) - lhs.len));
 }
 
+static BinOpType parse_bin_op(OpType type) {
+    switch (type) {
+    case OP_PLUS:
+        return OP_ADD;
+    case OP_MINUS:
+        return OP_SUB;
+    case OP_STAR:
+        return OP_MUL;
+    case OP_SLASH:
+        return OP_DIV;
+        break;
+    case OP_COUNT:
+        A3_UNREACHABLE();
+    }
+
+    A3_UNREACHABLE();
+}
+
+static UnaryOpType parse_unary_op(OpType type) {
+    switch (type) {
+    case OP_PLUS:
+        return OP_UNARY_ADD;
+    case OP_MINUS:
+        return OP_NEG;
+    default:
+        A3_PANIC("Not a unary operator.");
+    }
+}
+
 static Vertex* parse_expr(Parser* parser, uint8_t precedence) {
     assert(parser);
+
+    static uint8_t PREFIX_PRECEDENCE[OP_COUNT] = {
+        [OP_PLUS]  = 5,
+        [OP_MINUS] = 5,
+    };
 
     static uint8_t INFIX_PRECEDENCE[OP_COUNT][2] = {
         [OP_PLUS]  = { 1, 2 },
@@ -89,7 +123,8 @@ static Vertex* parse_expr(Parser* parser, uint8_t precedence) {
     };
 
     Vertex* lhs = NULL;
-    switch (lex_peek(parser->lexer).type) {
+    Token   tok = lex_peek(parser->lexer);
+    switch (tok.type) {
     case TOK_LPAREN:
         lex_next(parser->lexer);
         lhs = parse_expr(parser, 0);
@@ -97,12 +132,23 @@ static Vertex* parse_expr(Parser* parser, uint8_t precedence) {
             return parse_recover(parser);
         break;
     case TOK_LIT_NUM: {
-        Token lit = lex_next(parser->lexer);
-        lhs       = vertex_lit_num_new(lit.lexeme, lit.lit_num);
+        lex_next(parser->lexer);
+        lhs = vertex_lit_num_new(tok.lexeme, tok.lit_num);
         break;
     }
+    case TOK_OP:
+        if (!PREFIX_PRECEDENCE[tok.op_type]) {
+            parse_error(parser, lex_next(parser->lexer), "Expected a unary operator.");
+            return parse_recover(parser);
+        }
+
+        lex_next(parser->lexer);
+        Vertex* rhs = parse_expr(parser, PREFIX_PRECEDENCE[tok.op_type]);
+        lhs         = vertex_unary_op_new(tok.lexeme, parse_unary_op(tok.op_type), rhs);
+        break;
     default:
-        parse_error(parser, lex_next(parser->lexer), "Expected a literal or opening parenthesis.");
+        parse_error(parser, lex_next(parser->lexer),
+                    "Expected a literal, opening parenthesis, or unary operator.");
         return parse_recover(parser);
     }
 
@@ -116,25 +162,9 @@ static Vertex* parse_expr(Parser* parser, uint8_t precedence) {
 
         lex_next(parser->lexer);
 
-        Vertex*   rhs     = parse_expr(parser, INFIX_PRECEDENCE[tok_op.op_type][1]);
-        BinOpType op_type = OP_ADD;
-        switch (tok_op.op_type) {
-        case OP_PLUS:
-            op_type = OP_ADD;
-            break;
-        case OP_MINUS:
-            op_type = OP_SUB;
-            break;
-        case OP_STAR:
-            op_type = OP_MUL;
-            break;
-        case OP_SLASH:
-            op_type = OP_DIV;
-            break;
-        case OP_COUNT:
-            A3_UNREACHABLE();
-        }
-        lhs = vertex_bin_op_new(parse_span_merge(lhs->span, rhs->span), op_type, lhs, rhs);
+        Vertex* rhs = parse_expr(parser, INFIX_PRECEDENCE[tok_op.op_type][1]);
+        lhs         = vertex_bin_op_new(parse_span_merge(lhs->span, rhs->span),
+                                        parse_bin_op(tok_op.op_type), lhs, rhs);
     }
 
     return lhs;
