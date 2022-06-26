@@ -34,14 +34,8 @@ int main(int argc, char* argv[]) {
     if (!root)
         return -1;
 
-    puts("global main\n"
-         "section .text\n"
-         "main:");
-
     if (!gen(input, root))
         return -1;
-
-    puts("ret");
 
     return 0;
 }

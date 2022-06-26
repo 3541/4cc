@@ -121,6 +121,10 @@ static void gen_unary_op(AstVisitor* visitor, Vertex* op) {
 bool gen(A3CString src, Vertex* root) {
     Generator gen = { .src = src, .stack_depth = 0, .status = GEN_OK };
 
+    puts("global main\n"
+         "section .text\n"
+         "main:");
+
     vertex_visit(
         &(AstVisitor) {
             .ctx            = &gen,
@@ -130,6 +134,8 @@ bool gen(A3CString src, Vertex* root) {
         },
         root);
     assert(!gen.stack_depth);
+
+    puts("ret");
 
     return gen.status;
 }
