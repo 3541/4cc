@@ -41,7 +41,7 @@ typedef enum BinOpType {
 } BinOpType;
 
 typedef enum UnaryOpType { OP_UNARY_ADD, OP_NEG } UnaryOpType;
-typedef enum StmtType { STMT_EXPR_STMT, STMT_RET, STMT_BLOCK } StmtType;
+typedef enum StmtType { STMT_EXPR_STMT, STMT_RET, STMT_BLOCK, STMT_EMPTY } StmtType;
 typedef enum LiteralType { LIT_NUM } LiteralType;
 
 typedef struct Var {
@@ -133,6 +133,7 @@ Vertex* vertex_unary_op_new(A3CString span, UnaryOpType, Vertex* operand);
 Vertex* vertex_lit_num_new(A3CString span, int64_t);
 Vertex* vertex_expr_stmt_new(A3CString span, Vertex* expr);
 Vertex* vertex_ret_new(A3CString span, Vertex* expr);
+Vertex* vertex_empty_new(A3CString span);
 Vertex* vertex_block_new(Scope*);
 Vertex* vertex_fn_new(A3CString name, Vertex* body);
 Vertex* vertex_var_new(A3CString span, Scope* scope);

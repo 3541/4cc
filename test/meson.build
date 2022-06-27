@@ -41,7 +41,7 @@ tests = {
     'mid',
     'last'
   ],
-  'block': [ 'block' ]
+  'stmt': [ 'block', 'empty' ]
 }
 
 foreach suite, ts : tests

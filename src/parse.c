@@ -285,6 +285,10 @@ static Vertex* parse_stmt(Parser* parser) {
         return parse_ret(parser);
     case TOK_LBRACE:
         return parse_block(parser);
+    case TOK_SEMI: {
+        Token tok = lex_next(parser->lexer);
+        return vertex_empty_new(tok.lexeme);
+    }
     default:
         return parse_expr_stmt(parser);
     }

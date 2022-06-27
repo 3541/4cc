@@ -72,6 +72,13 @@ Vertex* vertex_ret_new(A3CString span, Vertex* expr) {
     return ret;
 }
 
+Vertex* vertex_empty_new(A3CString span) {
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .span = span, .type = V_STMT, .stmt_type = STMT_EMPTY };
+
+    return ret;
+}
+
 bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
     assert(visitor);
     assert(vertex);
@@ -99,6 +106,8 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
         case STMT_BLOCK:
             visit = visitor->visit_block;
             break;
+        case STMT_EMPTY:
+            return true;
         }
         break;
     case V_VAR:
