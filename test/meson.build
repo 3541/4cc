@@ -40,7 +40,8 @@ tests = {
     'early',
     'mid',
     'last'
-  ]
+  ],
+  'block': [ 'block' ]
 }
 
 foreach suite, ts : tests

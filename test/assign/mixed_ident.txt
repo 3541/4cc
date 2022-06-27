@@ -1,1 +1,1 @@
-abc123 = 123; return abc123;
+{ abc123 = 123; return abc123; }

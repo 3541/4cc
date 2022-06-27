@@ -225,8 +225,9 @@ static bool gen_fn(AstVisitor* visitor, Vertex* vertex) {
     assert(vertex);
     assert(vertex->type == V_FN);
 
-    Fn* fn          = &vertex->fn;
-    fn->stack_depth = align_up(fn->stack_depth, 16);
+    Fn*    fn                = &vertex->fn;
+    Block* body              = &fn->body->block;
+    body->scope->stack_depth = align_up(body->scope->stack_depth, 16);
 
     printf("global " A3_S_F "\n"
            "section .text\n"
@@ -234,17 +235,27 @@ static bool gen_fn(AstVisitor* visitor, Vertex* vertex) {
            "push rbp\n"
            "mov rbp, rsp\n"
            "sub rsp, %zu\n",
-           A3_S_FORMAT(fn->name), A3_S_FORMAT(fn->name), fn->stack_depth);
+           A3_S_FORMAT(fn->name), A3_S_FORMAT(fn->name), body->scope->stack_depth);
 
-    A3_SLL_FOR_EACH(Vertex, stmt, &fn->body, link) {
-        assert(stmt->type == V_STMT);
-        A3_TRYB(vertex_visit(visitor, stmt));
-    }
+    A3_TRYB(vertex_visit(visitor, fn->body));
 
     puts(".ret:\n"
          "mov rsp, rbp\n"
          "pop rbp\n"
          "ret");
+
+    return true;
+}
+
+static bool gen_block(AstVisitor* visitor, Vertex* vertex) {
+    assert(visitor);
+    assert(vertex);
+    assert(vertex->type == V_STMT && vertex->stmt_type == STMT_BLOCK);
+
+    A3_SLL_FOR_EACH(Vertex, stmt, &vertex->block.body, link) {
+        assert(stmt->type == V_STMT);
+        A3_TRYB(vertex_visit(visitor, stmt));
+    }
 
     return true;
 }
@@ -265,6 +276,7 @@ bool gen(A3CString src, Vertex* root) {
             .visit_ret       = gen_ret,
             .visit_var       = gen_var,
             .visit_fn        = gen_fn,
+            .visit_block     = gen_block,
         },
         root);
     assert(!gen.stack_depth);

@@ -20,6 +20,14 @@
 A3_HT_DECLARE_METHODS(A3CString, Var)
 A3_HT_DEFINE_METHODS(A3CString, Var, a3_string_cptr, a3_string_len, a3_string_cmp)
 
+Scope* scope_new(Scope* parent) {
+    A3_UNWRAPNI(Scope*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Scope) { .parent = parent, .stack_depth = parent ? parent->stack_depth : 0 };
+    A3_HT_INIT(A3CString, Var)(&ret->scope, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
+
+    return ret;
+}
+
 Vertex* vertex_bin_op_new(A3CString span, BinOpType type, Vertex* lhs, Vertex* rhs) {
     assert(lhs);
     assert(rhs);
@@ -87,6 +95,10 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
             break;
         case STMT_RET:
             visit = visitor->visit_ret;
+            break;
+        case STMT_BLOCK:
+            visit = visitor->visit_block;
+            break;
         }
         break;
     case V_VAR:
@@ -100,18 +112,30 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
     return visit(visitor, vertex);
 }
 
-Vertex* vertex_fn_new(A3CString name) {
-    assert(name.ptr);
+Vertex* vertex_block_new(Scope* scope) {
+    assert(scope);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .type = V_FN, .span = name, .fn = { .name = name, .stack_depth = 0 } };
-    A3_SLL_INIT(&ret->fn.body);
-    A3_HT_INIT(A3CString, Var)(&ret->fn.scope, A3_HT_NO_HASH_KEY, true);
+    *ret = (Vertex) {
+        .type = V_STMT, .span = A3_CS_NULL, .stmt_type = STMT_BLOCK, .block.scope = scope
+    };
+    A3_SLL_INIT(&ret->block.body);
 
     return ret;
 }
 
-Vertex* vertex_var_new(A3CString span, Fn* scope) {
+Vertex* vertex_fn_new(A3CString name, Vertex* body) {
+    assert(name.ptr);
+    assert(body);
+    assert(body->type == V_STMT && body->stmt_type == STMT_BLOCK);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .type = V_FN, .span = name, .fn = { .name = name, .body = body } };
+
+    return ret;
+}
+
+Vertex* vertex_var_new(A3CString span, Scope* scope) {
     assert(span.ptr);
     assert(scope);
 

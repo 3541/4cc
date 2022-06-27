@@ -23,7 +23,7 @@
 typedef struct Parser {
     A3CString src;
     Lexer*    lexer;
-    Vertex*   current_fn;
+    Scope*    current_scope;
     size_t    error_depth;
     bool      status;
 } Parser;
@@ -31,7 +31,7 @@ typedef struct Parser {
 Parser* parse_new(A3CString src, Lexer* lexer) {
     A3_UNWRAPNI(Parser*, ret, calloc(1, sizeof(*ret)));
     *ret = (Parser) {
-        .src = src, .lexer = lexer, .current_fn = NULL, .error_depth = 0, .status = true
+        .src = src, .lexer = lexer, .current_scope = NULL, .error_depth = 0, .status = true
     };
     return ret;
 }
@@ -74,7 +74,7 @@ static Vertex* parse_recover(Parser* parser) {
         next = lex_next(parser->lexer);
 
     if (next.type == TOK_EOF || lex_peek(parser->lexer).type == TOK_EOF)
-        return NULL;
+        exit(1);
 
     return parse_stmt(parser);
 }
@@ -135,7 +135,7 @@ static Vertex* parse_var(Parser* parser) {
     Token tok = lex_next(parser->lexer);
     assert(tok.type == TOK_IDENT);
 
-    return vertex_var_new(tok.lexeme, &parser->current_fn->fn);
+    return vertex_var_new(tok.lexeme, parser->current_scope);
 }
 
 static Vertex* parse_expr(Parser* parser, uint8_t precedence) {
@@ -207,8 +207,6 @@ static Vertex* parse_expr_stmt(Parser* parser) {
 
     Vertex* expr = parse_expr(parser, 0);
     Token   next = lex_next(parser->lexer);
-    if (next.type == TOK_EOF)
-        return NULL;
     if (next.type != TOK_SEMI) {
         parse_error(parser, next, "Expected a semicolon.");
         return parse_recover(parser);
@@ -238,28 +236,22 @@ static Vertex* parse_ret(Parser* parser) {
     return vertex_ret_new(parse_span_merge(tok.lexeme, expr->span), expr);
 }
 
-static Vertex* parse_stmt(Parser* parser) {
+static Vertex* parse_block(Parser* parser) {
     assert(parser);
 
-    if (lex_peek(parser->lexer).type == TOK_RET)
-        return parse_ret(parser);
+    Token left_tok = lex_next(parser->lexer);
+    assert(left_tok.type == TOK_LBRACE);
 
-    return parse_expr_stmt(parser);
-}
-
-Vertex* parse(Parser* parser) {
-    assert(parser);
-    assert(!parser->current_fn);
-
-    parser->current_fn = vertex_fn_new(A3_CS("main"));
+    parser->current_scope = scope_new(parser->current_scope);
+    Vertex* block         = vertex_block_new(parser->current_scope);
 
     Vertex* current = parse_stmt(parser);
     if (!current)
         return NULL;
-    A3_SLL_PUSH(&parser->current_fn->fn.body, current, link);
+    A3_SLL_PUSH(&block->block.body, current, link);
 
     Token next = lex_peek(parser->lexer);
-    while (next.type != TOK_EOF && next.type != TOK_ERR) {
+    while (next.type != TOK_RBRACE && next.type != TOK_EOF && next.type != TOK_ERR) {
         Vertex* v = parse_stmt(parser);
         if (!v)
             break;
@@ -271,8 +263,42 @@ Vertex* parse(Parser* parser) {
     next = lex_peek(parser->lexer);
 
     if (next.type == TOK_ERR)
+        return parse_recover(parser);
+
+    parser->current_scope = parser->current_scope->parent;
+
+    Token right_tok = lex_next(parser->lexer);
+    if (right_tok.type != TOK_RBRACE) {
+        parse_error(parser, right_tok, "Expected a closing brace.");
+        return parse_recover(parser);
+    }
+
+    block->span = parse_span_merge(left_tok.lexeme, right_tok.lexeme);
+    return block;
+}
+
+static Vertex* parse_stmt(Parser* parser) {
+    assert(parser);
+
+    switch (lex_peek(parser->lexer).type) {
+    case TOK_RET:
+        return parse_ret(parser);
+    case TOK_LBRACE:
+        return parse_block(parser);
+    default:
+        return parse_expr_stmt(parser);
+    }
+}
+
+Vertex* parse(Parser* parser) {
+    assert(parser);
+    assert(!parser->current_scope);
+
+    Vertex* body = parse_stmt(parser);
+    if (!body)
         return NULL;
 
+    Token next = lex_peek(parser->lexer);
     if (next.type != TOK_EOF) {
         parse_error(parser, next, "Expected end of file.");
         return NULL;
@@ -281,8 +307,5 @@ Vertex* parse(Parser* parser) {
     if (!parser->status)
         return NULL;
 
-    Vertex* ret        = parser->current_fn;
-    parser->current_fn = NULL;
-
-    return ret;
+    return vertex_fn_new(A3_CS("main"), body);
 }

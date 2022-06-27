@@ -41,7 +41,7 @@ typedef enum BinOpType {
 } BinOpType;
 
 typedef enum UnaryOpType { OP_UNARY_ADD, OP_NEG } UnaryOpType;
-typedef enum StmtType { STMT_EXPR_STMT, STMT_RET } StmtType;
+typedef enum StmtType { STMT_EXPR_STMT, STMT_RET, STMT_BLOCK } StmtType;
 typedef enum LiteralType { LIT_NUM } LiteralType;
 
 typedef struct Var {
@@ -50,11 +50,21 @@ typedef struct Var {
 } Var;
 A3_HT_DEFINE_STRUCTS(A3CString, Var)
 
-typedef struct Fn {
-    A3CString name;
-    A3_SLL(body, Vertex) body;
+typedef struct Scope Scope;
+typedef struct Scope {
+    Scope* parent;
     A3_HT(A3CString, Var) scope;
     size_t stack_depth;
+} Scope;
+
+typedef struct Block {
+    A3_SLL(body, Vertex) body;
+    Scope* scope;
+} Block;
+
+typedef struct Fn {
+    A3CString name;
+    Vertex*   body;
 } Fn;
 
 typedef struct Vertex {
@@ -90,7 +100,8 @@ typedef struct Vertex {
             A3_SLL_LINK(Vertex) link;
 
             union {
-                Vertex* expr; // STMT_EXPR_STMT and STMT_RET.
+                Vertex* expr;  // STMT_EXPR_STMT and STMT_RET.
+                Block   block; // STMT_BLOCK
             };
         };
 
@@ -112,13 +123,17 @@ typedef struct AstVisitor {
     AstVisitorCallback visit_ret;
     AstVisitorCallback visit_var;
     AstVisitorCallback visit_fn;
+    AstVisitorCallback visit_block;
 } AstVisitor;
+
+Scope* scope_new(Scope* parent);
 
 Vertex* vertex_bin_op_new(A3CString span, BinOpType, Vertex* lhs, Vertex* rhs);
 Vertex* vertex_unary_op_new(A3CString span, UnaryOpType, Vertex* operand);
 Vertex* vertex_lit_num_new(A3CString span, int64_t);
 Vertex* vertex_expr_stmt_new(A3CString span, Vertex* expr);
 Vertex* vertex_ret_new(A3CString span, Vertex* expr);
-Vertex* vertex_fn_new(A3CString name);
-Vertex* vertex_var_new(A3CString span, Fn* scope);
+Vertex* vertex_block_new(Scope*);
+Vertex* vertex_fn_new(A3CString name, Vertex* body);
+Vertex* vertex_var_new(A3CString span, Scope* scope);
 bool    vertex_visit(AstVisitor*, Vertex*);
