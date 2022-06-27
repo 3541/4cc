@@ -197,6 +197,16 @@ static bool gen_expr_stmt(AstVisitor* visitor, Vertex* stmt) {
     return vertex_visit(visitor, stmt->expr);
 }
 
+static bool gen_ret(AstVisitor* visitor, Vertex* ret) {
+    assert(visitor);
+    assert(ret);
+    assert(ret->type == V_STMT && ret->stmt_type == STMT_RET);
+
+    A3_TRYB(vertex_visit(visitor, ret->expr));
+    puts("jmp .ret");
+    return true;
+}
+
 static bool gen_var(AstVisitor* visitor, Vertex* ident) {
     assert(visitor);
     assert(ident);
@@ -231,7 +241,8 @@ static bool gen_fn(AstVisitor* visitor, Vertex* vertex) {
         A3_TRYB(vertex_visit(visitor, stmt));
     }
 
-    puts("mov rsp, rbp\n"
+    puts(".ret:\n"
+         "mov rsp, rbp\n"
          "pop rbp\n"
          "ret");
 
@@ -251,6 +262,7 @@ bool gen(A3CString src, Vertex* root) {
             .visit_bin_op    = gen_bin_op,
             .visit_unary_op  = gen_unary_op,
             .visit_expr_stmt = gen_expr_stmt,
+            .visit_ret       = gen_ret,
             .visit_var       = gen_var,
             .visit_fn        = gen_fn,
         },

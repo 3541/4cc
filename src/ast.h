@@ -41,7 +41,7 @@ typedef enum BinOpType {
 } BinOpType;
 
 typedef enum UnaryOpType { OP_UNARY_ADD, OP_NEG } UnaryOpType;
-typedef enum StmtType { STMT_EXPR_STMT } StmtType;
+typedef enum StmtType { STMT_EXPR_STMT, STMT_RET } StmtType;
 typedef enum LiteralType { LIT_NUM } LiteralType;
 
 typedef struct Var {
@@ -90,7 +90,7 @@ typedef struct Vertex {
             A3_SLL_LINK(Vertex) link;
 
             union {
-                Vertex* expr; // STMT_EXPR_STMT
+                Vertex* expr; // STMT_EXPR_STMT and STMT_RET.
             };
         };
 
@@ -109,6 +109,7 @@ typedef struct AstVisitor {
     AstVisitorCallback visit_bin_op;
     AstVisitorCallback visit_unary_op;
     AstVisitorCallback visit_expr_stmt;
+    AstVisitorCallback visit_ret;
     AstVisitorCallback visit_var;
     AstVisitorCallback visit_fn;
 } AstVisitor;
@@ -117,6 +118,7 @@ Vertex* vertex_bin_op_new(A3CString span, BinOpType, Vertex* lhs, Vertex* rhs);
 Vertex* vertex_unary_op_new(A3CString span, UnaryOpType, Vertex* operand);
 Vertex* vertex_lit_num_new(A3CString span, int64_t);
 Vertex* vertex_expr_stmt_new(A3CString span, Vertex* expr);
+Vertex* vertex_ret_new(A3CString span, Vertex* expr);
 Vertex* vertex_fn_new(A3CString name);
 Vertex* vertex_var_new(A3CString span, Fn* scope);
 bool    vertex_visit(AstVisitor*, Vertex*);

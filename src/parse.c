@@ -217,8 +217,32 @@ static Vertex* parse_expr_stmt(Parser* parser) {
     return vertex_expr_stmt_new(parse_span_merge(expr->span, next.lexeme), expr);
 }
 
+static Vertex* parse_ret(Parser* parser) {
+    assert(parser);
+
+    Token tok = lex_next(parser->lexer);
+    assert(tok.type == TOK_RET);
+
+    Vertex* expr = parse_expr(parser, 0);
+    if (!expr)
+        return NULL;
+
+    Token next = lex_next(parser->lexer);
+    if (next.type == TOK_EOF)
+        return NULL;
+    if (next.type != TOK_SEMI) {
+        parse_error(parser, next, "Expected a semicolon.");
+        return parse_recover(parser);
+    }
+
+    return vertex_ret_new(parse_span_merge(tok.lexeme, expr->span), expr);
+}
+
 static Vertex* parse_stmt(Parser* parser) {
     assert(parser);
+
+    if (lex_peek(parser->lexer).type == TOK_RET)
+        return parse_ret(parser);
 
     return parse_expr_stmt(parser);
 }

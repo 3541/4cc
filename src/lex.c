@@ -241,12 +241,22 @@ static Token lex_semi(Lexer* lexer) {
     return (Token) { .type = TOK_SEMI, .lexeme = lexeme };
 }
 
-static Token lex_ident(Lexer* lexer) {
+static Token lex_ident_or_kw(Lexer* lexer) {
     assert(lexer);
+
+    static struct {
+        A3CString name;
+        TokenType type;
+    } KEYWORDS[] = { { A3_CS("return"), TOK_RET } };
 
     A3CString lexeme = lex_consume_until(lexer, is_not_ident);
     if (!a3_string_cptr(lexeme))
         return lex_recover(lexer);
+
+    for (size_t i = 0; i < sizeof(KEYWORDS) / sizeof(KEYWORDS[0]); i++) {
+        if (a3_string_cmp(lexeme, KEYWORDS[i].name) == 0)
+            return (Token) { .type = KEYWORDS[i].type, .lexeme = lexeme };
+    }
 
     return (Token) { .type = TOK_IDENT, .lexeme = lexeme };
 }
@@ -289,16 +299,16 @@ Token lex_peek(Lexer* lexer) {
         lexer->peek = lex_semi(lexer);
         break;
     default:
-        if (isdigit(next)) {
+        if (is_digit(next)) {
             lexer->peek = lex_lit_num(lexer);
             break;
         }
         if (is_ident_first(next)) {
-            lexer->peek = lex_ident(lexer);
+            lexer->peek = lex_ident_or_kw(lexer);
             break;
         }
 
-        lex_error(lexer, "Expected a numeric literal, binary operator, or identifier.");
+        lex_error(lexer, "Expected a numeric literal, binary operator, keyword, or identifier.");
         return lex_recover(lexer);
     }
 

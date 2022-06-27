@@ -20,6 +20,7 @@ typedef enum TokenType {
     TOK_LIT_NUM,
     TOK_LPAREN,
     TOK_OP,
+    TOK_RET,
     TOK_RPAREN,
     TOK_SEMI,
     TOK_EOF,

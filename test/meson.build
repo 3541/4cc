@@ -35,6 +35,11 @@ tests = {
     'multiple',
     'long_ident',
     'mixed_ident'
+  ],
+  'return': [
+    'early',
+    'mid',
+    'last'
   ]
 }
 
