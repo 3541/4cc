@@ -135,6 +135,11 @@ static Vertex* parse_var(Parser* parser) {
     Token tok = lex_next(parser->lexer);
     assert(tok.type == TOK_IDENT);
 
+    if (!parser->current_scope) {
+        parse_error(parser, tok, "Variable used without scope.");
+        return parse_recover(parser);
+    }
+
     return vertex_var_new(tok.lexeme, parser->current_scope);
 }
 

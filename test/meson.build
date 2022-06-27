@@ -34,7 +34,8 @@ tests = {
     'arithmetic',
     'multiple',
     'long_ident',
-    'mixed_ident'
+    'mixed_ident',
+    'mutate'
   ],
   'return': [
     'early',
