@@ -19,7 +19,7 @@
 typedef struct Vertex Vertex;
 // lex.h
 typedef struct Lexer Lexer;
-
+// parse.c
 typedef struct Parser Parser;
 
 Parser* parse_new(A3CString src, Lexer* lexer);

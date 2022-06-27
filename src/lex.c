@@ -107,16 +107,32 @@ static A3CString lex_consume_one(Lexer* lexer, A3CString name, A3CString delim) 
     return ret;
 }
 
-static void lex_consume_until(Lexer* lexer, bool (*pred)(uint8_t)) {
+static A3CString lex_consume_until(Lexer* lexer, bool (*pred)(uint8_t)) {
     assert(lexer);
 
-    while (!lex_is_eof(lexer) && !pred(lex_peek_byte(lexer)))
+    if (lex_is_eof(lexer))
+        return A3_CS_NULL;
+
+    A3CString ret = lex_peek_str(lexer);
+    ret.len       = 0;
+
+    while (!lex_is_eof(lexer) && !pred(lex_peek_byte(lexer))) {
         lex_consume_any(lexer, 1);
+        ret.len++;
+    }
+
+    return ret;
 }
 
 static bool is_digit(uint8_t c) { return isdigit(c); }
 
 static bool is_not_space(uint8_t c) { return !isspace(c); }
+
+static bool is_ident_first(uint8_t c) { return isalpha(c) || c == '_'; }
+
+static bool is_ident(uint8_t c) { return is_ident_first(c) || is_digit(c); }
+
+static bool is_not_ident(uint8_t c) { return !is_ident(c); }
 
 static void lex_consume_space(Lexer* lexer) {
     assert(lexer);
@@ -169,14 +185,16 @@ static Token lex_op(Lexer* lexer) {
     case '/':
         return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_SLASH };
     case '=':
-        if (!lex_consume_one(lexer, A3_CS("relational equality"), A3_CS("=")).ptr)
-            return lex_recover(lexer);
+        if (lexeme.ptr[1] != '=')
+            return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_EQ };
         lexeme.len++;
+        lex_consume_any(lexer, 1);
         return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_EQ_EQ };
     case '!':
         if (!lex_consume_one(lexer, A3_CS("relational inequality"), A3_CS("=")).ptr)
             return lex_recover(lexer);
         lexeme.len++;
+        lex_consume_any(lexer, 1);
         return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_BANG_EQ };
     case '<':
         if (lexeme.ptr[1] != '=')
@@ -223,6 +241,16 @@ static Token lex_semi(Lexer* lexer) {
     return (Token) { .type = TOK_SEMI, .lexeme = lexeme };
 }
 
+static Token lex_ident(Lexer* lexer) {
+    assert(lexer);
+
+    A3CString lexeme = lex_consume_until(lexer, is_not_ident);
+    if (!a3_string_cptr(lexeme))
+        return lex_recover(lexer);
+
+    return (Token) { .type = TOK_IDENT, .lexeme = lexeme };
+}
+
 Token lex_peek(Lexer* lexer) {
     assert(lexer);
 
@@ -265,8 +293,12 @@ Token lex_peek(Lexer* lexer) {
             lexer->peek = lex_lit_num(lexer);
             break;
         }
+        if (is_ident_first(next)) {
+            lexer->peek = lex_ident(lexer);
+            break;
+        }
 
-        lex_error(lexer, "Expected a numeric literal or binary operator.");
+        lex_error(lexer, "Expected a numeric literal, binary operator, or identifier.");
         return lex_recover(lexer);
     }
 

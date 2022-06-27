@@ -10,10 +10,15 @@
 #include "ast.h"
 
 #include <assert.h>
+#include <stdint.h>
 
+#include <a3/ht.h>
 #include <a3/sll.h>
 #include <a3/str.h>
 #include <a3/util.h>
+
+A3_HT_DECLARE_METHODS(A3CString, Var)
+A3_HT_DEFINE_METHODS(A3CString, Var, a3_string_cptr, a3_string_len, a3_string_cmp)
 
 Vertex* vertex_bin_op_new(A3CString span, BinOpType type, Vertex* lhs, Vertex* rhs) {
     assert(lhs);
@@ -50,29 +55,62 @@ Vertex* vertex_expr_stmt_new(A3CString span, Vertex* expr) {
     return ret;
 }
 
-void vertex_visit(AstVisitor* visitor, Vertex* vertex) {
+bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
     assert(visitor);
     assert(vertex);
 
+    AstVisitorCallback visit = visitor->visit_lit;
+
     switch (vertex->type) {
     case V_LIT:
-        visitor->visit_lit(visitor, vertex);
+        visit = visitor->visit_lit;
         break;
     case V_BIN_OP:
-        visitor->visit_bin_op(visitor, vertex);
+        visit = visitor->visit_bin_op;
         break;
     case V_UNARY_OP:
-        visitor->visit_unary_op(visitor, vertex);
+        visit = visitor->visit_unary_op;
         break;
     case V_STMT:
-        switch (vertex->stmt_type) {
-        case STMT_EXPR_STMT:
-            visitor->visit_expr_stmt(visitor, vertex);
-            break;
-        }
-
-        if (A3_SLL_NEXT(vertex, link))
-            vertex_visit(visitor, A3_SLL_NEXT(vertex, link));
+        assert(vertex->stmt_type == STMT_EXPR_STMT);
+        visit = visitor->visit_expr_stmt;
+        break;
+    case V_VAR:
+        visit = visitor->visit_var;
+        break;
+    case V_FN:
+        visit = visitor->visit_fn;
         break;
     }
+
+    return visit(visitor, vertex);
+}
+
+Vertex* vertex_fn_new(A3CString name) {
+    assert(name.ptr);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .type = V_FN, .span = name, .fn = { .name = name, .stack_depth = 0 } };
+    A3_SLL_INIT(&ret->fn.body);
+    A3_HT_INIT(A3CString, Var)(&ret->fn.scope, A3_HT_NO_HASH_KEY, true);
+
+    return ret;
+}
+
+Vertex* vertex_var_new(A3CString span, Fn* scope) {
+    assert(span.ptr);
+    assert(scope);
+
+    Var* var = A3_HT_FIND(A3CString, Var)(&scope->scope, span);
+    if (!var) {
+        A3_UNWRAPN(var, calloc(1, sizeof(*var)));
+        Var new_var = { .name = span, .stack_offset = scope->stack_depth };
+        scope->stack_depth += sizeof(int64_t);
+        A3_HT_INSERT(A3CString, Var)(&scope->scope, span, new_var);
+        var = A3_HT_FIND(A3CString, Var)(&scope->scope, span);
+    }
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .span = span, .type = V_VAR, .var = var };
+    return ret;
 }

@@ -27,7 +27,6 @@
 typedef struct Generator {
     A3CString src;
     size_t    stack_depth;
-    bool      status;
 } Generator;
 
 A3_FORMAT_FN(3, 4)
@@ -59,22 +58,57 @@ static void gen_stack_pop(Generator* gen, char* reg) {
     gen->stack_depth--;
 }
 
-static void gen_lit(AstVisitor* visitor, Vertex* lit) {
+static bool gen_lit(AstVisitor* visitor, Vertex* lit) {
     assert(visitor);
     assert(lit);
     assert(lit->type == V_LIT);
 
     printf("mov rax, %" PRId64 "\n", lit->lit_num);
+    return true;
 }
 
-static void gen_bin_op(AstVisitor* visitor, Vertex* op) {
+static bool gen_addr(Generator* gen, Vertex* lvalue) {
+    assert(gen);
+    assert(lvalue);
+
+    switch (lvalue->type) {
+    case V_VAR:
+        printf("lea rax, [rbp - %zu]\n", lvalue->var->stack_offset);
+        break;
+    default:
+        gen_error(gen, lvalue, "Expected an lvalue.");
+        return false;
+    }
+
+    return true;
+}
+
+static bool gen_assign(AstVisitor* visitor, Vertex* op) {
+    assert(visitor);
+    assert(op);
+    assert(op->type == V_BIN_OP && op->bin_op_type == OP_ASSIGN);
+
+    A3_TRYB(gen_addr(visitor->ctx, op->lhs));
+    gen_stack_push(visitor->ctx);
+    vertex_visit(visitor, op->rhs);
+    gen_stack_pop(visitor->ctx, "rdi");
+
+    puts("mov [rdi], rax");
+
+    return true;
+}
+
+static bool gen_bin_op(AstVisitor* visitor, Vertex* op) {
     assert(visitor);
     assert(op);
     assert(op->type == V_BIN_OP);
 
-    vertex_visit(visitor, op->rhs);
+    if (op->bin_op_type == OP_ASSIGN)
+        return gen_assign(visitor, op);
+
+    A3_TRYB(vertex_visit(visitor, op->rhs));
     gen_stack_push(visitor->ctx);
-    vertex_visit(visitor, op->lhs);
+    A3_TRYB(vertex_visit(visitor, op->lhs));
     gen_stack_pop(visitor->ctx, "rdi");
 
     // Arguments now in rdi, rax.
@@ -130,21 +164,19 @@ static void gen_bin_op(AstVisitor* visitor, Vertex* op) {
                insn);
         break;
     }
-    default: {
-        Generator* gen = visitor->ctx;
-        gen->status    = GEN_ERR;
+    case OP_ASSIGN:
+        A3_UNREACHABLE();
+    }
 
-        gen_error(gen, op, "Unrecognized binary operator.");
-    }
-    }
+    return true;
 }
 
-static void gen_unary_op(AstVisitor* visitor, Vertex* op) {
+static bool gen_unary_op(AstVisitor* visitor, Vertex* op) {
     assert(visitor);
     assert(op);
     assert(op->type == V_UNARY_OP);
 
-    vertex_visit(visitor, op->operand);
+    A3_TRYB(vertex_visit(visitor, op->operand));
 
     switch (op->unary_op_type) {
     case OP_UNARY_ADD:
@@ -153,35 +185,77 @@ static void gen_unary_op(AstVisitor* visitor, Vertex* op) {
         puts("neg rax");
         break;
     }
+
+    return true;
 }
 
-static void gen_expr_stmt(AstVisitor* visitor, Vertex* stmt) {
+static bool gen_expr_stmt(AstVisitor* visitor, Vertex* stmt) {
     assert(visitor);
     assert(stmt);
     assert(stmt->type == V_STMT && stmt->stmt_type == STMT_EXPR_STMT);
 
-    vertex_visit(visitor, stmt->expr);
+    return vertex_visit(visitor, stmt->expr);
+}
+
+static bool gen_var(AstVisitor* visitor, Vertex* ident) {
+    assert(visitor);
+    assert(ident);
+    assert(ident->type == V_VAR);
+
+    A3_TRYB(gen_addr(visitor->ctx, ident));
+    puts("mov rax, [rax]");
+
+    return true;
+}
+
+static size_t align_up(size_t n, size_t align) { return (n + align - 1) & ~(align - 1); }
+
+static bool gen_fn(AstVisitor* visitor, Vertex* vertex) {
+    assert(visitor);
+    assert(vertex);
+    assert(vertex->type == V_FN);
+
+    Fn* fn          = &vertex->fn;
+    fn->stack_depth = align_up(fn->stack_depth, 16);
+
+    printf("global " A3_S_F "\n"
+           "section .text\n"
+           "" A3_S_F ":\n"
+           "push rbp\n"
+           "mov rbp, rsp\n"
+           "sub rsp, %zu\n",
+           A3_S_FORMAT(fn->name), A3_S_FORMAT(fn->name), fn->stack_depth);
+
+    A3_SLL_FOR_EACH(Vertex, stmt, &fn->body, link) {
+        assert(stmt->type == V_STMT);
+        A3_TRYB(vertex_visit(visitor, stmt));
+    }
+
+    puts("mov rsp, rbp\n"
+         "pop rbp\n"
+         "ret");
+
+    return true;
 }
 
 bool gen(A3CString src, Vertex* root) {
-    Generator gen = { .src = src, .stack_depth = 0, .status = GEN_OK };
+    assert(root);
+    assert(root->type == V_FN);
 
-    puts("global main\n"
-         "section .text\n"
-         "main:");
+    Generator gen = { .src = src, .stack_depth = 0 };
 
-    vertex_visit(
+    bool ret = vertex_visit(
         &(AstVisitor) {
             .ctx             = &gen,
             .visit_lit       = gen_lit,
             .visit_bin_op    = gen_bin_op,
             .visit_unary_op  = gen_unary_op,
             .visit_expr_stmt = gen_expr_stmt,
+            .visit_var       = gen_var,
+            .visit_fn        = gen_fn,
         },
         root);
     assert(!gen.stack_depth);
 
-    puts("ret");
-
-    return gen.status;
+    return ret;
 }

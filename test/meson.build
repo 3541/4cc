@@ -28,6 +28,13 @@ tests = {
     'ge_eq',
     'ge_gt',
     'multiple_stmts',
+  ],
+  'assign': [
+    'simple',
+    'arithmetic',
+    'multiple',
+    'long_ident',
+    'mixed_ident'
   ]
 }
 

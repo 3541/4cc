@@ -15,6 +15,7 @@
 
 #include <a3/str.h>
 
+// ast.h
 typedef struct Vertex Vertex;
 
 #define GEN_OK  true

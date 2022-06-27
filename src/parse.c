@@ -23,15 +23,20 @@
 typedef struct Parser {
     A3CString src;
     Lexer*    lexer;
+    Vertex*   current_fn;
     size_t    error_depth;
     bool      status;
 } Parser;
 
 Parser* parse_new(A3CString src, Lexer* lexer) {
     A3_UNWRAPNI(Parser*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Parser) { .src = src, .lexer = lexer, .error_depth = 0, .status = true };
+    *ret = (Parser) {
+        .src = src, .lexer = lexer, .current_fn = NULL, .error_depth = 0, .status = true
+    };
     return ret;
 }
+
+static Vertex* parse_stmt(Parser*);
 
 // Report a parser error.
 A3_FORMAT_FN(3, 4)
@@ -68,10 +73,10 @@ static Vertex* parse_recover(Parser* parser) {
     while (next.type != TOK_SEMI && next.type != TOK_EOF)
         next = lex_next(parser->lexer);
 
-    if (next.type == TOK_EOF)
+    if (next.type == TOK_EOF || lex_peek(parser->lexer).type == TOK_EOF)
         return NULL;
 
-    return parse(parser);
+    return parse_stmt(parser);
 }
 
 static A3CString parse_span_merge(A3CString lhs, A3CString rhs) {
@@ -104,6 +109,8 @@ static BinOpType parse_bin_op(OpType type) {
         return OP_GT;
     case TOK_OP_GT_EQ:
         return OP_GE;
+    case TOK_OP_EQ:
+        return OP_ASSIGN;
     case TOK_OP_COUNT:
         A3_UNREACHABLE();
     }
@@ -122,6 +129,15 @@ static UnaryOpType parse_unary_op(OpType type) {
     }
 }
 
+static Vertex* parse_var(Parser* parser) {
+    assert(parser);
+
+    Token tok = lex_next(parser->lexer);
+    assert(tok.type == TOK_IDENT);
+
+    return vertex_var_new(tok.lexeme, &parser->current_fn->fn);
+}
+
 static Vertex* parse_expr(Parser* parser, uint8_t precedence) {
     assert(parser);
 
@@ -131,10 +147,8 @@ static Vertex* parse_expr(Parser* parser, uint8_t precedence) {
     };
 
     static uint8_t INFIX_PRECEDENCE[TOK_OP_COUNT][2] = {
-        [TOK_OP_PLUS]  = { 1, 2 },
-        [TOK_OP_MINUS] = { 1, 2 },
-        [TOK_OP_STAR]  = { 3, 4 },
-        [TOK_OP_SLASH] = { 3, 4 },
+        [TOK_OP_EQ] = { 2, 1 },   [TOK_OP_PLUS] = { 3, 4 },  [TOK_OP_MINUS] = { 3, 4 },
+        [TOK_OP_STAR] = { 5, 6 }, [TOK_OP_SLASH] = { 5, 6 },
     };
 
     Vertex* lhs = NULL;
@@ -160,6 +174,9 @@ static Vertex* parse_expr(Parser* parser, uint8_t precedence) {
         lex_next(parser->lexer);
         Vertex* rhs = parse_expr(parser, PREFIX_PRECEDENCE[tok.op_type]);
         lhs         = vertex_unary_op_new(tok.lexeme, parse_unary_op(tok.op_type), rhs);
+        break;
+    case TOK_IDENT:
+        lhs = parse_var(parser);
         break;
     default:
         parse_error(parser, lex_next(parser->lexer),
@@ -190,6 +207,8 @@ static Vertex* parse_expr_stmt(Parser* parser) {
 
     Vertex* expr = parse_expr(parser, 0);
     Token   next = lex_next(parser->lexer);
+    if (next.type == TOK_EOF)
+        return NULL;
     if (next.type != TOK_SEMI) {
         parse_error(parser, next, "Expected a semicolon.");
         return parse_recover(parser);
@@ -206,14 +225,14 @@ static Vertex* parse_stmt(Parser* parser) {
 
 Vertex* parse(Parser* parser) {
     assert(parser);
+    assert(!parser->current_fn);
 
-    A3_SLL(stmts, Vertex) stmts;
-    A3_SLL_INIT(&stmts);
+    parser->current_fn = vertex_fn_new(A3_CS("main"));
 
     Vertex* current = parse_stmt(parser);
     if (!current)
         return NULL;
-    A3_SLL_PUSH(&stmts, current, link);
+    A3_SLL_PUSH(&parser->current_fn->fn.body, current, link);
 
     Token next = lex_peek(parser->lexer);
     while (next.type != TOK_EOF && next.type != TOK_ERR) {
@@ -238,5 +257,8 @@ Vertex* parse(Parser* parser) {
     if (!parser->status)
         return NULL;
 
-    return A3_SLL_HEAD(&stmts);
+    Vertex* ret        = parser->current_fn;
+    parser->current_fn = NULL;
+
+    return ret;
 }
