@@ -33,7 +33,9 @@ Vertex* vertex_bin_op_new(A3CString span, BinOpType type, Vertex* lhs, Vertex* r
     assert(rhs);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .span = span, .type = V_BIN_OP, .bin_op_type = type, .lhs = lhs, .rhs = rhs };
+    *ret = (Vertex) { .span   = span,
+                      .type   = V_BIN_OP,
+                      .bin_op = { .type = type, .lhs = lhs, .rhs = rhs } };
 
     return ret;
 }
@@ -42,14 +44,16 @@ Vertex* vertex_unary_op_new(A3CString span, UnaryOpType type, Vertex* operand) {
     assert(operand);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .span = span, .type = V_UNARY_OP, .unary_op_type = type, .operand = operand };
+    *ret = (Vertex) { .span     = span,
+                      .type     = V_UNARY_OP,
+                      .unary_op = { .type = type, .operand = operand } };
 
     return ret;
 }
 
 Vertex* vertex_lit_num_new(A3CString span, int64_t num) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .span = span, .type = V_LIT, .lit_type = LIT_NUM, .lit_num = num };
+    *ret = (Vertex) { .span = span, .type = V_LIT, .lit = { .type = LIT_NUM, .num = num } };
 
     return ret;
 }
@@ -58,7 +62,8 @@ Vertex* vertex_expr_stmt_new(A3CString span, Vertex* expr) {
     assert(expr);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .span = span, .type = V_STMT, .stmt_type = STMT_EXPR_STMT, .expr = expr };
+    *ret =
+        (Vertex) { .span = span, .type = V_STMT, .stmt = { .type = STMT_EXPR_STMT, .expr = expr } };
 
     return ret;
 }
@@ -67,68 +72,26 @@ Vertex* vertex_ret_new(A3CString span, Vertex* expr) {
     assert(expr);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .span = span, .type = V_STMT, .stmt_type = STMT_RET, .expr = expr };
+    *ret = (Vertex) { .span = span, .type = V_STMT, .stmt = { .type = STMT_RET, .expr = expr } };
 
     return ret;
 }
 
 Vertex* vertex_empty_new(A3CString span) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .span = span, .type = V_STMT, .stmt_type = STMT_EMPTY };
+    *ret = (Vertex) { .span = span, .type = V_STMT, .stmt.type = STMT_EMPTY };
 
     return ret;
-}
-
-bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
-    assert(visitor);
-    assert(vertex);
-
-    AstVisitorCallback visit = visitor->visit_lit;
-
-    switch (vertex->type) {
-    case V_LIT:
-        visit = visitor->visit_lit;
-        break;
-    case V_BIN_OP:
-        visit = visitor->visit_bin_op;
-        break;
-    case V_UNARY_OP:
-        visit = visitor->visit_unary_op;
-        break;
-    case V_STMT:
-        switch (vertex->stmt_type) {
-        case STMT_EXPR_STMT:
-            visit = visitor->visit_expr_stmt;
-            break;
-        case STMT_RET:
-            visit = visitor->visit_ret;
-            break;
-        case STMT_BLOCK:
-            visit = visitor->visit_block;
-            break;
-        case STMT_EMPTY:
-            return true;
-        }
-        break;
-    case V_VAR:
-        visit = visitor->visit_var;
-        break;
-    case V_FN:
-        visit = visitor->visit_fn;
-        break;
-    }
-
-    return visit(visitor, vertex);
 }
 
 Vertex* vertex_block_new(Scope* scope) {
     assert(scope);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) {
-        .type = V_STMT, .span = A3_CS_NULL, .stmt_type = STMT_BLOCK, .block.scope = scope
-    };
-    A3_SLL_INIT(&ret->block.body);
+    *ret = (Vertex) { .type = V_STMT,
+                      .span = A3_CS_NULL,
+                      .stmt = { .type = STMT_BLOCK, .block.scope = scope } };
+    A3_SLL_INIT(&ret->stmt.block.body);
 
     return ret;
 }
@@ -136,7 +99,7 @@ Vertex* vertex_block_new(Scope* scope) {
 Vertex* vertex_fn_new(A3CString name, Vertex* body) {
     assert(name.ptr);
     assert(body);
-    assert(body->type == V_STMT && body->stmt_type == STMT_BLOCK);
+    assert(body->type == V_STMT && body->stmt.type == STMT_BLOCK);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret = (Vertex) { .type = V_FN, .span = name, .fn = { .name = name, .body = body } };
@@ -160,4 +123,46 @@ Vertex* vertex_var_new(A3CString span, Scope* scope) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret = (Vertex) { .span = span, .type = V_VAR, .var = var };
     return ret;
+}
+
+bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
+    assert(visitor);
+    assert(vertex);
+
+    AstVisitorCallback visit = visitor->visit_lit;
+
+    switch (vertex->type) {
+    case V_LIT:
+        visit = visitor->visit_lit;
+        break;
+    case V_BIN_OP:
+        visit = visitor->visit_bin_op;
+        break;
+    case V_UNARY_OP:
+        visit = visitor->visit_unary_op;
+        break;
+    case V_STMT:
+        switch (vertex->stmt.type) {
+        case STMT_EXPR_STMT:
+            visit = visitor->visit_expr_stmt;
+            break;
+        case STMT_RET:
+            visit = visitor->visit_ret;
+            break;
+        case STMT_BLOCK:
+            visit = visitor->visit_block;
+            break;
+        case STMT_EMPTY:
+            return true;
+        }
+        break;
+    case V_VAR:
+        visit = visitor->visit_var;
+        break;
+    case V_FN:
+        visit = visitor->visit_fn;
+        break;
+    }
+
+    return visit(visitor, vertex);
 }

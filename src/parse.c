@@ -248,14 +248,14 @@ static Vertex* parse_block(Parser* parser) {
     Vertex* current = parse_stmt(parser);
     if (!current)
         return NULL;
-    A3_SLL_PUSH(&block->block.body, current, link);
+    A3_SLL_PUSH(&block->stmt.block.body, current, stmt.link);
 
     Token next = lex_peek(parser->lexer);
     while (next.type != TOK_RBRACE && next.type != TOK_EOF && next.type != TOK_ERR) {
         Vertex* v = parse_stmt(parser);
         if (!v)
             break;
-        A3_SLL_INSERT_AFTER(current, v, link);
+        A3_SLL_INSERT_AFTER(current, v, stmt.link);
 
         next    = lex_peek(parser->lexer);
         current = v;

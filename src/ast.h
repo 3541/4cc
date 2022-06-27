@@ -67,46 +67,46 @@ typedef struct Fn {
     Vertex*   body;
 } Fn;
 
+typedef struct BinOp {
+    BinOpType type;
+    Vertex*   lhs;
+    Vertex*   rhs;
+} BinOp;
+
+typedef struct UnaryOp {
+    UnaryOpType type;
+    Vertex*     operand;
+} UnaryOp;
+
+typedef struct Literal {
+    LiteralType type;
+
+    union {
+        int64_t num; // LIT_NUM
+    };
+} Literal;
+
+typedef struct Statement {
+    StmtType type;
+    A3_SLL_LINK(Vertex) link;
+
+    union {
+        Vertex* expr;  // STMT_EXPR_STMT and STMT_RET.
+        Block   block; // STMT_BLOCK
+    };
+} Statement;
+
 typedef struct Vertex {
     A3CString  span;
     VertexType type;
 
     union {
-        // V_BIN_OP
-        struct {
-            BinOpType bin_op_type;
-            Vertex*   lhs;
-            Vertex*   rhs;
-        };
-
-        // V_UNARY_OP
-        struct {
-            UnaryOpType unary_op_type;
-            Vertex*     operand;
-        };
-
-        // V_LIT
-        struct {
-            LiteralType lit_type;
-
-            union {
-                int64_t lit_num; // LIT_NUM
-            };
-        };
-
-        // V_STMT
-        struct {
-            StmtType stmt_type;
-            A3_SLL_LINK(Vertex) link;
-
-            union {
-                Vertex* expr;  // STMT_EXPR_STMT and STMT_RET.
-                Block   block; // STMT_BLOCK
-            };
-        };
-
-        Var* var; // V_VAR
-        Fn   fn;  // V_FN
+        BinOp     bin_op;
+        UnaryOp   unary_op;
+        Literal   lit;
+        Statement stmt;
+        Var*      var;
+        Fn        fn;
     };
 } Vertex;
 
