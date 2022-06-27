@@ -18,7 +18,11 @@ asm = tempfile.NamedTemporaryFile(suffix = ".asm")
 object = tempfile.NamedTemporaryFile(suffix = ".o")
 binary_path = os.path.splitext(object.name)[0]
 
-subprocess.run([cc, open(input_path).read().strip()], stdout = asm, check = True)
+asm_result = subprocess.check_output([cc, open(input_path).read().strip()])
+print(f"Output:\n{asm_result.decode('utf-8')}", file = sys.stderr)
+asm.write(asm_result)
+asm.flush()
+
 subprocess.run(["nasm", "-felf64", "-o", object.name, asm.name], check = True)
 subprocess.run(["gcc", "-o", binary_path, object.name], check = True)
 
