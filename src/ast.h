@@ -14,6 +14,7 @@
 #include <a3/ht.h>
 #include <a3/sll.h>
 #include <a3/str.h>
+#include <a3/util.h>
 
 typedef struct Vertex Vertex;
 
@@ -115,15 +116,15 @@ typedef struct AstVisitor AstVisitor;
 typedef bool (*AstVisitorCallback)(AstVisitor*, Vertex*);
 
 typedef struct AstVisitor {
-    void*              ctx;
-    AstVisitorCallback visit_lit;
-    AstVisitorCallback visit_bin_op;
-    AstVisitorCallback visit_unary_op;
-    AstVisitorCallback visit_expr_stmt;
-    AstVisitorCallback visit_ret;
-    AstVisitorCallback visit_var;
-    AstVisitorCallback visit_fn;
-    AstVisitorCallback visit_block;
+    void* ctx;
+    bool (*visit_lit)(AstVisitor*, Literal*);
+    bool (*visit_bin_op)(AstVisitor*, BinOp*);
+    bool (*visit_unary_op)(AstVisitor*, UnaryOp*);
+    bool (*visit_expr_stmt)(AstVisitor*, Statement*);
+    bool (*visit_ret)(AstVisitor*, Statement*);
+    bool (*visit_var)(AstVisitor*, Var*);
+    bool (*visit_fn)(AstVisitor*, Fn*);
+    bool (*visit_block)(AstVisitor*, Block*);
 } AstVisitor;
 
 Scope* scope_new(Scope* parent);

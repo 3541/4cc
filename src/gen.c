@@ -58,39 +58,32 @@ static void gen_stack_pop(Generator* gen, char* reg) {
     gen->stack_depth--;
 }
 
-static bool gen_lit(AstVisitor* visitor, Vertex* lit) {
+static bool gen_lit(AstVisitor* visitor, Literal* lit) {
     assert(visitor);
-    assert(lit);
-    assert(lit->type == V_LIT);
+    assert(lit->type == LIT_NUM);
 
-    printf("mov rax, %" PRId64 "\n", lit->lit.num);
+    printf("mov rax, %" PRId64 "\n", lit->num);
     return true;
 }
 
-static bool gen_addr(Generator* gen, Vertex* lvalue) {
+static bool gen_addr(Generator* gen, Var* lvalue) {
     assert(gen);
     assert(lvalue);
 
-    switch (lvalue->type) {
-    case V_VAR:
-        printf("lea rax, [rbp - %zu]\n", lvalue->var->stack_offset);
-        break;
-    default:
-        gen_error(gen, lvalue, "Expected an lvalue.");
-        return false;
-    }
+    printf("lea rax, [rbp - %zu]\n", lvalue->stack_offset);
 
     return true;
 }
 
-static bool gen_assign(AstVisitor* visitor, Vertex* op) {
+static bool gen_assign(AstVisitor* visitor, BinOp* op) {
     assert(visitor);
     assert(op);
-    assert(op->type == V_BIN_OP && op->bin_op.type == OP_ASSIGN);
+    assert(op->type == OP_ASSIGN);
+    assert(op->lhs->type == V_VAR);
 
-    A3_TRYB(gen_addr(visitor->ctx, op->bin_op.lhs));
+    A3_TRYB(gen_addr(visitor->ctx, op->lhs->var));
     gen_stack_push(visitor->ctx);
-    vertex_visit(visitor, op->bin_op.rhs);
+    vertex_visit(visitor, op->rhs);
     gen_stack_pop(visitor->ctx, "rdi");
 
     puts("mov [rdi], rax");
@@ -98,22 +91,21 @@ static bool gen_assign(AstVisitor* visitor, Vertex* op) {
     return true;
 }
 
-static bool gen_bin_op(AstVisitor* visitor, Vertex* op) {
+static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
     assert(visitor);
     assert(op);
-    assert(op->type == V_BIN_OP);
 
-    if (op->bin_op.type == OP_ASSIGN)
+    if (op->type == OP_ASSIGN)
         return gen_assign(visitor, op);
 
-    A3_TRYB(vertex_visit(visitor, op->bin_op.rhs));
+    A3_TRYB(vertex_visit(visitor, op->rhs));
     gen_stack_push(visitor->ctx);
-    A3_TRYB(vertex_visit(visitor, op->bin_op.lhs));
+    A3_TRYB(vertex_visit(visitor, op->lhs));
     gen_stack_pop(visitor->ctx, "rdi");
 
     // Arguments now in rdi, rax.
 
-    switch (op->bin_op.type) {
+    switch (op->type) {
     case OP_ADD:
         puts("add rax, rdi");
         break;
@@ -136,7 +128,7 @@ static bool gen_bin_op(AstVisitor* visitor, Vertex* op) {
         puts("cmp rax, rdi");
 
         char* insn;
-        switch (op->bin_op.type) {
+        switch (op->type) {
         case OP_EQ:
             insn = "sete";
             break;
@@ -171,14 +163,13 @@ static bool gen_bin_op(AstVisitor* visitor, Vertex* op) {
     return true;
 }
 
-static bool gen_unary_op(AstVisitor* visitor, Vertex* op) {
+static bool gen_unary_op(AstVisitor* visitor, UnaryOp* op) {
     assert(visitor);
     assert(op);
-    assert(op->type == V_UNARY_OP);
 
-    A3_TRYB(vertex_visit(visitor, op->unary_op.operand));
+    A3_TRYB(vertex_visit(visitor, op->operand));
 
-    switch (op->unary_op.type) {
+    switch (op->type) {
     case OP_UNARY_ADD:
         break;
     case OP_NEG:
@@ -189,30 +180,29 @@ static bool gen_unary_op(AstVisitor* visitor, Vertex* op) {
     return true;
 }
 
-static bool gen_expr_stmt(AstVisitor* visitor, Vertex* stmt) {
+static bool gen_expr_stmt(AstVisitor* visitor, Statement* stmt) {
     assert(visitor);
     assert(stmt);
-    assert(stmt->type == V_STMT && stmt->stmt.type == STMT_EXPR_STMT);
+    assert(stmt->type == STMT_EXPR_STMT);
 
-    return vertex_visit(visitor, stmt->stmt.expr);
+    return vertex_visit(visitor, stmt->expr);
 }
 
-static bool gen_ret(AstVisitor* visitor, Vertex* ret) {
+static bool gen_ret(AstVisitor* visitor, Statement* ret) {
     assert(visitor);
     assert(ret);
-    assert(ret->type == V_STMT && ret->stmt.type == STMT_RET);
+    assert(ret->type == STMT_RET);
 
-    A3_TRYB(vertex_visit(visitor, ret->stmt.expr));
+    A3_TRYB(vertex_visit(visitor, ret->expr));
     puts("jmp .ret");
     return true;
 }
 
-static bool gen_var(AstVisitor* visitor, Vertex* ident) {
+static bool gen_var(AstVisitor* visitor, Var* var) {
     assert(visitor);
-    assert(ident);
-    assert(ident->type == V_VAR);
+    assert(var);
 
-    A3_TRYB(gen_addr(visitor->ctx, ident));
+    A3_TRYB(gen_addr(visitor->ctx, var));
     puts("mov rax, [rax]");
 
     return true;
@@ -220,12 +210,10 @@ static bool gen_var(AstVisitor* visitor, Vertex* ident) {
 
 static size_t align_up(size_t n, size_t align) { return (n + align - 1) & ~(align - 1); }
 
-static bool gen_fn(AstVisitor* visitor, Vertex* vertex) {
+static bool gen_fn(AstVisitor* visitor, Fn* fn) {
     assert(visitor);
-    assert(vertex);
-    assert(vertex->type == V_FN);
+    assert(fn);
 
-    Fn*    fn                = &vertex->fn;
     Block* body              = &fn->body->stmt.block;
     body->scope->stack_depth = align_up(body->scope->stack_depth, 16);
 
@@ -247,12 +235,11 @@ static bool gen_fn(AstVisitor* visitor, Vertex* vertex) {
     return true;
 }
 
-static bool gen_block(AstVisitor* visitor, Vertex* vertex) {
+static bool gen_block(AstVisitor* visitor, Block* block) {
     assert(visitor);
-    assert(vertex);
-    assert(vertex->type == V_STMT && vertex->stmt.type == STMT_BLOCK);
+    assert(block);
 
-    A3_SLL_FOR_EACH(Vertex, stmt, &vertex->stmt.block.body, stmt.link) {
+    A3_SLL_FOR_EACH(Vertex, stmt, &block->body, stmt.link) {
         assert(stmt->type == V_STMT);
         A3_TRYB(vertex_visit(visitor, stmt));
     }

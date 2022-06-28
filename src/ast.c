@@ -129,40 +129,30 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
     assert(visitor);
     assert(vertex);
 
-    AstVisitorCallback visit = visitor->visit_lit;
-
     switch (vertex->type) {
     case V_LIT:
-        visit = visitor->visit_lit;
-        break;
+        return visitor->visit_lit(visitor, &vertex->lit);
     case V_BIN_OP:
-        visit = visitor->visit_bin_op;
-        break;
+        return visitor->visit_bin_op(visitor, &vertex->bin_op);
     case V_UNARY_OP:
-        visit = visitor->visit_unary_op;
-        break;
+        return visitor->visit_unary_op(visitor, &vertex->unary_op);
     case V_STMT:
         switch (vertex->stmt.type) {
         case STMT_EXPR_STMT:
-            visit = visitor->visit_expr_stmt;
-            break;
+            return visitor->visit_expr_stmt(visitor, &vertex->stmt);
         case STMT_RET:
-            visit = visitor->visit_ret;
-            break;
+            return visitor->visit_ret(visitor, &vertex->stmt);
         case STMT_BLOCK:
-            visit = visitor->visit_block;
-            break;
+            return visitor->visit_block(visitor, &vertex->stmt.block);
         case STMT_EMPTY:
             return true;
         }
         break;
     case V_VAR:
-        visit = visitor->visit_var;
-        break;
+        return visitor->visit_var(visitor, vertex->var);
     case V_FN:
-        visit = visitor->visit_fn;
-        break;
+        return visitor->visit_fn(visitor, &vertex->fn);
     }
 
-    return visit(visitor, vertex);
+    A3_UNREACHABLE();
 }
