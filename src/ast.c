@@ -110,11 +110,22 @@ Fn* vertex_fn_new(A3CString name, Block* body) {
     return &ret->fn;
 }
 
+static Var* scope_find(Scope* scope, A3CString name) {
+    assert(scope);
+    assert(name.ptr);
+
+    Var* ret = A3_HT_FIND(A3CString, Var)(&scope->scope, name);
+    if (!ret && scope->parent)
+        return scope_find(scope->parent, name);
+
+    return ret;
+}
+
 Expr* vertex_var_new(A3CString span, Scope* scope) {
     assert(span.ptr);
     assert(scope);
 
-    Var* var = A3_HT_FIND(A3CString, Var)(&scope->scope, span);
+    Var* var = scope_find(scope, span);
     if (!var) {
         A3_UNWRAPN(var, calloc(1, sizeof(*var)));
         Var new_var = { .name = span, .stack_offset = scope->stack_depth };
@@ -142,6 +153,21 @@ If* vertex_if_new(A3CString span, Expr* cond, Statement* body_true, Statement* b
     };
 
     return &ret->stmt.if_stmt;
+}
+
+Loop* vertex_loop_new(A3CString span, Statement* init, Expr* cond, Expr* post, Statement* body) {
+    assert(span.ptr);
+    assert(cond);
+    assert(body);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret =
+        (Vertex) { .span = span,
+                   .type = V_STMT,
+                   .stmt = { .type = STMT_LOOP,
+                             .loop = { .init = init, .cond = cond, .post = post, .body = body } } };
+
+    return &ret->stmt.loop;
 }
 
 bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
@@ -173,6 +199,8 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
             return visitor->visit_if_stmt(visitor, &vertex->stmt.if_stmt);
         case STMT_EMPTY:
             return true;
+        case STMT_LOOP:
+            return visitor->visit_loop(visitor, &vertex->stmt.loop);
         }
         break;
     case V_FN:

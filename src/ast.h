@@ -41,8 +41,16 @@ typedef enum BinOpType {
     OP_SUB,
 } BinOpType;
 
+typedef enum StmtType {
+    STMT_BLOCK,
+    STMT_EMPTY,
+    STMT_EXPR_STMT,
+    STMT_IF,
+    STMT_LOOP,
+    STMT_RET,
+} StmtType;
+
 typedef enum UnaryOpType { OP_UNARY_ADD, OP_NEG } UnaryOpType;
-typedef enum StmtType { STMT_EXPR_STMT, STMT_RET, STMT_BLOCK, STMT_IF, STMT_EMPTY } StmtType;
 typedef enum ExprType { EXPR_BIN_OP, EXPR_UNARY_OP, EXPR_LIT, EXPR_VAR } ExprType;
 typedef enum LiteralType { LIT_NUM } LiteralType;
 
@@ -104,6 +112,13 @@ typedef struct If {
     Statement* body_false;
 } If;
 
+typedef struct Loop {
+    Statement* init;
+    Expr*      cond;
+    Expr*      post;
+    Statement* body;
+} Loop;
+
 typedef struct Statement {
     StmtType type;
     A3_SLL_LINK(Statement) link;
@@ -112,6 +127,7 @@ typedef struct Statement {
         Expr* expr;    // STMT_EXPR_STMT and STMT_RET.
         Block block;   // STMT_BLOCK
         If    if_stmt; // STMT_IF
+        Loop  loop;    // STMT_LOOP
     };
 } Statement;
 
@@ -136,15 +152,16 @@ typedef bool (*AstVisitorCallback)(AstVisitor*, Vertex*);
 
 typedef struct AstVisitor {
     void* ctx;
-    bool (*visit_lit)(AstVisitor*, Literal*);
     bool (*visit_bin_op)(AstVisitor*, BinOp*);
     bool (*visit_unary_op)(AstVisitor*, UnaryOp*);
+    bool (*visit_lit)(AstVisitor*, Literal*);
+    bool (*visit_var)(AstVisitor*, Var**);
     bool (*visit_expr_stmt)(AstVisitor*, Statement*);
     bool (*visit_ret)(AstVisitor*, Statement*);
     bool (*visit_if_stmt)(AstVisitor*, If*);
-    bool (*visit_var)(AstVisitor*, Var**);
-    bool (*visit_fn)(AstVisitor*, Fn*);
     bool (*visit_block)(AstVisitor*, Block*);
+    bool (*visit_fn)(AstVisitor*, Fn*);
+    bool (*visit_loop)(AstVisitor*, Loop*);
 } AstVisitor;
 
 Scope* scope_new(Scope* parent);
@@ -159,4 +176,5 @@ Statement* vertex_empty_new(A3CString span);
 If*        vertex_if_new(A3CString span, Expr* cond, Statement* body_true, Statement* body_false);
 Block*     vertex_block_new(Scope*);
 Fn*        vertex_fn_new(A3CString name, Block* body);
-bool       vertex_visit(AstVisitor*, Vertex*);
+Loop* vertex_loop_new(A3CString span, Statement* init, Expr* cond, Expr* post, Statement* body);
+bool  vertex_visit(AstVisitor*, Vertex*);

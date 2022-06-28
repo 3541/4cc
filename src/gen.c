@@ -274,6 +274,34 @@ static bool gen_if_stmt(AstVisitor* visitor, If* if_stmt) {
     return true;
 }
 
+static bool gen_loop(AstVisitor* visitor, Loop* loop) {
+    assert(visitor);
+    assert(loop);
+
+    size_t label = gen_label(visitor->ctx);
+
+    if (loop->init)
+        A3_TRYB(vertex_visit(visitor, VERTEX(loop->init, stmt)));
+
+    printf(".begin%zu:\n", label);
+    if (loop->cond) {
+        A3_TRYB(vertex_visit(visitor, VERTEX(loop->cond, expr)));
+        printf("test rax, rax\n"
+               "jz .end%zu\n",
+               label);
+    }
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(loop->body, stmt)));
+    if (loop->post)
+        A3_TRYB(vertex_visit(visitor, VERTEX(loop->post, expr)));
+
+    printf("jmp .begin%zu\n"
+           ".end%zu:\n",
+           label, label);
+
+    return true;
+}
+
 bool gen(A3CString src, Vertex* root) {
     assert(root);
     assert(root->type == V_FN);
@@ -283,15 +311,16 @@ bool gen(A3CString src, Vertex* root) {
     bool ret = vertex_visit(
         &(AstVisitor) {
             .ctx             = &gen,
-            .visit_lit       = gen_lit,
             .visit_bin_op    = gen_bin_op,
             .visit_unary_op  = gen_unary_op,
+            .visit_lit       = gen_lit,
+            .visit_var       = gen_var,
             .visit_expr_stmt = gen_expr_stmt,
             .visit_ret       = gen_ret,
-            .visit_var       = gen_var,
-            .visit_fn        = gen_fn,
-            .visit_block     = gen_block,
             .visit_if_stmt   = gen_if_stmt,
+            .visit_block     = gen_block,
+            .visit_fn        = gen_fn,
+            .visit_loop      = gen_loop,
         },
         root);
     assert(!gen.stack_depth);

@@ -54,6 +54,12 @@ tests = {
     'else_false',
     'else_true',
     'nested'
+  ],
+  'loop': [
+    'simple_for',
+    'return_from_for',
+    'simple_while',
+    'nested'
   ]
 }
 

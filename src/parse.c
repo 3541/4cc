@@ -330,6 +330,53 @@ static Statement* parse_if(Parser* parser) {
                 if_stmt);
 }
 
+static Statement* parse_loop(Parser* parser) {
+    assert(parser);
+
+    Token loop_tok = lex_next(parser->lexer);
+    assert(loop_tok.type == TOK_FOR || loop_tok.type == TOK_WHILE);
+
+    if (!parse_consume(parser, A3_CS("opening parenthesis"), TOK_LPAREN))
+        return NULL;
+
+    parse_scope_push(parser);
+
+    Statement* init = NULL;
+    Expr*      cond = NULL;
+    Expr*      post = NULL;
+
+    if (loop_tok.type == TOK_FOR) {
+        init = parse_expr_stmt(parser);
+        if (!init)
+            return NULL;
+
+        if (lex_peek(parser->lexer).type != TOK_SEMI)
+            cond = parse_expr(parser, 0);
+        if (!parse_consume(parser, A3_CS("semicolon"), TOK_SEMI))
+            return NULL;
+
+        if (lex_peek(parser->lexer).type != TOK_RPAREN)
+            post = parse_expr(parser, 0);
+    } else {
+        cond = parse_expr(parser, 0);
+        if (!cond)
+            return NULL;
+    }
+
+    if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
+        return NULL;
+
+    Statement* body = parse_stmt(parser);
+    if (!body)
+        return NULL;
+
+    parse_scope_pop(parser);
+
+    return STMT(vertex_loop_new(parse_span_merge(loop_tok.lexeme, SPAN(body, stmt)), init, cond,
+                                post, body),
+                loop);
+}
+
 static Statement* parse_stmt(Parser* parser) {
     assert(parser);
 
@@ -344,6 +391,9 @@ static Statement* parse_stmt(Parser* parser) {
     }
     case TOK_IF:
         return parse_if(parser);
+    case TOK_FOR:
+    case TOK_WHILE:
+        return parse_loop(parser);
     default:
         return parse_expr_stmt(parser);
     }

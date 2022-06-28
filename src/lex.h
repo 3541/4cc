@@ -17,6 +17,7 @@
 
 typedef enum TokenType {
     TOK_ELSE,
+    TOK_FOR,
     TOK_IDENT,
     TOK_IF,
     TOK_LBRACE,
@@ -27,6 +28,7 @@ typedef enum TokenType {
     TOK_RET,
     TOK_RPAREN,
     TOK_SEMI,
+    TOK_WHILE,
     TOK_EOF,
     TOK_ERR
 } TokenType;
