@@ -145,13 +145,21 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
     assert(parser);
 
     static uint8_t PREFIX_PRECEDENCE[TOK_OP_COUNT] = {
-        [TOK_OP_PLUS]  = 5,
-        [TOK_OP_MINUS] = 5,
+        [TOK_OP_PLUS]  = 11,
+        [TOK_OP_MINUS] = 11,
     };
 
     static uint8_t INFIX_PRECEDENCE[TOK_OP_COUNT][2] = {
-        [TOK_OP_EQ] = { 2, 1 },   [TOK_OP_PLUS] = { 3, 4 },  [TOK_OP_MINUS] = { 3, 4 },
-        [TOK_OP_STAR] = { 5, 6 }, [TOK_OP_SLASH] = { 5, 6 },
+        [TOK_OP_EQ] = { 2, 1 },
+
+        [TOK_OP_EQ_EQ] = { 3, 4 }, [TOK_OP_BANG_EQ] = { 3, 4 },
+
+        [TOK_OP_GT] = { 5, 6 },    [TOK_OP_GT_EQ] = { 5, 6 },
+        [TOK_OP_LT] = { 5, 6 },    [TOK_OP_LT_EQ] = { 5, 6 },
+
+        [TOK_OP_PLUS] = { 7, 8 },  [TOK_OP_MINUS] = { 7, 8 },
+
+        [TOK_OP_STAR] = { 9, 10 }, [TOK_OP_SLASH] = { 9, 10 }
     };
 
     Expr* lhs = NULL;
