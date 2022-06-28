@@ -251,7 +251,9 @@ static Token lex_ident_or_kw(Lexer* lexer) {
     static struct {
         A3CString name;
         TokenType type;
-    } KEYWORDS[] = { { A3_CS("return"), TOK_RET } };
+    } KEYWORDS[] = { { A3_CS("return"), TOK_RET },
+                     { A3_CS("if"), TOK_IF },
+                     { A3_CS("else"), TOK_ELSE } };
 
     A3CString lexeme = lex_consume_until(lexer, is_not_ident);
     if (!a3_string_cptr(lexeme))

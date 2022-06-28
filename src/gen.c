@@ -27,7 +27,14 @@
 typedef struct Generator {
     A3CString src;
     size_t    stack_depth;
+    size_t    label;
 } Generator;
+
+static size_t gen_label(Generator* gen) {
+    assert(gen);
+
+    return gen->label++;
+}
 
 A3_FORMAT_FN(3, 4)
 static void gen_error(Generator* gen, Vertex* vertex, char* fmt, ...) {
@@ -247,11 +254,33 @@ static bool gen_block(AstVisitor* visitor, Block* block) {
     return true;
 }
 
+static bool gen_if_stmt(AstVisitor* visitor, Statement* if_stmt) {
+    assert(visitor);
+    assert(if_stmt);
+    assert(if_stmt->type == STMT_IF);
+
+    size_t label = gen_label(visitor->ctx);
+
+    A3_TRYB(vertex_visit(visitor, if_stmt->cond));
+    printf("test rax, rax\n"
+           "jz .else%zu\n",
+           label);
+    A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->body_true, stmt)));
+    printf("jmp .end%zu\n", label);
+
+    printf(".else%zu:\n", label);
+    if (if_stmt->body_false)
+        A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->body_false, stmt)));
+
+    printf(".end%zu:\n", label);
+    return true;
+}
+
 bool gen(A3CString src, Vertex* root) {
     assert(root);
     assert(root->type == V_FN);
 
-    Generator gen = { .src = src, .stack_depth = 0 };
+    Generator gen = { .src = src, .stack_depth = 0, .label = 0 };
 
     bool ret = vertex_visit(
         &(AstVisitor) {
@@ -264,6 +293,7 @@ bool gen(A3CString src, Vertex* root) {
             .visit_var       = gen_var,
             .visit_fn        = gen_fn,
             .visit_block     = gen_block,
+            .visit_if_stmt   = gen_if_stmt,
         },
         root);
     assert(!gen.stack_depth);

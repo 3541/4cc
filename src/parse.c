@@ -282,6 +282,38 @@ static Vertex* parse_block(Parser* parser) {
     return block;
 }
 
+static Vertex* parse_if(Parser* parser) {
+    assert(parser);
+
+    Token if_tok = lex_next(parser->lexer);
+    assert(if_tok.type == TOK_IF);
+
+    if (!parse_consume(parser, A3_CS("opening parenthesis"), TOK_LPAREN))
+        return parse_recover(parser);
+
+    Vertex* cond = parse_expr(parser, 0);
+    if (!cond)
+        return NULL;
+
+    if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
+        return parse_recover(parser);
+
+    Vertex* body_true  = parse_stmt(parser);
+    Vertex* body_false = NULL;
+
+    if (lex_peek(parser->lexer).type == TOK_ELSE) {
+        lex_next(parser->lexer);
+        body_false = parse_stmt(parser);
+    }
+
+    assert(body_true->type == V_STMT);
+    assert(!body_false || body_false->type == V_STMT);
+
+    return vertex_if_new(
+        parse_span_merge(if_tok.lexeme, body_false ? body_false->span : body_true->span), cond,
+        &body_true->stmt, body_false ? &body_false->stmt : NULL);
+}
+
 static Vertex* parse_stmt(Parser* parser) {
     assert(parser);
 
@@ -294,6 +326,8 @@ static Vertex* parse_stmt(Parser* parser) {
         Token tok = lex_next(parser->lexer);
         return vertex_empty_new(tok.lexeme);
     }
+    case TOK_IF:
+        return parse_if(parser);
     default:
         return parse_expr_stmt(parser);
     }

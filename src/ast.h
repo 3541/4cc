@@ -42,7 +42,7 @@ typedef enum BinOpType {
 } BinOpType;
 
 typedef enum UnaryOpType { OP_UNARY_ADD, OP_NEG } UnaryOpType;
-typedef enum StmtType { STMT_EXPR_STMT, STMT_RET, STMT_BLOCK, STMT_EMPTY } StmtType;
+typedef enum StmtType { STMT_EXPR_STMT, STMT_RET, STMT_BLOCK, STMT_IF, STMT_EMPTY } StmtType;
 typedef enum LiteralType { LIT_NUM } LiteralType;
 
 typedef struct Var {
@@ -87,6 +87,7 @@ typedef struct Literal {
     };
 } Literal;
 
+typedef struct Statement Statement;
 typedef struct Statement {
     StmtType type;
     A3_SLL_LINK(Vertex) link;
@@ -94,6 +95,12 @@ typedef struct Statement {
     union {
         Vertex* expr;  // STMT_EXPR_STMT and STMT_RET.
         Block   block; // STMT_BLOCK
+        // STMT_IF
+        struct {
+            Vertex*    cond;
+            Statement* body_true;
+            Statement* body_false;
+        };
     };
 } Statement;
 
@@ -111,6 +118,8 @@ typedef struct Vertex {
     };
 } Vertex;
 
+#define VERTEX(P, F) A3_CONTAINER_OF(P, Vertex, F)
+
 typedef struct AstVisitor AstVisitor;
 
 typedef bool (*AstVisitorCallback)(AstVisitor*, Vertex*);
@@ -122,6 +131,7 @@ typedef struct AstVisitor {
     bool (*visit_unary_op)(AstVisitor*, UnaryOp*);
     bool (*visit_expr_stmt)(AstVisitor*, Statement*);
     bool (*visit_ret)(AstVisitor*, Statement*);
+    bool (*visit_if_stmt)(AstVisitor*, Statement*);
     bool (*visit_var)(AstVisitor*, Var*);
     bool (*visit_fn)(AstVisitor*, Fn*);
     bool (*visit_block)(AstVisitor*, Block*);
@@ -138,4 +148,5 @@ Vertex* vertex_empty_new(A3CString span);
 Vertex* vertex_block_new(Scope*);
 Vertex* vertex_fn_new(A3CString name, Vertex* body);
 Vertex* vertex_var_new(A3CString span, Scope* scope);
+Vertex* vertex_if_new(A3CString span, Vertex* cond, Statement* body_true, Statement* body_false);
 bool    vertex_visit(AstVisitor*, Vertex*);

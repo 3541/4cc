@@ -16,7 +16,9 @@
 #define LEX_ERRORS_MAX 512
 
 typedef enum TokenType {
+    TOK_ELSE,
     TOK_IDENT,
+    TOK_IF,
     TOK_LBRACE,
     TOK_LIT_NUM,
     TOK_LPAREN,

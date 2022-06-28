@@ -125,6 +125,21 @@ Vertex* vertex_var_new(A3CString span, Scope* scope) {
     return ret;
 }
 
+Vertex* vertex_if_new(A3CString span, Vertex* cond, Statement* body_true, Statement* body_false) {
+    assert(span.ptr);
+    assert(cond);
+    assert(body_true);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) {
+        .span = span,
+        .type = V_STMT,
+        .stmt = { .type = STMT_IF, .cond = cond, .body_true = body_true, .body_false = body_false }
+    };
+
+    return ret;
+}
+
 bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
     assert(visitor);
     assert(vertex);
@@ -144,6 +159,8 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
             return visitor->visit_ret(visitor, &vertex->stmt);
         case STMT_BLOCK:
             return visitor->visit_block(visitor, &vertex->stmt.block);
+        case STMT_IF:
+            return visitor->visit_if_stmt(visitor, &vertex->stmt);
         case STMT_EMPTY:
             return true;
         }

@@ -42,7 +42,19 @@ tests = {
     'mid',
     'last'
   ],
-  'stmt': [ 'block', 'empty' ]
+  'stmt': [
+    'block',
+    'empty'
+  ],
+  'if': [
+    'simple_false',
+    'simple_true',
+    'expr_false',
+    'expr_true',
+    'else_false',
+    'else_true',
+    'nested'
+  ]
 }
 
 foreach suite, ts : tests
