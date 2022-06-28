@@ -34,6 +34,7 @@ typedef enum TokenType {
 } TokenType;
 
 typedef enum OpType {
+    TOK_OP_AMP,
     TOK_OP_BANG_EQ,
     TOK_OP_EQ,
     TOK_OP_EQ_EQ,

@@ -73,11 +73,25 @@ static bool gen_lit(AstVisitor* visitor, Literal* lit) {
     return true;
 }
 
-static bool gen_addr(Generator* gen, Var* lvalue) {
-    assert(gen);
+static bool gen_addr(AstVisitor* visitor, Expr* lvalue) {
+    assert(visitor);
     assert(lvalue);
 
-    printf("lea rax, [rbp - %zu]\n", lvalue->stack_offset);
+    switch (lvalue->type) {
+    case EXPR_VAR:
+        printf("lea rax, [rbp - %zu]\n", lvalue->var->stack_offset);
+        break;
+    case EXPR_UNARY_OP:
+        if (lvalue->unary_op.type == OP_DEREF) {
+            vertex_visit(visitor, VERTEX(lvalue->unary_op.operand, expr));
+            break;
+        }
+
+        // fallthrough
+    default:
+        gen_error(visitor->ctx, VERTEX(lvalue, expr), "Expected an lvalue.");
+        return false;
+    }
 
     return true;
 }
@@ -86,9 +100,8 @@ static bool gen_assign(AstVisitor* visitor, BinOp* op) {
     assert(visitor);
     assert(op);
     assert(op->type == OP_ASSIGN);
-    assert(op->lhs->type == EXPR_VAR);
 
-    A3_TRYB(gen_addr(visitor->ctx, op->lhs->var));
+    A3_TRYB(gen_addr(visitor, op->lhs));
     gen_stack_push(visitor->ctx);
     vertex_visit(visitor, VERTEX(op->rhs, expr));
     gen_stack_pop(visitor->ctx, "rdi");
@@ -182,6 +195,12 @@ static bool gen_unary_op(AstVisitor* visitor, UnaryOp* op) {
     case OP_NEG:
         puts("neg rax");
         break;
+    case OP_ADDR:
+        A3_TRYB(gen_addr(visitor, op->operand));
+        break;
+    case OP_DEREF:
+        A3_TRYB(vertex_visit(visitor, VERTEX(op->operand, expr)));
+        puts("mov rax, [rax]");
     }
 
     return true;
@@ -209,7 +228,7 @@ static bool gen_var(AstVisitor* visitor, Var** var) {
     assert(visitor);
     assert(var);
 
-    A3_TRYB(gen_addr(visitor->ctx, *var));
+    A3_TRYB(gen_addr(visitor, EXPR(var, var)));
     puts("mov rax, [rax]");
 
     return true;

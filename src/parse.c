@@ -109,6 +109,8 @@ static BinOpType parse_bin_op(OpType type) {
         return OP_GE;
     case TOK_OP_EQ:
         return OP_ASSIGN;
+    case TOK_OP_AMP:
+        A3_PANIC("TODO");
     case TOK_OP_COUNT:
         A3_UNREACHABLE();
     }
@@ -122,6 +124,10 @@ static UnaryOpType parse_unary_op(OpType type) {
         return OP_UNARY_ADD;
     case TOK_OP_MINUS:
         return OP_NEG;
+    case TOK_OP_AMP:
+        return OP_ADDR;
+    case TOK_OP_STAR:
+        return OP_DEREF;
     default:
         A3_PANIC("Not a unary operator.");
     }
@@ -147,6 +153,8 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
     static uint8_t PREFIX_PRECEDENCE[TOK_OP_COUNT] = {
         [TOK_OP_PLUS]  = 11,
         [TOK_OP_MINUS] = 11,
+        [TOK_OP_AMP]   = 11,
+        [TOK_OP_STAR]  = 11,
     };
 
     static uint8_t INFIX_PRECEDENCE[TOK_OP_COUNT][2] = {

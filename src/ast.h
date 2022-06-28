@@ -50,7 +50,7 @@ typedef enum StmtType {
     STMT_RET,
 } StmtType;
 
-typedef enum UnaryOpType { OP_UNARY_ADD, OP_NEG } UnaryOpType;
+typedef enum UnaryOpType { OP_UNARY_ADD, OP_NEG, OP_ADDR, OP_DEREF } UnaryOpType;
 typedef enum ExprType { EXPR_BIN_OP, EXPR_UNARY_OP, EXPR_LIT, EXPR_VAR } ExprType;
 typedef enum LiteralType { LIT_NUM } LiteralType;
 
@@ -144,6 +144,7 @@ typedef struct Vertex {
 
 #define VERTEX(P, F) A3_CONTAINER_OF(P, Vertex, F)
 #define STMT(P, F)   A3_CONTAINER_OF(P, Statement, F)
+#define EXPR(P, F)   A3_CONTAINER_OF(P, Expr, F)
 #define SPAN(P, F)   (A3_CONTAINER_OF(P, Vertex, F)->span)
 
 typedef struct AstVisitor AstVisitor;

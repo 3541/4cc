@@ -60,6 +60,11 @@ tests = {
     'return_from_for',
     'simple_while',
     'nested'
+  ],
+  'pointer': [
+    'simple',
+    'double',
+    'mutate'
   ]
 }
 
