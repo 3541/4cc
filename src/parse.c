@@ -192,6 +192,11 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
         if (tok_op.type != TOK_OP)
             break;
 
+        if (!INFIX_PRECEDENCE[tok_op.op_type][0]) {
+            parse_error(parser, lex_next(parser->lexer), "Expected a binary operator.");
+            return NULL;
+        }
+
         if (INFIX_PRECEDENCE[tok_op.op_type][0] < precedence)
             break;
 
