@@ -206,14 +206,6 @@ static bool gen_unary_op(AstVisitor* visitor, UnaryOp* op) {
     return true;
 }
 
-static bool gen_expr_stmt(AstVisitor* visitor, Statement* stmt) {
-    assert(visitor);
-    assert(stmt);
-    assert(stmt->type == STMT_EXPR_STMT);
-
-    return vertex_visit(visitor, VERTEX(stmt->expr, expr));
-}
-
 static bool gen_ret(AstVisitor* visitor, Statement* ret) {
     assert(visitor);
     assert(ret);
@@ -261,18 +253,7 @@ static bool gen_fn(AstVisitor* visitor, Fn* fn) {
     return true;
 }
 
-static bool gen_block(AstVisitor* visitor, Block* block) {
-    assert(visitor);
-    assert(block);
-
-    A3_SLL_FOR_EACH(Statement, stmt, &block->body, link) {
-        A3_TRYB(vertex_visit(visitor, VERTEX(stmt, stmt)));
-    }
-
-    return true;
-}
-
-static bool gen_if_stmt(AstVisitor* visitor, If* if_stmt) {
+static bool gen_if(AstVisitor* visitor, If* if_stmt) {
     assert(visitor);
     assert(if_stmt);
 
@@ -322,6 +303,7 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
 }
 
 bool gen(A3CString src, Vertex* root) {
+    assert(src.ptr);
     assert(root);
     assert(root->type == V_FN);
 
@@ -334,10 +316,10 @@ bool gen(A3CString src, Vertex* root) {
             .visit_unary_op  = gen_unary_op,
             .visit_lit       = gen_lit,
             .visit_var       = gen_var,
-            .visit_expr_stmt = gen_expr_stmt,
+            .visit_expr_stmt = NULL,
             .visit_ret       = gen_ret,
-            .visit_if_stmt   = gen_if_stmt,
-            .visit_block     = gen_block,
+            .visit_if        = gen_if,
+            .visit_block     = NULL,
             .visit_fn        = gen_fn,
             .visit_loop      = gen_loop,
         },

@@ -35,8 +35,9 @@ Expr* vertex_bin_op_new(A3CString span, BinOpType type, Expr* lhs, Expr* rhs) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret = (Vertex) { .span = span,
                       .type = V_EXPR,
-                      .expr = { .type   = EXPR_BIN_OP,
-                                .bin_op = { .type = type, .lhs = lhs, .rhs = rhs } } };
+                      .expr = { .type     = EXPR_BIN_OP,
+                                .res_type = NULL,
+                                .bin_op   = { .type = type, .lhs = lhs, .rhs = rhs } } };
 
     return &ret->expr;
 }
@@ -48,6 +49,7 @@ Expr* vertex_unary_op_new(A3CString span, UnaryOpType type, Expr* operand) {
     *ret = (Vertex) { .span = span,
                       .type = V_EXPR,
                       .expr = { .type     = EXPR_UNARY_OP,
+                                .res_type = NULL,
                                 .unary_op = { .type = type, .operand = operand } } };
 
     return &ret->expr;
@@ -55,9 +57,11 @@ Expr* vertex_unary_op_new(A3CString span, UnaryOpType type, Expr* operand) {
 
 Expr* vertex_lit_num_new(A3CString span, int64_t num) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .span = span,
-                      .type = V_EXPR,
-                      .expr = { .type = EXPR_LIT, .lit = { .type = LIT_NUM, .num = num } } };
+    *ret = (Vertex) {
+        .span = span,
+        .type = V_EXPR,
+        .expr = { .type = EXPR_LIT, .res_type = NULL, .lit = { .type = LIT_NUM, .num = num } }
+    };
 
     return &ret->expr;
 }
@@ -170,6 +174,100 @@ Loop* vertex_loop_new(A3CString span, Statement* init, Expr* cond, Expr* post, S
     return &ret->stmt.loop;
 }
 
+static bool visit_bin_op(AstVisitor* visitor, BinOp* op) {
+    assert(visitor);
+    assert(op);
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(op->lhs, expr)));
+    return vertex_visit(visitor, VERTEX(op->rhs, expr));
+}
+
+static bool visit_unary_op(AstVisitor* visitor, UnaryOp* op) {
+    assert(visitor);
+    assert(op);
+
+    return vertex_visit(visitor, VERTEX(op->operand, expr));
+}
+
+static bool visit_lit(AstVisitor* visitor, Literal* lit) {
+    assert(visitor);
+    assert(lit);
+
+    (void)visitor;
+    (void)lit;
+    return true;
+}
+
+static bool visit_var(AstVisitor* visitor, Var** var) {
+    assert(visitor);
+    assert(var);
+
+    (void)visitor;
+    (void)var;
+    return true;
+}
+
+static bool visit_expr_stmt(AstVisitor* visitor, Statement* stmt) {
+    assert(visitor);
+    assert(stmt);
+    assert(stmt->type == STMT_EXPR_STMT);
+
+    return vertex_visit(visitor, VERTEX(stmt->expr, expr));
+}
+
+static bool visit_ret(AstVisitor* visitor, Statement* stmt) {
+    assert(visitor);
+    assert(stmt);
+    assert(stmt->type == STMT_RET);
+
+    return vertex_visit(visitor, VERTEX(stmt->expr, expr));
+}
+
+static bool visit_if(AstVisitor* visitor, If* if_stmt) {
+    assert(visitor);
+    assert(if_stmt);
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->cond, expr)));
+    A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->body_true, stmt)));
+    if (if_stmt->body_false)
+        return vertex_visit(visitor, VERTEX(if_stmt->body_false, stmt));
+    return true;
+}
+
+static bool visit_block(AstVisitor* visitor, Block* block) {
+    assert(visitor);
+    assert(block);
+
+    A3_SLL_FOR_EACH(Statement, stmt, &block->body, link) {
+        A3_TRYB(vertex_visit(visitor, VERTEX(stmt, stmt)));
+    }
+
+    return true;
+}
+
+static bool visit_loop(AstVisitor* visitor, Loop* loop) {
+    assert(visitor);
+    assert(loop);
+
+    if (loop->init)
+        A3_TRYB(vertex_visit(visitor, VERTEX(loop->init, stmt)));
+    if (loop->cond)
+        A3_TRYB(vertex_visit(visitor, VERTEX(loop->cond, expr)));
+    A3_TRYB(vertex_visit(visitor, VERTEX(loop->body, stmt)));
+    if (loop->post)
+        return vertex_visit(visitor, VERTEX(loop->post, expr));
+    return true;
+}
+
+static bool visit_fn(AstVisitor* visitor, Fn* fn) {
+    assert(visitor);
+    assert(fn);
+
+    return vertex_visit(visitor, VERTEX(fn->body, stmt.block));
+}
+
+#define VISIT(VISITOR, NAME, VERTEX) ((((VISITOR)->NAME) ?: NAME)((VISITOR), (VERTEX)))
+
 bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
     assert(visitor);
     assert(vertex);
@@ -177,34 +275,34 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
     switch (vertex->type) {
     case V_EXPR:
         switch (vertex->expr.type) {
-        case EXPR_LIT:
-            return visitor->visit_lit(visitor, &vertex->expr.lit);
         case EXPR_BIN_OP:
-            return visitor->visit_bin_op(visitor, &vertex->expr.bin_op);
+            return VISIT(visitor, visit_bin_op, &vertex->expr.bin_op);
         case EXPR_UNARY_OP:
-            return visitor->visit_unary_op(visitor, &vertex->expr.unary_op);
+            return VISIT(visitor, visit_unary_op, &vertex->expr.unary_op);
+        case EXPR_LIT:
+            return VISIT(visitor, visit_lit, &vertex->expr.lit);
         case EXPR_VAR:
-            return visitor->visit_var(visitor, &vertex->expr.var);
+            return VISIT(visitor, visit_var, &vertex->expr.var);
         }
         break;
     case V_STMT:
         switch (vertex->stmt.type) {
         case STMT_EXPR_STMT:
-            return visitor->visit_expr_stmt(visitor, &vertex->stmt);
+            return VISIT(visitor, visit_expr_stmt, &vertex->stmt);
         case STMT_RET:
-            return visitor->visit_ret(visitor, &vertex->stmt);
-        case STMT_BLOCK:
-            return visitor->visit_block(visitor, &vertex->stmt.block);
+            return VISIT(visitor, visit_ret, &vertex->stmt);
         case STMT_IF:
-            return visitor->visit_if_stmt(visitor, &vertex->stmt.if_stmt);
+            return VISIT(visitor, visit_if, &vertex->stmt.if_stmt);
+        case STMT_BLOCK:
+            return VISIT(visitor, visit_block, &vertex->stmt.block);
         case STMT_EMPTY:
             return true;
         case STMT_LOOP:
-            return visitor->visit_loop(visitor, &vertex->stmt.loop);
+            return VISIT(visitor, visit_loop, &vertex->stmt.loop);
         }
         break;
     case V_FN:
-        return visitor->visit_fn(visitor, &vertex->fn);
+        return VISIT(visitor, visit_fn, &vertex->fn);
     }
 
     A3_UNREACHABLE();

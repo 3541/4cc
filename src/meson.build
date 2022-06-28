@@ -32,7 +32,15 @@ cflags += c.get_supported_arguments(warnings_wanted[c_arg])
 
 a3 = dependency('a3', fallback: ['a3', 'a3_dep'])
 
-src = files(['ast.c', 'error.c', 'gen.c', 'lex.c', 'main.c', 'parse.c'])
+src = files([
+  'ast.c',
+  'error.c',
+  'gen.c',
+  'lex.c',
+  'main.c',
+  'parse.c',
+  'type.c'
+])
 
 fcc = executable(
   '4cc',

@@ -19,6 +19,7 @@
 #include "gen.h"
 #include "lex.h"
 #include "parse.h"
+#include "type.h"
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
@@ -32,6 +33,10 @@ int main(int argc, char* argv[]) {
 
     Vertex* root = parse(parser);
     if (!root)
+        return -1;
+
+    Registry* reg = type_registry_new();
+    if (!type(reg, input, root))
         return -1;
 
     if (!gen(input, root))

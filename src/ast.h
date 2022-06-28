@@ -16,6 +16,8 @@
 #include <a3/str.h>
 #include <a3/util.h>
 
+#include "type.h"
+
 typedef struct Expr      Expr;
 typedef struct Scope     Scope;
 typedef struct Statement Statement;
@@ -55,8 +57,9 @@ typedef enum ExprType { EXPR_BIN_OP, EXPR_UNARY_OP, EXPR_LIT, EXPR_VAR } ExprTyp
 typedef enum LiteralType { LIT_NUM } LiteralType;
 
 typedef struct Var {
-    A3CString name;
-    size_t    stack_offset;
+    A3CString   name;
+    Type const* type;
+    size_t      stack_offset;
 } Var;
 A3_HT_DEFINE_STRUCTS(A3CString, Var)
 
@@ -96,7 +99,8 @@ typedef struct Literal {
 } Literal;
 
 typedef struct Expr {
-    ExprType type;
+    ExprType    type;
+    Type const* res_type;
 
     union {
         BinOp   bin_op;
@@ -159,10 +163,10 @@ typedef struct AstVisitor {
     bool (*visit_var)(AstVisitor*, Var**);
     bool (*visit_expr_stmt)(AstVisitor*, Statement*);
     bool (*visit_ret)(AstVisitor*, Statement*);
-    bool (*visit_if_stmt)(AstVisitor*, If*);
+    bool (*visit_if)(AstVisitor*, If*);
     bool (*visit_block)(AstVisitor*, Block*);
-    bool (*visit_fn)(AstVisitor*, Fn*);
     bool (*visit_loop)(AstVisitor*, Loop*);
+    bool (*visit_fn)(AstVisitor*, Fn*);
 } AstVisitor;
 
 Scope* scope_new(Scope* parent);
