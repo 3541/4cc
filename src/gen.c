@@ -86,11 +86,11 @@ static bool gen_assign(AstVisitor* visitor, BinOp* op) {
     assert(visitor);
     assert(op);
     assert(op->type == OP_ASSIGN);
-    assert(op->lhs->type == V_VAR);
+    assert(op->lhs->type == EXPR_VAR);
 
     A3_TRYB(gen_addr(visitor->ctx, op->lhs->var));
     gen_stack_push(visitor->ctx);
-    vertex_visit(visitor, op->rhs);
+    vertex_visit(visitor, VERTEX(op->rhs, expr));
     gen_stack_pop(visitor->ctx, "rdi");
 
     puts("mov [rdi], rax");
@@ -105,9 +105,9 @@ static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
     if (op->type == OP_ASSIGN)
         return gen_assign(visitor, op);
 
-    A3_TRYB(vertex_visit(visitor, op->rhs));
+    A3_TRYB(vertex_visit(visitor, VERTEX(op->rhs, expr)));
     gen_stack_push(visitor->ctx);
-    A3_TRYB(vertex_visit(visitor, op->lhs));
+    A3_TRYB(vertex_visit(visitor, VERTEX(op->lhs, expr)));
     gen_stack_pop(visitor->ctx, "rdi");
 
     // Arguments now in rdi, rax.
@@ -174,7 +174,7 @@ static bool gen_unary_op(AstVisitor* visitor, UnaryOp* op) {
     assert(visitor);
     assert(op);
 
-    A3_TRYB(vertex_visit(visitor, op->operand));
+    A3_TRYB(vertex_visit(visitor, VERTEX(op->operand, expr)));
 
     switch (op->type) {
     case OP_UNARY_ADD:
@@ -192,7 +192,7 @@ static bool gen_expr_stmt(AstVisitor* visitor, Statement* stmt) {
     assert(stmt);
     assert(stmt->type == STMT_EXPR_STMT);
 
-    return vertex_visit(visitor, stmt->expr);
+    return vertex_visit(visitor, VERTEX(stmt->expr, expr));
 }
 
 static bool gen_ret(AstVisitor* visitor, Statement* ret) {
@@ -200,16 +200,16 @@ static bool gen_ret(AstVisitor* visitor, Statement* ret) {
     assert(ret);
     assert(ret->type == STMT_RET);
 
-    A3_TRYB(vertex_visit(visitor, ret->expr));
+    A3_TRYB(vertex_visit(visitor, VERTEX(ret->expr, expr)));
     puts("jmp .ret");
     return true;
 }
 
-static bool gen_var(AstVisitor* visitor, Var* var) {
+static bool gen_var(AstVisitor* visitor, Var** var) {
     assert(visitor);
     assert(var);
 
-    A3_TRYB(gen_addr(visitor->ctx, var));
+    A3_TRYB(gen_addr(visitor->ctx, *var));
     puts("mov rax, [rax]");
 
     return true;
@@ -221,7 +221,7 @@ static bool gen_fn(AstVisitor* visitor, Fn* fn) {
     assert(visitor);
     assert(fn);
 
-    Block* body              = &fn->body->stmt.block;
+    Block* body              = fn->body;
     body->scope->stack_depth = align_up(body->scope->stack_depth, 16);
 
     printf("global " A3_S_F "\n"
@@ -232,7 +232,7 @@ static bool gen_fn(AstVisitor* visitor, Fn* fn) {
            "sub rsp, %zu\n",
            A3_S_FORMAT(fn->name), A3_S_FORMAT(fn->name), body->scope->stack_depth);
 
-    A3_TRYB(vertex_visit(visitor, fn->body));
+    A3_TRYB(vertex_visit(visitor, VERTEX(fn->body, stmt.block)));
 
     puts(".ret:\n"
          "mov rsp, rbp\n"
@@ -246,22 +246,20 @@ static bool gen_block(AstVisitor* visitor, Block* block) {
     assert(visitor);
     assert(block);
 
-    A3_SLL_FOR_EACH(Vertex, stmt, &block->body, stmt.link) {
-        assert(stmt->type == V_STMT);
-        A3_TRYB(vertex_visit(visitor, stmt));
+    A3_SLL_FOR_EACH(Statement, stmt, &block->body, link) {
+        A3_TRYB(vertex_visit(visitor, VERTEX(stmt, stmt)));
     }
 
     return true;
 }
 
-static bool gen_if_stmt(AstVisitor* visitor, Statement* if_stmt) {
+static bool gen_if_stmt(AstVisitor* visitor, If* if_stmt) {
     assert(visitor);
     assert(if_stmt);
-    assert(if_stmt->type == STMT_IF);
 
     size_t label = gen_label(visitor->ctx);
 
-    A3_TRYB(vertex_visit(visitor, if_stmt->cond));
+    A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->cond, expr)));
     printf("test rax, rax\n"
            "jz .else%zu\n",
            label);
