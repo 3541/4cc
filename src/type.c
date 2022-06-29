@@ -60,6 +60,25 @@ A3String type_name(Type const* type) {
     A3_UNREACHABLE();
 }
 
+bool type_is_scalar(Type const* type) {
+    assert(type);
+
+    return type->type == TY_INT;
+}
+
+size_t type_size(Type const* type) {
+    assert(type);
+
+    switch (type->type) {
+    case TY_INT:
+        return sizeof(int64_t);
+    case TY_PTR:
+        return sizeof(void*);
+    }
+
+    A3_UNREACHABLE();
+}
+
 A3_FORMAT_FN(3, 4)
 static void type_error(Registry const* reg, Vertex const* vertex, char* fmt, ...) {
     assert(reg);
@@ -114,18 +133,43 @@ static bool type_binary_op(AstVisitor* visitor, BinOp* op) {
     A3_TRYB(vertex_visit(visitor, VERTEX(op->rhs, expr)));
 
     // TODO: Check compatibility.
-    /*    if (op->lhs->res_type != op->rhs->res_type) {
+    /*    */
+
+    switch (op->type) {
+    case OP_DIV:
+    case OP_MUL:
+        if (op->lhs->res_type != op->rhs->res_type) {
             type_error_mismatch(visitor->ctx, VERTEX(op, expr.bin_op), op->lhs->res_type,
                                 op->rhs->res_type);
             return false;
-            }*/
+        }
+        if (!type_is_scalar(op->lhs->res_type)) {
+            A3String name = type_name(op->lhs->res_type);
+            type_error(visitor->ctx, VERTEX(op->lhs, expr),
+                       "Non-scalar type" A3_S_F " invalid for this operation.", A3_S_FORMAT(name));
+            a3_string_free(&name);
+            return false;
+        }
+        if (!type_is_scalar(op->rhs->res_type)) {
+            A3String name = type_name(op->rhs->res_type);
+            type_error(visitor->ctx, VERTEX(op->rhs, expr),
+                       "Non-scalar type" A3_S_F " invalid for this operation.", A3_S_FORMAT(name));
+            a3_string_free(&name);
+            return false;
+        }
 
-    switch (op->type) {
+        // fallthrough
     case OP_ADD:
-    case OP_ASSIGN:
-    case OP_DIV:
-    case OP_MUL:
+        if (!type_is_scalar(op->lhs->res_type) && !type_is_scalar(op->rhs->res_type)) {
+            type_error_mismatch(visitor->ctx, VERTEX(op, expr.bin_op), op->lhs->res_type,
+                                op->rhs->res_type);
+            return false;
+        }
+
+        // fallthrough
     case OP_SUB:
+    case OP_ASSIGN:
+        // TODO: Typechecking for assignment.
         EXPR(op, bin_op)->res_type = op->lhs->res_type;
         break;
     case OP_EQ:

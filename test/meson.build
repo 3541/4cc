@@ -64,7 +64,12 @@ tests = {
   'pointer': [
     'simple',
     'double',
-    'mutate'
+    'mutate',
+    'add',
+    'sub',
+    'add_lhs',
+    'sub_lhs',
+    'diff'
   ]
 }
 

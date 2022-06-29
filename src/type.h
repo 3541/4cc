@@ -33,4 +33,6 @@ extern Type const* BUILTIN_TYPES[1];
 
 Registry* type_registry_new(void);
 A3String  type_name(Type const*);
+bool      type_is_scalar(Type const*);
+size_t    type_size(Type const*);
 bool      type(Registry*, A3CString src, Vertex*);

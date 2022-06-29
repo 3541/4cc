@@ -111,6 +111,44 @@ static bool gen_assign(AstVisitor* visitor, BinOp* op) {
     return true;
 }
 
+static bool gen_add_sub(AstVisitor* visitor, BinOp* op) {
+    assert(visitor);
+    assert(op);
+    assert(op->type == OP_ADD || op->type == OP_SUB);
+
+    size_t count_scalar = type_is_scalar(op->lhs->res_type) + type_is_scalar(op->rhs->res_type);
+    assert(op->type == OP_SUB || count_scalar != 0);
+
+    char const* insn = op->type == OP_ADD ? "add" : "sub";
+
+    // Scalar type needs to be multiplied by sizeof(ptr).
+    if (count_scalar == 1) {
+        char const* scalar_reg = NULL;
+        Type const* ptr_type   = NULL;
+        if (type_is_scalar(op->lhs->res_type)) {
+            scalar_reg = "rax";
+            ptr_type   = op->rhs->res_type;
+        } else {
+            scalar_reg = "rdi";
+            ptr_type   = op->rhs->res_type;
+        }
+
+        printf("imul %s, %zu\n", scalar_reg, type_size(ptr_type));
+    }
+
+    printf("%s rax, rdi\n", insn);
+
+    // Pointer difference is in units of elements.
+    if (op->type == OP_SUB && count_scalar == 0) {
+        printf("cqo\n"
+               "mov rsi, %zu\n"
+               "idiv rsi\n",
+               type_size(op->lhs->res_type));
+    }
+
+    return true;
+}
+
 static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
     assert(visitor);
     assert(op);
@@ -127,11 +165,10 @@ static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
 
     switch (op->type) {
     case OP_ADD:
-        puts("add rax, rdi");
+    case OP_SUB: {
+        A3_TRYB(gen_add_sub(visitor, op));
         break;
-    case OP_SUB:
-        puts("sub rax, rdi");
-        break;
+    }
     case OP_MUL:
         puts("imul rax, rdi");
         break;
@@ -187,6 +224,9 @@ static bool gen_unary_op(AstVisitor* visitor, UnaryOp* op) {
     assert(visitor);
     assert(op);
 
+    if (op->type == OP_ADDR)
+        return gen_addr(visitor, op->operand);
+
     A3_TRYB(vertex_visit(visitor, VERTEX(op->operand, expr)));
 
     switch (op->type) {
@@ -195,12 +235,13 @@ static bool gen_unary_op(AstVisitor* visitor, UnaryOp* op) {
     case OP_NEG:
         puts("neg rax");
         break;
-    case OP_ADDR:
-        A3_TRYB(gen_addr(visitor, op->operand));
-        break;
     case OP_DEREF:
-        A3_TRYB(vertex_visit(visitor, VERTEX(op->operand, expr)));
         puts("mov rax, [rax]");
+        break;
+    case OP_ADDR:
+        // Handled earlier.
+        A3_UNREACHABLE();
+        break;
     }
 
     return true;
