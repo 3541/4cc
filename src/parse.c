@@ -411,7 +411,7 @@ Vertex* parse(Parser* parser) {
     assert(parser);
     assert(!parser->current_scope);
 
-    Statement* body = parse_stmt(parser);
+    Statement* body = parse_block(parser);
     if (!body)
         return NULL;
     assert(body->type == STMT_BLOCK);
