@@ -17,17 +17,6 @@
 #include <a3/str.h>
 #include <a3/util.h>
 
-A3_HT_DECLARE_METHODS(A3CString, Var)
-A3_HT_DEFINE_METHODS(A3CString, Var, a3_string_cptr, a3_string_len, a3_string_cmp)
-
-Scope* scope_new(Scope* parent) {
-    A3_UNWRAPNI(Scope*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Scope) { .parent = parent, .stack_depth = parent ? parent->stack_depth : 0 };
-    A3_HT_INIT(A3CString, Var)(&ret->scope, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
-
-    return ret;
-}
-
 Expr* vertex_bin_op_new(A3CString span, BinOpType type, Expr* lhs, Expr* rhs) {
     assert(lhs);
     assert(rhs);
@@ -92,13 +81,9 @@ Statement* vertex_empty_new(A3CString span) {
     return &ret->stmt;
 }
 
-Block* vertex_block_new(Scope* scope) {
-    assert(scope);
-
+Block* vertex_block_new(void) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .type = V_STMT,
-                      .span = A3_CS_NULL,
-                      .stmt = { .type = STMT_BLOCK, .block.scope = scope } };
+    *ret = (Vertex) { .type = V_STMT, .span = A3_CS_NULL, .stmt = { .type = STMT_BLOCK } };
     A3_SLL_INIT(&ret->stmt.block.body);
 
     return &ret->stmt.block;
@@ -114,32 +99,12 @@ Fn* vertex_fn_new(A3CString name, Block* body) {
     return &ret->fn;
 }
 
-static Var* scope_find(Scope* scope, A3CString name) {
-    assert(scope);
-    assert(name.ptr);
-
-    Var* ret = A3_HT_FIND(A3CString, Var)(&scope->scope, name);
-    if (!ret && scope->parent)
-        return scope_find(scope->parent, name);
-
-    return ret;
-}
-
-Expr* vertex_var_new(A3CString span, Scope* scope) {
+Expr* vertex_var_new(A3CString span) {
     assert(span.ptr);
-    assert(scope);
-
-    Var* var = scope_find(scope, span);
-    if (!var) {
-        A3_UNWRAPN(var, calloc(1, sizeof(*var)));
-        Var new_var = { .name = span, .stack_offset = scope->stack_depth };
-        scope->stack_depth += sizeof(int64_t);
-        A3_HT_INSERT(A3CString, Var)(&scope->scope, span, new_var);
-        var = A3_HT_FIND(A3CString, Var)(&scope->scope, span);
-    }
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .span = span, .type = V_EXPR, .expr = { .type = EXPR_VAR, .var = var } };
+    *ret =
+        (Vertex) { .span = span, .type = V_EXPR, .expr = { .type = EXPR_VAR, .var.name = span } };
     return &ret->expr;
 }
 
@@ -198,7 +163,7 @@ static bool visit_lit(AstVisitor* visitor, Literal* lit) {
     return true;
 }
 
-static bool visit_var(AstVisitor* visitor, Var** var) {
+static bool visit_var(AstVisitor* visitor, Var* var) {
     assert(visitor);
     assert(var);
 

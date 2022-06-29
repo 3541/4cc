@@ -23,6 +23,7 @@
 
 #include "ast.h"
 #include "error.h"
+#include "type.h"
 
 typedef struct Generator {
     A3CString src;
@@ -79,7 +80,7 @@ static bool gen_addr(AstVisitor* visitor, Expr* lvalue) {
 
     switch (lvalue->type) {
     case EXPR_VAR:
-        printf("lea rax, [rbp - %zu]\n", lvalue->var->stack_offset);
+        printf("lea rax, [rbp - %zu]\n", lvalue->var.obj->stack_offset);
         break;
     case EXPR_UNARY_OP:
         if (lvalue->unary_op.type == OP_DEREF) {
@@ -257,7 +258,7 @@ static bool gen_ret(AstVisitor* visitor, Statement* ret) {
     return true;
 }
 
-static bool gen_var(AstVisitor* visitor, Var** var) {
+static bool gen_var(AstVisitor* visitor, Var* var) {
     assert(visitor);
     assert(var);
 
@@ -267,14 +268,9 @@ static bool gen_var(AstVisitor* visitor, Var** var) {
     return true;
 }
 
-static size_t align_up(size_t n, size_t align) { return (n + align - 1) & ~(align - 1); }
-
 static bool gen_fn(AstVisitor* visitor, Fn* fn) {
     assert(visitor);
     assert(fn);
-
-    Block* body              = fn->body;
-    body->scope->stack_depth = align_up(body->scope->stack_depth, 16);
 
     printf("global " A3_S_F "\n"
            "section .text\n"
@@ -282,7 +278,7 @@ static bool gen_fn(AstVisitor* visitor, Fn* fn) {
            "push rbp\n"
            "mov rbp, rsp\n"
            "sub rsp, %zu\n",
-           A3_S_FORMAT(fn->name), A3_S_FORMAT(fn->name), body->scope->stack_depth);
+           A3_S_FORMAT(fn->name), A3_S_FORMAT(fn->name), scope_stack_depth(fn->body->scope));
 
     A3_TRYB(vertex_visit(visitor, VERTEX(fn->body, stmt.block)));
 
@@ -352,17 +348,15 @@ bool gen(A3CString src, Vertex* root) {
 
     bool ret = vertex_visit(
         &(AstVisitor) {
-            .ctx             = &gen,
-            .visit_bin_op    = gen_bin_op,
-            .visit_unary_op  = gen_unary_op,
-            .visit_lit       = gen_lit,
-            .visit_var       = gen_var,
-            .visit_expr_stmt = NULL,
-            .visit_ret       = gen_ret,
-            .visit_if        = gen_if,
-            .visit_block     = NULL,
-            .visit_fn        = gen_fn,
-            .visit_loop      = gen_loop,
+            .ctx            = &gen,
+            .visit_bin_op   = gen_bin_op,
+            .visit_unary_op = gen_unary_op,
+            .visit_lit      = gen_lit,
+            .visit_var      = gen_var,
+            .visit_ret      = gen_ret,
+            .visit_if       = gen_if,
+            .visit_fn       = gen_fn,
+            .visit_loop     = gen_loop,
         },
         root);
     assert(!gen.stack_depth);

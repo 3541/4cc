@@ -10,6 +10,7 @@
 #include "parse.h"
 
 #include <assert.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -23,7 +24,6 @@
 typedef struct Parser {
     A3CString src;
     Lexer*    lexer;
-    Scope*    current_scope;
     size_t    error_depth;
     bool      status;
 } Parser;
@@ -32,22 +32,8 @@ static Statement* parse_stmt(Parser*);
 
 Parser* parse_new(A3CString src, Lexer* lexer) {
     A3_UNWRAPNI(Parser*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Parser) {
-        .src = src, .lexer = lexer, .current_scope = NULL, .error_depth = 0, .status = true
-    };
+    *ret = (Parser) { .src = src, .lexer = lexer, .error_depth = 0, .status = true };
     return ret;
-}
-
-static void parse_scope_push(Parser* parser) {
-    assert(parser);
-    parser->current_scope = scope_new(parser->current_scope);
-}
-
-static void parse_scope_pop(Parser* parser) {
-    assert(parser);
-    assert(parser->current_scope);
-
-    parser->current_scope = parser->current_scope->parent;
 }
 
 // Report a parser error.
@@ -139,12 +125,7 @@ static Expr* parse_var(Parser* parser) {
     Token tok = lex_next(parser->lexer);
     assert(tok.type == TOK_IDENT);
 
-    if (!parser->current_scope) {
-        parse_error(parser, tok, "Variable used without scope.");
-        return NULL;
-    }
-
-    return vertex_var_new(tok.lexeme, parser->current_scope);
+    return vertex_var_new(tok.lexeme);
 }
 
 static Expr* parse_expr(Parser* parser, uint8_t precedence) {
@@ -266,8 +247,7 @@ static Statement* parse_block(Parser* parser) {
     Token left_tok = lex_next(parser->lexer);
     assert(left_tok.type == TOK_LBRACE);
 
-    parse_scope_push(parser);
-    Block* block = vertex_block_new(parser->current_scope);
+    Block* block = vertex_block_new();
 
     Statement* current = parse_stmt(parser);
     if (!current)
@@ -295,8 +275,6 @@ static Statement* parse_block(Parser* parser) {
 
     if (next.type == TOK_ERR)
         return NULL;
-
-    parse_scope_pop(parser);
 
     Token right_tok = lex_next(parser->lexer);
     if (right_tok.type != TOK_RBRACE) {
@@ -347,8 +325,6 @@ static Statement* parse_loop(Parser* parser) {
     if (!parse_consume(parser, A3_CS("opening parenthesis"), TOK_LPAREN))
         return NULL;
 
-    parse_scope_push(parser);
-
     Statement* init = NULL;
     Expr*      cond = NULL;
     Expr*      post = NULL;
@@ -377,8 +353,6 @@ static Statement* parse_loop(Parser* parser) {
     Statement* body = parse_stmt(parser);
     if (!body)
         return NULL;
-
-    parse_scope_pop(parser);
 
     return STMT(vertex_loop_new(parse_span_merge(loop_tok.lexeme, SPAN(body, stmt)), init, cond,
                                 post, body),
@@ -409,7 +383,6 @@ static Statement* parse_stmt(Parser* parser) {
 
 Vertex* parse(Parser* parser) {
     assert(parser);
-    assert(!parser->current_scope);
 
     Statement* body = parse_block(parser);
     if (!body)

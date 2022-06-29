@@ -18,6 +18,7 @@ typedef struct Vertex Vertex;
 
 typedef struct Type     Type;
 typedef struct Registry Registry;
+typedef struct Scope    Scope;
 
 typedef enum TypeType {
     TY_INT,
@@ -29,7 +30,15 @@ typedef struct Type {
     Type const* parent;
 } Type;
 
+typedef struct Obj {
+    A3CString   name;
+    Type const* type;
+    size_t      stack_offset;
+} Obj;
+
 extern Type const* BUILTIN_TYPES[1];
+
+size_t scope_stack_depth(Scope*);
 
 Registry* type_registry_new(void);
 A3String  type_name(Type const*);

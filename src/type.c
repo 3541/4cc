@@ -27,12 +27,73 @@ A3_HT_DEFINE_STRUCTS(TypePtr, TypePtr);
 A3_HT_DECLARE_METHODS(TypePtr, TypePtr);
 A3_HT_DEFINE_METHODS(TypePtr, TypePtr, KEY_BYTES, KEY_SIZE, key_eq)
 
+A3_HT_DEFINE_STRUCTS(A3CString, Obj)
+
+A3_HT_DECLARE_METHODS(A3CString, Obj)
+A3_HT_DEFINE_METHODS(A3CString, Obj, a3_string_cptr, a3_string_len, a3_string_cmp)
+
+typedef struct Scope {
+    Scope* parent;
+    A3_HT(A3CString, Obj) scope;
+    size_t stack_depth;
+} Scope;
+
 typedef struct Registry {
     A3_HT(TypePtr, TypePtr) ptrs_to;
+    Scope*    current_scope;
     A3CString src;
 } Registry;
 
 Type const* BUILTIN_TYPES[] = { [TY_INT] = &(Type) { .type = TY_INT } };
+
+static Scope* scope_new(Scope* parent) {
+    A3_UNWRAPNI(Scope*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Scope) { .parent = parent, .stack_depth = parent ? parent->stack_depth : 0 };
+    A3_HT_INIT(A3CString, Obj)(&ret->scope, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
+
+    return ret;
+}
+
+static Obj* scope_find(Scope* scope, A3CString name) {
+    assert(scope);
+    assert(name.ptr);
+
+    Obj* ret = A3_HT_FIND(A3CString, Obj)(&scope->scope, name);
+    if (!ret && scope->parent)
+        return scope_find(scope->parent, name);
+
+    return ret;
+}
+
+static Obj* scope_add(Scope* scope, Obj obj) {
+    assert(scope);
+    assert(obj.name.ptr);
+
+    bool res = A3_HT_INSERT(A3CString, Obj)(&scope->scope, obj.name, obj);
+    assert(res);
+    (void)res;
+
+    return A3_HT_FIND(A3CString, Obj)(&scope->scope, obj.name);
+}
+
+size_t scope_stack_depth(Scope* scope) {
+    assert(scope);
+
+    return scope->stack_depth;
+}
+
+static void reg_scope_push(Registry* reg) {
+    assert(reg);
+
+    reg->current_scope = scope_new(reg->current_scope);
+}
+
+static void reg_scope_pop(Registry* reg) {
+    assert(reg);
+    assert(reg->current_scope);
+
+    reg->current_scope = reg->current_scope->parent;
+}
 
 Registry* type_registry_new(void) {
     A3_UNWRAPNI(Registry*, ret, calloc(1, sizeof(*ret)));
@@ -225,12 +286,80 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
     return true;
 }
 
-static bool type_var(AstVisitor* visitor, Var** var) {
+static bool type_var(AstVisitor* visitor, Var* var) {
     assert(visitor);
     assert(var);
-    (void)visitor;
 
-    EXPR(var, var)->res_type = (*var)->type = BUILTIN_TYPES[TY_INT];
+    Registry* reg = visitor->ctx;
+
+    if (!reg->current_scope) {
+        type_error(reg, VERTEX(var, expr.var), "Variable used oustide scope.");
+        return false;
+    }
+
+    if (!var->obj) {
+        Obj* obj = scope_find(reg->current_scope, var->name);
+
+        if (!obj) {
+            obj = scope_add(reg->current_scope,
+                            (Obj) { .name         = var->name,
+                                    .stack_offset = reg->current_scope->stack_depth,
+                                    .type         = BUILTIN_TYPES[TY_INT] });
+            reg->current_scope->stack_depth += type_size(obj->type);
+        }
+
+        var->obj = obj;
+    }
+
+    EXPR(var, var)->res_type = var->obj->type;
+    return true;
+}
+
+static bool type_block(AstVisitor* visitor, Block* block) {
+    assert(visitor);
+    assert(block);
+
+    Registry* reg = visitor->ctx;
+
+    reg_scope_push(reg);
+    block->scope = reg->current_scope;
+
+    A3_SLL_FOR_EACH(Statement, stmt, &block->body, link) {
+        A3_TRYB(vertex_visit(visitor, VERTEX(stmt, stmt)));
+    }
+
+    reg_scope_pop(reg);
+
+    return true;
+}
+
+static bool type_loop(AstVisitor* visitor, Loop* loop) {
+    assert(visitor);
+    assert(loop);
+
+    reg_scope_push(visitor->ctx);
+
+    if (loop->init)
+        A3_TRYB(vertex_visit(visitor, VERTEX(loop->init, stmt)));
+    if (loop->cond)
+        A3_TRYB(vertex_visit(visitor, VERTEX(loop->cond, expr)));
+    A3_TRYB(vertex_visit(visitor, VERTEX(loop->body, stmt)));
+    if (loop->post)
+        A3_TRYB(vertex_visit(visitor, VERTEX(loop->post, expr)));
+
+    reg_scope_pop(visitor->ctx);
+    return true;
+}
+
+static size_t align_up(size_t n, size_t align) { return (n + align - 1) & ~(align - 1); }
+
+static bool type_fn(AstVisitor* visitor, Fn* fn) {
+    assert(visitor);
+    assert(fn);
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(fn->body, stmt.block)));
+    fn->body->scope->stack_depth = align_up(fn->body->scope->stack_depth, 16);
+
     return true;
 }
 
@@ -243,17 +372,14 @@ bool type(Registry* reg, A3CString src, Vertex* root) {
 
     return vertex_visit(
         &(AstVisitor) {
-            .ctx             = reg,
-            .visit_bin_op    = type_binary_op,
-            .visit_unary_op  = type_unary_op,
-            .visit_lit       = type_lit,
-            .visit_var       = type_var,
-            .visit_expr_stmt = NULL,
-            .visit_ret       = NULL,
-            .visit_if        = NULL,
-            .visit_block     = NULL,
-            .visit_loop      = NULL,
-            .visit_fn        = NULL,
+            .ctx            = reg,
+            .visit_bin_op   = type_binary_op,
+            .visit_unary_op = type_unary_op,
+            .visit_lit      = type_lit,
+            .visit_var      = type_var,
+            .visit_block    = type_block,
+            .visit_loop     = type_loop,
+            .visit_fn       = type_fn,
         },
         root);
 }

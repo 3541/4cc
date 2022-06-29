@@ -11,12 +11,15 @@
 
 #include <stdint.h>
 
-#include <a3/ht.h>
 #include <a3/sll.h>
 #include <a3/str.h>
 #include <a3/util.h>
 
-#include "type.h"
+// type.h
+typedef struct Type Type;
+
+// res.h
+typedef struct Obj Obj;
 
 typedef struct Expr      Expr;
 typedef struct Scope     Scope;
@@ -56,19 +59,6 @@ typedef enum UnaryOpType { OP_UNARY_ADD, OP_NEG, OP_ADDR, OP_DEREF } UnaryOpType
 typedef enum ExprType { EXPR_BIN_OP, EXPR_UNARY_OP, EXPR_LIT, EXPR_VAR } ExprType;
 typedef enum LiteralType { LIT_NUM } LiteralType;
 
-typedef struct Var {
-    A3CString   name;
-    Type const* type;
-    size_t      stack_offset;
-} Var;
-A3_HT_DEFINE_STRUCTS(A3CString, Var)
-
-typedef struct Scope {
-    Scope* parent;
-    A3_HT(A3CString, Var) scope;
-    size_t stack_depth;
-} Scope;
-
 typedef struct Block {
     A3_SLL(body, Statement) body;
     Scope* scope;
@@ -98,6 +88,11 @@ typedef struct Literal {
     };
 } Literal;
 
+typedef struct Var {
+    A3CString name;
+    Obj*      obj;
+} Var;
+
 typedef struct Expr {
     ExprType    type;
     Type const* res_type;
@@ -106,7 +101,7 @@ typedef struct Expr {
         BinOp   bin_op;
         UnaryOp unary_op;
         Literal lit;
-        Var*    var;
+        Var     var;
     };
 } Expr;
 
@@ -160,7 +155,7 @@ typedef struct AstVisitor {
     bool (*visit_bin_op)(AstVisitor*, BinOp*);
     bool (*visit_unary_op)(AstVisitor*, UnaryOp*);
     bool (*visit_lit)(AstVisitor*, Literal*);
-    bool (*visit_var)(AstVisitor*, Var**);
+    bool (*visit_var)(AstVisitor*, Var*);
     bool (*visit_expr_stmt)(AstVisitor*, Statement*);
     bool (*visit_ret)(AstVisitor*, Statement*);
     bool (*visit_if)(AstVisitor*, If*);
@@ -169,17 +164,15 @@ typedef struct AstVisitor {
     bool (*visit_fn)(AstVisitor*, Fn*);
 } AstVisitor;
 
-Scope* scope_new(Scope* parent);
-
 Expr*      vertex_bin_op_new(A3CString span, BinOpType, Expr* lhs, Expr* rhs);
 Expr*      vertex_unary_op_new(A3CString span, UnaryOpType, Expr* operand);
 Expr*      vertex_lit_num_new(A3CString span, int64_t);
-Expr*      vertex_var_new(A3CString span, Scope* scope);
+Expr*      vertex_var_new(A3CString span);
 Statement* vertex_expr_stmt_new(A3CString span, Expr* expr);
 Statement* vertex_ret_new(A3CString span, Expr* expr);
 Statement* vertex_empty_new(A3CString span);
 If*        vertex_if_new(A3CString span, Expr* cond, Statement* body_true, Statement* body_false);
-Block*     vertex_block_new(Scope*);
+Block*     vertex_block_new(void);
 Fn*        vertex_fn_new(A3CString name, Block* body);
 Loop* vertex_loop_new(A3CString span, Statement* init, Expr* cond, Expr* post, Statement* body);
 bool  vertex_visit(AstVisitor*, Vertex*);
