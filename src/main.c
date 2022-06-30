@@ -15,6 +15,7 @@
 #include <a3/str.h>
 
 #include "ast.h"
+#include "dump.h"
 #include "error.h"
 #include "gen.h"
 #include "lex.h"
@@ -38,6 +39,8 @@ int main(int argc, char* argv[]) {
     Registry* reg = type_registry_new();
     if (!type(reg, input, root))
         return -1;
+
+    dump(root);
 
     if (!gen(input, root))
         return -1;

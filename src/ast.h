@@ -19,9 +19,7 @@
 
 // type.h
 typedef struct Type Type;
-
-// res.h
-typedef struct Obj Obj;
+typedef struct Obj  Obj;
 
 typedef struct Expr   Expr;
 typedef struct Scope  Scope;

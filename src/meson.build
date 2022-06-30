@@ -34,6 +34,7 @@ a3 = dependency('a3', fallback: ['a3', 'a3_dep'])
 
 src = files([
   'ast.c',
+  'dump.c',
   'error.c',
   'gen.c',
   'lex.c',
