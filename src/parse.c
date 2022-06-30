@@ -86,48 +86,46 @@ static bool parse_has_decl(Parser* parser) {
     return lex_peek(parser->lexer).type == TOK_INT;
 }
 
-static BinOpType parse_bin_op(OpType type) {
+static BinOpType parse_bin_op(TokenType type) {
     switch (type) {
-    case TOK_OP_PLUS:
+    case TOK_PLUS:
         return OP_ADD;
-    case TOK_OP_MINUS:
+    case TOK_MINUS:
         return OP_SUB;
-    case TOK_OP_STAR:
+    case TOK_STAR:
         return OP_MUL;
-    case TOK_OP_SLASH:
+    case TOK_SLASH:
         return OP_DIV;
-    case TOK_OP_EQ_EQ:
+    case TOK_EQ_EQ:
         return OP_EQ;
-    case TOK_OP_BANG_EQ:
+    case TOK_BANG_EQ:
         return OP_NE;
-    case TOK_OP_LT:
+    case TOK_LT:
         return OP_LT;
-    case TOK_OP_LT_EQ:
+    case TOK_LT_EQ:
         return OP_LE;
-    case TOK_OP_GT:
+    case TOK_GT:
         return OP_GT;
-    case TOK_OP_GT_EQ:
+    case TOK_GT_EQ:
         return OP_GE;
-    case TOK_OP_EQ:
+    case TOK_EQ:
         return OP_ASSIGN;
-    case TOK_OP_AMP:
+    case TOK_AMP:
         A3_PANIC("TODO");
-    case TOK_OP_COUNT:
-        A3_UNREACHABLE();
+    default:
+        A3_PANIC("Not a binary operator.");
     }
-
-    A3_UNREACHABLE();
 }
 
-static UnaryOpType parse_unary_op(OpType type) {
+static UnaryOpType parse_unary_op(TokenType type) {
     switch (type) {
-    case TOK_OP_PLUS:
+    case TOK_PLUS:
         return OP_UNARY_ADD;
-    case TOK_OP_MINUS:
+    case TOK_MINUS:
         return OP_NEG;
-    case TOK_OP_AMP:
+    case TOK_AMP:
         return OP_ADDR;
-    case TOK_OP_STAR:
+    case TOK_STAR:
         return OP_DEREF;
     default:
         A3_PANIC("Not a unary operator.");
@@ -143,24 +141,23 @@ static Expr* parse_var(Parser* parser) {
     return vertex_var_new(tok.lexeme);
 }
 
-static uint8_t PREFIX_PRECEDENCE[TOK_OP_COUNT] = {
-    [TOK_OP_PLUS]  = 11,
-    [TOK_OP_MINUS] = 11,
-    [TOK_OP_AMP]   = 11,
-    [TOK_OP_STAR]  = 11,
+static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
+    [TOK_PLUS]  = 11,
+    [TOK_MINUS] = 11,
+    [TOK_AMP]   = 11,
+    [TOK_STAR]  = 11,
 };
 
-static uint8_t INFIX_PRECEDENCE[TOK_OP_COUNT][2] = {
-    [TOK_OP_EQ] = { 2, 1 },
+static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
+    [TOK_EQ] = { 2, 1 },
 
-    [TOK_OP_EQ_EQ] = { 3, 4 }, [TOK_OP_BANG_EQ] = { 3, 4 },
+    [TOK_EQ_EQ] = { 3, 4 }, [TOK_BANG_EQ] = { 3, 4 },
 
-    [TOK_OP_GT] = { 5, 6 },    [TOK_OP_GT_EQ] = { 5, 6 },
-    [TOK_OP_LT] = { 5, 6 },    [TOK_OP_LT_EQ] = { 5, 6 },
+    [TOK_GT] = { 5, 6 },    [TOK_GT_EQ] = { 5, 6 },   [TOK_LT] = { 5, 6 }, [TOK_LT_EQ] = { 5, 6 },
 
-    [TOK_OP_PLUS] = { 7, 8 },  [TOK_OP_MINUS] = { 7, 8 },
+    [TOK_PLUS] = { 7, 8 },  [TOK_MINUS] = { 7, 8 },
 
-    [TOK_OP_STAR] = { 9, 10 }, [TOK_OP_SLASH] = { 9, 10 }
+    [TOK_STAR] = { 9, 10 }, [TOK_SLASH] = { 9, 10 }
 };
 
 static Expr* parse_expr(Parser* parser, uint8_t precedence) {
@@ -180,44 +177,37 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
         lhs = vertex_lit_num_new(tok.lexeme, tok.lit_num);
         break;
     }
-    case TOK_OP:
-        if (!PREFIX_PRECEDENCE[tok.op_type]) {
-            parse_error(parser, lex_next(parser->lexer), "Expected a unary operator.");
-            return NULL;
-        }
-
-        lex_next(parser->lexer);
-        Expr* rhs = parse_expr(parser, PREFIX_PRECEDENCE[tok.op_type]);
-        lhs       = vertex_unary_op_new(parse_span_merge(tok.lexeme, SPAN(rhs, expr)),
-                                        parse_unary_op(tok.op_type), rhs);
-        break;
     case TOK_IDENT:
         lhs = parse_var(parser);
         break;
     default:
-        parse_error(parser, lex_next(parser->lexer),
-                    "Expected a literal, opening parenthesis, or unary operator.");
+        if (!PREFIX_PRECEDENCE[tok.type]) {
+            parse_error(parser, lex_next(parser->lexer),
+                        "Expected a literal, opening parenthesis, or unary operator.");
+
+            return NULL;
+        }
+
+        lex_next(parser->lexer);
+        Expr* rhs = parse_expr(parser, PREFIX_PRECEDENCE[tok.type]);
+        lhs       = vertex_unary_op_new(parse_span_merge(tok.lexeme, SPAN(rhs, expr)),
+                                        parse_unary_op(tok.type), rhs);
+        break;
+
         return NULL;
     }
 
     while (true) {
         Token tok_op = lex_peek(parser->lexer);
-        if (tok_op.type != TOK_OP)
-            break;
 
-        if (!INFIX_PRECEDENCE[tok_op.op_type][0]) {
-            parse_error(parser, lex_next(parser->lexer), "Expected a binary operator.");
-            return NULL;
-        }
-
-        if (INFIX_PRECEDENCE[tok_op.op_type][0] < precedence)
+        if (!INFIX_PRECEDENCE[tok_op.type][0] || INFIX_PRECEDENCE[tok_op.type][0] < precedence)
             break;
 
         lex_next(parser->lexer);
 
-        Expr* rhs = parse_expr(parser, INFIX_PRECEDENCE[tok_op.op_type][1]);
+        Expr* rhs = parse_expr(parser, INFIX_PRECEDENCE[tok_op.type][1]);
         lhs       = vertex_bin_op_new(parse_span_merge(SPAN(lhs, expr), SPAN(rhs, expr)),
-                                      parse_bin_op(tok_op.op_type), lhs, rhs);
+                                      parse_bin_op(tok_op.type), lhs, rhs);
     }
 
     return lhs;
@@ -379,13 +369,12 @@ static Item* parse_declarator(Parser* parser, PType* type) {
     assert(type);
 
     Token first = lex_peek(parser->lexer);
-    if ((first.type != TOK_OP || first.op_type != TOK_OP_STAR) && first.type != TOK_IDENT) {
+    if ((first.type != TOK_STAR) && first.type != TOK_IDENT) {
         parse_error(parser, first, "Expected a pointer specifier or identifier.");
         return NULL;
     }
 
-    Token next;
-    while ((next = lex_peek(parser->lexer)).type == TOK_OP && next.op_type == TOK_OP_STAR) {
+    while (lex_peek(parser->lexer).type == TOK_STAR) {
         lex_next(parser->lexer);
         type = ptype_ptr_to(type);
     }
@@ -422,11 +411,10 @@ static bool parse_decl(Parser* parser, Block* block) {
             return false;
         A3_SLL_ENQUEUE(&block->body, decl, link);
 
-        Token next = lex_peek(parser->lexer);
-        if (next.type == TOK_OP && next.op_type == TOK_OP_EQ) {
+        if (lex_peek(parser->lexer).type == TOK_EQ) {
             lex_next(parser->lexer);
 
-            Expr* init_rhs = parse_expr(parser, INFIX_PRECEDENCE[TOK_OP_EQ][1]);
+            Expr* init_rhs = parse_expr(parser, INFIX_PRECEDENCE[TOK_EQ][1]);
             if (!init_rhs)
                 return false;
 

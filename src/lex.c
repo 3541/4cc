@@ -175,45 +175,66 @@ static Token lex_op(Lexer* lexer) {
     if (!a3_string_cptr(lexeme))
         return lex_recover(lexer);
 
+    TokenType type;
     switch (lexeme.ptr[0]) {
     case '+':
-        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_PLUS };
+        type = TOK_PLUS;
+        break;
     case '-':
-        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_MINUS };
+        type = TOK_MINUS;
+        break;
     case '*':
-        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_STAR };
+        type = TOK_STAR;
+        break;
     case '/':
-        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_SLASH };
+        type = TOK_SLASH;
+        break;
     case '&':
-        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_AMP };
+        type = TOK_AMP;
+        break;
     case '=':
-        if (lexeme.ptr[1] != '=')
-            return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_EQ };
+        if (lexeme.ptr[1] != '=') {
+            type = TOK_EQ;
+            break;
+        }
+
         lexeme.len++;
         lex_consume_any(lexer, 1);
-        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_EQ_EQ };
+        type = TOK_EQ_EQ;
+        break;
     case '!':
         if (!lex_consume_one(lexer, A3_CS("relational inequality"), A3_CS("=")).ptr)
             return lex_recover(lexer);
+
         lexeme.len++;
         lex_consume_any(lexer, 1);
-        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_BANG_EQ };
+        type = TOK_BANG_EQ;
+        break;
     case '<':
-        if (lexeme.ptr[1] != '=')
-            return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_LT };
+        if (lexeme.ptr[1] != '=') {
+            type = TOK_LT;
+            break;
+        }
+
         lexeme.len++;
         lex_consume_any(lexer, 1);
-        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_LT_EQ };
+        type = TOK_LT_EQ;
+        break;
     case '>':
         if (lexeme.ptr[1] != '=') {
-            return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_GT };
+            type = TOK_GT;
+            break;
         }
+
         lexeme.len++;
         lex_consume_any(lexer, 1);
-        return (Token) { .type = TOK_OP, .lexeme = lexeme, .op_type = TOK_OP_GT_EQ };
+        type = TOK_GT_EQ;
+        break;
     default:
         A3_UNREACHABLE();
     }
+
+    return (Token) { .type = type, .lexeme = lexeme };
 }
 
 static Token lex_paren(Lexer* lexer) {
