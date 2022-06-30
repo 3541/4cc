@@ -268,6 +268,29 @@ static bool gen_var(AstVisitor* visitor, Var* var) {
     return true;
 }
 
+static bool gen_call(AstVisitor* visitor, Call* call) {
+    assert(visitor);
+    assert(call);
+
+    static char* CALL_REGISTERS[] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
+
+    size_t args = 0;
+    A3_SLL_FOR_EACH(Arg, arg, &call->args, link) {
+        args++;
+        A3_TRYB(vertex_visit(visitor, VERTEX(arg->expr, expr)));
+        gen_stack_push(visitor->ctx);
+    }
+    assert(args <= 6);
+
+    for (size_t i = 0; i < args; i++)
+        gen_stack_pop(visitor->ctx, CALL_REGISTERS[args - i - 1]);
+
+    printf("extern " A3_S_F "\n"
+           "call " A3_S_F "\n",
+           A3_S_FORMAT(call->name), A3_S_FORMAT(call->name));
+    return true;
+}
+
 static bool gen_fn(AstVisitor* visitor, Fn* fn) {
     assert(visitor);
     assert(fn);
@@ -353,6 +376,7 @@ bool gen(A3CString src, Vertex* root) {
             .visit_unary_op = gen_unary_op,
             .visit_lit      = gen_lit,
             .visit_var      = gen_var,
+            .visit_call     = gen_call,
             .visit_ret      = gen_ret,
             .visit_if       = gen_if,
             .visit_fn       = gen_fn,

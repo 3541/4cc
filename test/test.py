@@ -6,8 +6,9 @@ import sys
 import tempfile
 
 cc = sys.argv[1]
-test_path = sys.argv[2]
-test_name = sys.argv[3]
+test_lib = sys.argv[2]
+test_path = sys.argv[3]
+test_name = sys.argv[4]
 
 input_path = os.sep.join([test_path, test_name + '.c'])
 if not os.path.exists(input_path):
@@ -24,7 +25,7 @@ asm.write(asm_result)
 asm.flush()
 
 subprocess.run(["nasm", "-felf64", "-o", object.name, asm.name], check = True)
-subprocess.run(["gcc", "-o", binary_path, object.name], check = True)
+subprocess.run(["gcc", "-o", binary_path, object.name, test_lib], check = True)
 
 asm.close()
 object.close()

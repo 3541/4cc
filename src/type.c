@@ -356,6 +356,14 @@ static bool type_var(AstVisitor* visitor, Var* var) {
     return true;
 }
 
+static bool type_call(AstVisitor* visitor, Call* call) {
+    assert(visitor);
+    assert(call);
+
+    EXPR(call, call)->res_type = BUILTIN_TYPES[TY_INT];
+    return true;
+}
+
 static bool type_block(AstVisitor* visitor, Block* block) {
     assert(visitor);
     assert(block);
@@ -427,6 +435,7 @@ bool type(Registry* reg, A3CString src, Vertex* root) {
             .visit_unary_op = type_unary_op,
             .visit_lit      = type_lit,
             .visit_var      = type_var,
+            .visit_call     = type_call,
             .visit_block    = type_block,
             .visit_loop     = type_loop,
             .visit_decl     = type_decl,

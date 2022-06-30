@@ -116,6 +116,19 @@ Expr* vertex_var_new(A3CString span) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret =
         (Vertex) { .span = span, .type = V_EXPR, .expr = { .type = EXPR_VAR, .var.name = span } };
+
+    return &ret->expr;
+}
+
+Expr* vertex_call_new(A3CString span, A3CString name) {
+    assert(span.ptr);
+    assert(name.ptr);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret =
+        (Vertex) { .span = span, .type = V_EXPR, .expr = { .type = EXPR_CALL, .call.name = name } };
+    A3_SLL_INIT(&ret->expr.call.args);
+
     return &ret->expr;
 }
 
@@ -250,6 +263,17 @@ static bool visit_fn(AstVisitor* visitor, Fn* fn) {
     return vertex_visit(visitor, VERTEX(fn->body, item.block));
 }
 
+static bool visit_call(AstVisitor* visitor, Call* call) {
+    assert(visitor);
+    assert(call);
+
+    A3_SLL_FOR_EACH(Arg, arg, &call->args, link) {
+        A3_TRYB(vertex_visit(visitor, VERTEX(arg->expr, expr)));
+    }
+
+    return true;
+}
+
 #define VISIT(VISITOR, NAME, VERTEX) ((((VISITOR)->NAME) ?: NAME)((VISITOR), (VERTEX)))
 
 bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
@@ -267,6 +291,8 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
             return VISIT(visitor, visit_lit, &vertex->expr.lit);
         case EXPR_VAR:
             return VISIT(visitor, visit_var, &vertex->expr.var);
+        case EXPR_CALL:
+            return VISIT(visitor, visit_call, &vertex->expr.call);
         }
         break;
     case V_STMT:
@@ -308,6 +334,15 @@ PType* ptype_ptr_to(PType* type) {
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
     *ret = (PType) { .type = PTY_PTR, .parent = type };
+
+    return ret;
+}
+
+Arg* arg_new(Expr* expr) {
+    assert(expr);
+
+    A3_UNWRAPNI(Arg*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Arg) { .expr = expr };
 
     return ret;
 }

@@ -59,7 +59,7 @@ typedef enum StmtType {
 } StmtType;
 
 typedef enum UnaryOpType { OP_UNARY_ADD, OP_NEG, OP_ADDR, OP_DEREF } UnaryOpType;
-typedef enum ExprType { EXPR_BIN_OP, EXPR_UNARY_OP, EXPR_LIT, EXPR_VAR } ExprType;
+typedef enum ExprType { EXPR_BIN_OP, EXPR_UNARY_OP, EXPR_LIT, EXPR_VAR, EXPR_CALL } ExprType;
 typedef enum LiteralType { LIT_NUM } LiteralType;
 
 typedef struct Block {
@@ -96,6 +96,17 @@ typedef struct Var {
     Obj*      obj;
 } Var;
 
+typedef struct Arg Arg;
+typedef struct Arg {
+    Expr* expr;
+    A3_SLL_LINK(Arg) link;
+} Arg;
+
+typedef struct Call {
+    A3CString name;
+    A3_SLL(args, Arg) args;
+} Call;
+
 typedef struct Expr {
     ExprType    type;
     Type const* res_type;
@@ -105,6 +116,7 @@ typedef struct Expr {
         UnaryOp unary_op;
         Literal lit;
         Var     var;
+        Call    call;
     };
 } Expr;
 
@@ -186,6 +198,7 @@ typedef struct AstVisitor {
     bool (*visit_unary_op)(AstVisitor*, UnaryOp*);
     bool (*visit_lit)(AstVisitor*, Literal*);
     bool (*visit_var)(AstVisitor*, Var*);
+    bool (*visit_call)(AstVisitor*, Call*);
     bool (*visit_expr_stmt)(AstVisitor*, Item*);
     bool (*visit_ret)(AstVisitor*, Item*);
     bool (*visit_decl)(AstVisitor*, Item*);
@@ -199,6 +212,7 @@ Expr*  vertex_bin_op_new(A3CString span, BinOpType, Expr* lhs, Expr* rhs);
 Expr*  vertex_unary_op_new(A3CString span, UnaryOpType, Expr* operand);
 Expr*  vertex_lit_num_new(A3CString span, int64_t);
 Expr*  vertex_var_new(A3CString span);
+Expr*  vertex_call_new(A3CString span, A3CString name);
 Item*  vertex_expr_stmt_new(A3CString span, Expr* expr);
 Item*  vertex_ret_new(A3CString span, Expr* expr);
 Item*  vertex_empty_new(A3CString span);
@@ -211,3 +225,5 @@ bool   vertex_visit(AstVisitor*, Vertex*);
 
 PType* ptype_builtin_new(TokenType);
 PType* ptype_ptr_to(PType*);
+
+Arg* arg_new(Expr*);

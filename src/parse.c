@@ -28,6 +28,7 @@ typedef struct Parser {
     bool      status;
 } Parser;
 
+static Expr*  parse_expr(Parser*, uint8_t precedence);
 static Item*  parse_stmt(Parser*);
 static Block* parse_block(Parser*);
 static bool   parse_decl(Parser*, Block*);
@@ -141,6 +142,41 @@ static Expr* parse_var(Parser* parser) {
     return vertex_var_new(tok.lexeme);
 }
 
+static Expr* parse_call(Parser* parser, Expr* callee) {
+    assert(parser);
+    assert(callee);
+    assert(callee->type == EXPR_VAR);
+
+    Token tok_left = lex_next(parser->lexer);
+    assert(tok_left.type == TOK_LPAREN);
+
+    Expr* ret =
+        vertex_call_new(parse_span_merge(SPAN(callee, expr), tok_left.lexeme), callee->var.name);
+
+    bool first = true;
+    while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_RPAREN) {
+        if (!first && !parse_consume(parser, A3_CS("comma"), TOK_COMMA))
+            return NULL;
+        first = false;
+
+        Expr* expr = parse_expr(parser, 0);
+        if (!expr)
+            return NULL;
+
+        Arg* arg = arg_new(expr);
+        A3_SLL_ENQUEUE(&ret->call.args, arg, link);
+    }
+
+    Token tok_right = lex_next(parser->lexer);
+    if (tok_right.type != TOK_RPAREN) {
+        parse_error(parser, tok_right, "Expected a closing parenthesis.");
+        return NULL;
+    }
+
+    SPAN(ret, expr) = parse_span_merge(SPAN(ret, expr), tok_right.lexeme);
+    return ret;
+}
+
 static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
     [TOK_PLUS]  = 11,
     [TOK_MINUS] = 11,
@@ -159,6 +195,8 @@ static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
 
     [TOK_STAR] = { 9, 10 }, [TOK_SLASH] = { 9, 10 }
 };
+
+static uint8_t POSTFIX_PRECEDENCE[TOK_COUNT] = { [TOK_LPAREN] = 13 };
 
 static Expr* parse_expr(Parser* parser, uint8_t precedence) {
     assert(parser);
@@ -199,6 +237,18 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
 
     while (true) {
         Token tok_op = lex_peek(parser->lexer);
+
+        if (POSTFIX_PRECEDENCE[tok_op.type]) {
+            if (POSTFIX_PRECEDENCE[tok_op.type] < precedence)
+                break;
+
+            if (tok_op.type == TOK_LPAREN)
+                lhs = parse_call(parser, lhs);
+            else
+                A3_PANIC("Todo: other postfix operators.");
+
+            continue;
+        }
 
         if (!INFIX_PRECEDENCE[tok_op.type][0] || INFIX_PRECEDENCE[tok_op.type][0] < precedence)
             break;

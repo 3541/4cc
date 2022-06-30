@@ -71,17 +71,29 @@ tests = {
     'add_lhs',
     'sub_lhs',
     'diff'
+  ],
+  'call': [
+    'simple',
+    'expr',
+    'args',
+    'args6',
+    'nested',
+    'very_nested'
   ]
 }
+
+libtest = static_library('testlib', 'test.c')
 
 foreach suite, ts : tests
   foreach t : ts
     test(
       suite / t,
       python,
+      depends: libtest,
       args: [
         meson.current_source_dir() / 'test.py',
         fcc,
+        libtest,
         meson.current_source_dir() / suite,
         t
       ],
