@@ -246,6 +246,24 @@ static bool dump_loop(AstVisitor* visitor, Loop* loop) {
     return true;
 }
 
+static bool dump_fn(AstVisitor* visitor, Fn* fn) {
+    assert(visitor);
+    assert(fn);
+    assert(fn->type->type == TY_FN);
+
+    A3String  return_type = type_name(fn->type->ret);
+    A3CString return_name = return_type.ptr ? A3_S_CONST(return_type) : A3_CS("(untyped)");
+
+    dump_print(visitor->ctx, "FN<" A3_S_F ">(" A3_S_F ")", A3_S_FORMAT(return_name),
+               A3_S_FORMAT(fn->name));
+    A3_TRYB(dump_child(visitor, VERTEX(fn->body, item.block)));
+
+    if (return_type.ptr)
+        a3_string_free(&return_type);
+
+    return true;
+}
+
 bool dump(Vertex* root) {
     assert(root);
 
@@ -265,6 +283,7 @@ bool dump(Vertex* root) {
             .visit_if        = dump_if,
             .visit_block     = dump_block,
             .visit_loop      = dump_loop,
+            .visit_fn        = dump_fn,
         },
         root);
 

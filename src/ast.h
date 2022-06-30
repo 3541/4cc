@@ -25,12 +25,14 @@ typedef struct Expr   Expr;
 typedef struct Scope  Scope;
 typedef struct Item   Item;
 typedef struct Vertex Vertex;
+typedef struct PType  PType;
 
 typedef enum VertexType {
     V_DECL,
     V_EXPR,
     V_FN,
     V_STMT,
+    V_UNIT,
 } VertexType;
 
 typedef enum BinOpType {
@@ -65,9 +67,16 @@ typedef struct Block {
     Scope* scope;
 } Block;
 
+typedef struct Fn Fn;
 typedef struct Fn {
     A3CString name;
-    Block*    body;
+    A3_SLL_LINK(Fn) link;
+    Block* body;
+
+    union {
+        PType*      ptype;
+        Type const* type;
+    };
 } Fn;
 
 typedef struct BinOp {
@@ -131,9 +140,8 @@ typedef struct Loop {
     Item* body;
 } Loop;
 
-typedef enum PTypeType { PTY_PTR, PTY_BASE, PTY_BUILTIN } PTypeType;
+typedef enum PTypeType { PTY_PTR, PTY_BASE, PTY_BUILTIN, PTY_FN } PTypeType;
 
-typedef struct PType PType;
 typedef struct PType {
     PTypeType type;
 
@@ -141,6 +149,7 @@ typedef struct PType {
         TokenType builtin;
         A3CString name;
         PType*    parent;
+        PType*    ret;
     };
 } PType;
 
@@ -170,6 +179,10 @@ typedef struct Item {
     };
 } Item;
 
+typedef struct Unit {
+    A3_SLL(fns, Fn) fns;
+} Unit;
+
 typedef struct Vertex {
     A3CString  span;
     VertexType type;
@@ -178,6 +191,7 @@ typedef struct Vertex {
         Expr expr;
         Item item;
         Fn   fn;
+        Unit unit;
     };
 } Vertex;
 
@@ -217,11 +231,13 @@ Item*  vertex_empty_new(A3CString span);
 Item*  vertex_decl_new(A3CString span, A3CString name, PType*);
 If*    vertex_if_new(A3CString span, Expr* cond, Item* body_true, Item* body_false);
 Block* vertex_block_new(void);
-Fn*    vertex_fn_new(A3CString name, Block* body);
+Fn*    vertex_fn_new(A3CString span, A3CString name, PType* type, Block* body);
 Loop*  vertex_loop_new(A3CString span, Item* init, Expr* cond, Expr* post, Item* body);
+Unit*  vertex_unit_new(void);
 bool   vertex_visit(AstVisitor*, Vertex*);
 
 PType* ptype_builtin_new(TokenType);
 PType* ptype_ptr_to(PType*);
+PType* ptype_fn(PType* ret_type);
 
 Arg* arg_new(Expr*);

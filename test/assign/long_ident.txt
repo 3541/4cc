@@ -1,1 +1,0 @@
-{ int word = 1; return word; }

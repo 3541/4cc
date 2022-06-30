@@ -365,7 +365,7 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
 bool gen(A3CString src, Vertex* root) {
     assert(src.ptr);
     assert(root);
-    assert(root->type == V_FN);
+    assert(root->type == V_UNIT);
 
     Generator gen = { .src = src, .stack_depth = 0, .label = 0 };
 

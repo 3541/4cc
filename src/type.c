@@ -40,6 +40,7 @@ typedef struct Scope {
 
 typedef struct Registry {
     A3_HT(TypePtr, TypePtr) ptrs_to;
+    A3_HT(TypePtr, TypePtr) fns;
     Scope*    current_scope;
     A3CString src;
 } Registry;
@@ -105,6 +106,7 @@ static void reg_scope_pop(Registry* reg) {
 Registry* type_registry_new(void) {
     A3_UNWRAPNI(Registry*, ret, calloc(1, sizeof(*ret)));
     A3_HT_INIT(TypePtr, TypePtr)(&ret->ptrs_to, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
+    A3_HT_INIT(TypePtr, TypePtr)(&ret->fns, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
 
     return ret;
 }
@@ -120,6 +122,13 @@ A3String type_name(Type const* type) {
         A3String ret  = a3_string_alloc(base.len + 1);
         a3_string_copy(ret, A3_S_CONST(base));
         ret.ptr[base.len] = '*';
+        a3_string_free(&base);
+        return ret;
+    }
+    case TY_FN: {
+        A3String base = type_name(type->ret);
+        A3String ret  = a3_string_alloc(base.len + sizeof(" (*)(void)"));
+        a3_string_concat(ret, 2, base, A3_CS(" (*)(void)"));
         a3_string_free(&base);
         return ret;
     }
@@ -142,6 +151,8 @@ size_t type_size(Type const* type) {
         return sizeof(int64_t);
     case TY_PTR:
         return sizeof(void*);
+    case TY_FN:
+        return sizeof(void (*)(void));
     }
 
     A3_UNREACHABLE();
@@ -193,6 +204,22 @@ static Type const* type_ptr_to(Registry* reg, Type const* type) {
     return ret;
 }
 
+static Type const* type_fn_returning(Registry* reg, Type const* ret_type) {
+    assert(reg);
+    assert(ret_type);
+
+    Type const** entry = A3_HT_FIND(TypePtr, TypePtr)(&reg->fns, ret_type);
+    if (entry)
+        return *entry;
+
+    A3_UNWRAPNI(Type*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Type) { .type = TY_FN, .ret = ret_type };
+
+    A3_HT_INSERT(TypePtr, TypePtr)(&reg->fns, ret_type, ret);
+
+    return ret;
+}
+
 static Type const* type_from_ptype(Registry* reg, PType* ptype) {
     assert(reg);
     assert(ptype);
@@ -202,12 +229,12 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
     case PTY_BASE:
         A3_PANIC("Todo: custom types.");
     case PTY_PTR:
-        ret = type_ptr_to(reg, type_from_ptype(reg, ptype->parent));
-        break;
+        return type_ptr_to(reg, type_from_ptype(reg, ptype->parent));
+    case PTY_FN:
+        return type_fn_returning(reg, type_from_ptype(reg, ptype->ret));
     case PTY_BUILTIN:
         assert(ptype->builtin == TOK_INT);
-        ret = BUILTIN_TYPES[TY_INT];
-        break;
+        return BUILTIN_TYPES[TY_INT];
     }
 
     return ret;
@@ -401,7 +428,11 @@ static bool type_loop(AstVisitor* visitor, Loop* loop) {
     }
     if (loop->cond)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->cond, expr)));
+
+    if (loop->body->type == STMT_BLOCK)
+        loop->body->block.scope = reg->current_scope;
     A3_TRYB(vertex_visit(visitor, VERTEX(loop->body, item)));
+
     if (loop->post)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->post, expr)));
 
@@ -415,8 +446,16 @@ static bool type_fn(AstVisitor* visitor, Fn* fn) {
     assert(visitor);
     assert(fn);
 
+    Registry* reg = visitor->ctx;
+
+    reg_scope_push(reg);
+    fn->type        = type_from_ptype(reg, fn->ptype);
+    fn->body->scope = reg->current_scope;
+
     A3_TRYB(vertex_visit(visitor, VERTEX(fn->body, item.block)));
     fn->body->scope->stack_depth = align_up(fn->body->scope->stack_depth, 16);
+
+    reg_scope_pop(reg);
 
     return true;
 }
@@ -424,7 +463,7 @@ static bool type_fn(AstVisitor* visitor, Fn* fn) {
 bool type(Registry* reg, A3CString src, Vertex* root) {
     assert(reg);
     assert(src.ptr);
-    assert(root->type == V_FN);
+    assert(root->type == V_UNIT);
 
     reg->src = src;
 

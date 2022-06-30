@@ -23,11 +23,16 @@ typedef struct Scope    Scope;
 typedef enum TypeType {
     TY_INT,
     TY_PTR,
+    TY_FN,
 } TypeType;
 
 typedef struct Type {
-    TypeType    type;
-    Type const* parent;
+    TypeType type;
+
+    union {
+        Type const* parent;
+        Type const* ret;
+    };
 } Type;
 
 typedef struct Obj {

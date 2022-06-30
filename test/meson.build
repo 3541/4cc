@@ -79,6 +79,10 @@ tests = {
     'args6',
     'nested',
     'very_nested'
+  ],
+  'fn': [
+    'simple',
+    'multiple',
   ]
 }
 

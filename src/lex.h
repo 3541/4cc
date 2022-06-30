@@ -41,6 +41,7 @@ typedef enum TokenType {
     TOK_SEMI,
     TOK_SLASH,
     TOK_STAR,
+    TOK_VOID,
     TOK_WHILE,
 
     TOK_COUNT,

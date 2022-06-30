@@ -100,12 +100,16 @@ Block* vertex_block_new(void) {
     return &ret->item.block;
 }
 
-Fn* vertex_fn_new(A3CString name, Block* body) {
+Fn* vertex_fn_new(A3CString span, A3CString name, PType* type, Block* body) {
+    assert(span.ptr);
     assert(name.ptr);
+    assert(type);
     assert(body);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .type = V_FN, .span = name, .fn = { .name = name, .body = body } };
+    *ret = (Vertex) { .type = V_FN,
+                      .span = span,
+                      .fn   = { .name = name, .body = body, .ptype = type } };
 
     return &ret->fn;
 }
@@ -161,6 +165,14 @@ Loop* vertex_loop_new(A3CString span, Item* init, Expr* cond, Expr* post, Item* 
                              .loop = { .init = init, .cond = cond, .post = post, .body = body } } };
 
     return &ret->item.loop;
+}
+
+Unit* vertex_unit_new(void) {
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .type = V_UNIT };
+    A3_SLL_INIT(&ret->unit.fns);
+
+    return &ret->unit;
 }
 
 static bool visit_bin_op(AstVisitor* visitor, BinOp* op) {
@@ -281,6 +293,11 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
     assert(vertex);
 
     switch (vertex->type) {
+    case V_UNIT:
+        A3_SLL_FOR_EACH(Fn, fn, &vertex->unit.fns, link) {
+            A3_TRYB(vertex_visit(visitor, VERTEX(fn, fn)));
+        }
+        return true;
     case V_EXPR:
         switch (vertex->expr.type) {
         case EXPR_BIN_OP:
@@ -334,6 +351,15 @@ PType* ptype_ptr_to(PType* type) {
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
     *ret = (PType) { .type = PTY_PTR, .parent = type };
+
+    return ret;
+}
+
+PType* ptype_fn(PType* ret_type) {
+    assert(ret_type);
+
+    A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
+    *ret = (PType) { .type = PTY_FN, .ret = ret_type };
 
     return ret;
 }

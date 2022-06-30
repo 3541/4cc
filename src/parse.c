@@ -414,6 +414,22 @@ static PType* parse_declspec(Parser* parser) {
     return ptype_builtin_new(TOK_INT);
 }
 
+static PType* parse_decl_suffix(Parser* parser, PType* base) {
+    assert(parser);
+    assert(base);
+
+    Token next = lex_next(parser->lexer);
+    assert(next.type == TOK_LPAREN);
+
+    if (lex_peek(parser->lexer).type == TOK_VOID)
+        lex_next(parser->lexer);
+
+    if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
+        return NULL;
+
+    return ptype_fn(base);
+}
+
 static Item* parse_declarator(Parser* parser, PType* type) {
     assert(parser);
     assert(type);
@@ -434,6 +450,12 @@ static Item* parse_declarator(Parser* parser, PType* type) {
         parse_error(parser, ident, "Expected an identifier.");
         return NULL;
     }
+
+    if (lex_peek(parser->lexer).type == TOK_LPAREN)
+        type = parse_decl_suffix(parser, type);
+
+    if (!type)
+        return NULL;
 
     return vertex_decl_new(first.lexeme.ptr != ident.lexeme.ptr
                                ? parse_span_merge(first.lexeme, ident.lexeme)
@@ -530,12 +552,37 @@ static Block* parse_block(Parser* parser) {
     return block;
 }
 
-Vertex* parse(Parser* parser) {
+static Fn* parse_fn(Parser* parser) {
     assert(parser);
+
+    PType* base = parse_declspec(parser);
+    Item*  decl = parse_declarator(parser, base);
+    if (!decl)
+        return NULL;
 
     Block* body = parse_block(parser);
     if (!body)
         return NULL;
+
+    Fn* ret = vertex_fn_new(parse_span_merge(SPAN(decl, item), SPAN(body, item.block)), decl->name,
+                            decl->decl_ptype, body);
+    free(VERTEX(decl, item));
+
+    return ret;
+}
+
+Vertex* parse(Parser* parser) {
+    assert(parser);
+
+    Unit* unit = vertex_unit_new();
+
+    while (parse_has_next(parser)) {
+        Fn* fn = parse_fn(parser);
+        if (!fn)
+            break;
+
+        A3_SLL_ENQUEUE(&unit->fns, fn, link);
+    }
 
     Token next = lex_peek(parser->lexer);
     if (next.type != TOK_EOF) {
@@ -546,5 +593,5 @@ Vertex* parse(Parser* parser) {
     if (!parser->status)
         return NULL;
 
-    return VERTEX(vertex_fn_new(A3_CS("main"), body), fn);
+    return VERTEX(unit, unit);
 }

@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <a3/log.h>
 #include <a3/str.h>
 
 #include "ast.h"
@@ -27,6 +28,8 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Usage: %s <EXPR>\n", argv[0]);
         return -1;
     }
+
+    a3_log_init(stderr, A3_LOG_INFO);
 
     A3CString input  = a3_cstring_from(argv[1]);
     Lexer*    lexer  = lex_new(input);
