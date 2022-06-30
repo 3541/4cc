@@ -31,6 +31,7 @@ tests = {
   ],
   'assign': [
     'simple',
+    'simple_split',
     'arithmetic',
     'multiple',
     'long_ident',

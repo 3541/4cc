@@ -1,1 +1,1 @@
-{ abc123 = 123; return abc123; }
+{ int abc123 = 123; return abc123; }

@@ -248,7 +248,7 @@ static bool gen_unary_op(AstVisitor* visitor, UnaryOp* op) {
     return true;
 }
 
-static bool gen_ret(AstVisitor* visitor, Statement* ret) {
+static bool gen_ret(AstVisitor* visitor, Item* ret) {
     assert(visitor);
     assert(ret);
     assert(ret->type == STMT_RET);
@@ -280,7 +280,7 @@ static bool gen_fn(AstVisitor* visitor, Fn* fn) {
            "sub rsp, %zu\n",
            A3_S_FORMAT(fn->name), A3_S_FORMAT(fn->name), scope_stack_depth(fn->body->scope));
 
-    A3_TRYB(vertex_visit(visitor, VERTEX(fn->body, stmt.block)));
+    A3_TRYB(vertex_visit(visitor, VERTEX(fn->body, item.block)));
 
     puts(".ret:\n"
          "mov rsp, rbp\n"
@@ -300,12 +300,12 @@ static bool gen_if(AstVisitor* visitor, If* if_stmt) {
     printf("test rax, rax\n"
            "jz .else%zu\n",
            label);
-    A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->body_true, stmt)));
+    A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->body_true, item)));
     printf("jmp .end%zu\n", label);
 
     printf(".else%zu:\n", label);
     if (if_stmt->body_false)
-        A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->body_false, stmt)));
+        A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->body_false, item)));
 
     printf(".end%zu:\n", label);
     return true;
@@ -318,7 +318,7 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
     size_t label = gen_label(visitor->ctx);
 
     if (loop->init)
-        A3_TRYB(vertex_visit(visitor, VERTEX(loop->init, stmt)));
+        A3_TRYB(vertex_visit(visitor, VERTEX(loop->init, item)));
 
     printf(".begin%zu:\n", label);
     if (loop->cond) {
@@ -328,7 +328,7 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
                label);
     }
 
-    A3_TRYB(vertex_visit(visitor, VERTEX(loop->body, stmt)));
+    A3_TRYB(vertex_visit(visitor, VERTEX(loop->body, item)));
     if (loop->post)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->post, expr)));
 

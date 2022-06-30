@@ -28,7 +28,9 @@ typedef struct Parser {
     bool      status;
 } Parser;
 
-static Statement* parse_stmt(Parser*);
+static Item*  parse_stmt(Parser*);
+static Block* parse_block(Parser*);
+static bool   parse_decl(Parser*, Block*);
 
 Parser* parse_new(A3CString src, Lexer* lexer) {
     A3_UNWRAPNI(Parser*, ret, calloc(1, sizeof(*ret)));
@@ -69,6 +71,19 @@ static A3CString parse_span_merge(A3CString lhs, A3CString rhs) {
     assert(lhs.ptr < rhs.ptr);
 
     return a3_cstring_new(lhs.ptr, lhs.len + rhs.len + ((size_t)(rhs.ptr - lhs.ptr) - lhs.len));
+}
+
+static bool parse_has_next(Parser* parser) {
+    assert(parser);
+
+    Token next = lex_peek(parser->lexer);
+    return next.type != TOK_EOF && next.type != TOK_ERR;
+}
+
+static bool parse_has_decl(Parser* parser) {
+    assert(parser);
+
+    return lex_peek(parser->lexer).type == TOK_INT;
 }
 
 static BinOpType parse_bin_op(OpType type) {
@@ -128,28 +143,28 @@ static Expr* parse_var(Parser* parser) {
     return vertex_var_new(tok.lexeme);
 }
 
+static uint8_t PREFIX_PRECEDENCE[TOK_OP_COUNT] = {
+    [TOK_OP_PLUS]  = 11,
+    [TOK_OP_MINUS] = 11,
+    [TOK_OP_AMP]   = 11,
+    [TOK_OP_STAR]  = 11,
+};
+
+static uint8_t INFIX_PRECEDENCE[TOK_OP_COUNT][2] = {
+    [TOK_OP_EQ] = { 2, 1 },
+
+    [TOK_OP_EQ_EQ] = { 3, 4 }, [TOK_OP_BANG_EQ] = { 3, 4 },
+
+    [TOK_OP_GT] = { 5, 6 },    [TOK_OP_GT_EQ] = { 5, 6 },
+    [TOK_OP_LT] = { 5, 6 },    [TOK_OP_LT_EQ] = { 5, 6 },
+
+    [TOK_OP_PLUS] = { 7, 8 },  [TOK_OP_MINUS] = { 7, 8 },
+
+    [TOK_OP_STAR] = { 9, 10 }, [TOK_OP_SLASH] = { 9, 10 }
+};
+
 static Expr* parse_expr(Parser* parser, uint8_t precedence) {
     assert(parser);
-
-    static uint8_t PREFIX_PRECEDENCE[TOK_OP_COUNT] = {
-        [TOK_OP_PLUS]  = 11,
-        [TOK_OP_MINUS] = 11,
-        [TOK_OP_AMP]   = 11,
-        [TOK_OP_STAR]  = 11,
-    };
-
-    static uint8_t INFIX_PRECEDENCE[TOK_OP_COUNT][2] = {
-        [TOK_OP_EQ] = { 2, 1 },
-
-        [TOK_OP_EQ_EQ] = { 3, 4 }, [TOK_OP_BANG_EQ] = { 3, 4 },
-
-        [TOK_OP_GT] = { 5, 6 },    [TOK_OP_GT_EQ] = { 5, 6 },
-        [TOK_OP_LT] = { 5, 6 },    [TOK_OP_LT_EQ] = { 5, 6 },
-
-        [TOK_OP_PLUS] = { 7, 8 },  [TOK_OP_MINUS] = { 7, 8 },
-
-        [TOK_OP_STAR] = { 9, 10 }, [TOK_OP_SLASH] = { 9, 10 }
-    };
 
     Expr* lhs = NULL;
     Token tok = lex_peek(parser->lexer);
@@ -207,7 +222,7 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
     return lhs;
 }
 
-static Statement* parse_expr_stmt(Parser* parser) {
+static Item* parse_expr_stmt(Parser* parser) {
     assert(parser);
 
     Expr* expr = parse_expr(parser, 0);
@@ -220,7 +235,7 @@ static Statement* parse_expr_stmt(Parser* parser) {
     return vertex_expr_stmt_new(parse_span_merge(SPAN(expr, expr), next.lexeme), expr);
 }
 
-static Statement* parse_ret(Parser* parser) {
+static Item* parse_ret(Parser* parser) {
     assert(parser);
 
     Token tok = lex_next(parser->lexer);
@@ -241,52 +256,7 @@ static Statement* parse_ret(Parser* parser) {
     return vertex_ret_new(parse_span_merge(tok.lexeme, SPAN(expr, expr)), expr);
 }
 
-static Statement* parse_block(Parser* parser) {
-    assert(parser);
-
-    Token left_tok = lex_next(parser->lexer);
-    assert(left_tok.type == TOK_LBRACE);
-
-    Block* block = vertex_block_new();
-
-    Statement* current = parse_stmt(parser);
-    if (!current)
-        return NULL;
-    A3_SLL_PUSH(&block->body, current, link);
-
-    Token next = lex_peek(parser->lexer);
-    while (next.type != TOK_RBRACE && next.type != TOK_EOF) {
-        if (next.type == TOK_ERR) {
-            parser->status = false;
-
-            while (next.type != TOK_SEMI && next.type != TOK_EOF)
-                next = lex_next(parser->lexer);
-        }
-
-        Statement* s = parse_stmt(parser);
-        if (!s)
-            break;
-        A3_SLL_INSERT_AFTER(current, s, link);
-
-        next    = lex_peek(parser->lexer);
-        current = s;
-    }
-    next = lex_peek(parser->lexer);
-
-    if (next.type == TOK_ERR)
-        return NULL;
-
-    Token right_tok = lex_next(parser->lexer);
-    if (right_tok.type != TOK_RBRACE) {
-        parse_error(parser, right_tok, "Expected a closing brace.");
-        return NULL;
-    }
-
-    SPAN(block, stmt.block) = parse_span_merge(left_tok.lexeme, right_tok.lexeme);
-    return STMT(block, block);
-}
-
-static Statement* parse_if(Parser* parser) {
+static Item* parse_if(Parser* parser) {
     assert(parser);
 
     Token if_tok = lex_next(parser->lexer);
@@ -302,21 +272,21 @@ static Statement* parse_if(Parser* parser) {
     if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
         return NULL;
 
-    Statement* body_true  = parse_stmt(parser);
-    Statement* body_false = NULL;
+    Item* body_true  = parse_stmt(parser);
+    Item* body_false = NULL;
 
     if (lex_peek(parser->lexer).type == TOK_ELSE) {
         lex_next(parser->lexer);
         body_false = parse_stmt(parser);
     }
 
-    return STMT(vertex_if_new(parse_span_merge(if_tok.lexeme, body_false ? SPAN(body_false, stmt)
-                                                                         : SPAN(body_true, stmt)),
+    return ITEM(vertex_if_new(parse_span_merge(if_tok.lexeme, body_false ? SPAN(body_false, item)
+                                                                         : SPAN(body_true, item)),
                               cond, body_true, body_false),
                 if_stmt);
 }
 
-static Statement* parse_loop(Parser* parser) {
+static Item* parse_loop(Parser* parser) {
     assert(parser);
 
     Token loop_tok = lex_next(parser->lexer);
@@ -325,12 +295,25 @@ static Statement* parse_loop(Parser* parser) {
     if (!parse_consume(parser, A3_CS("opening parenthesis"), TOK_LPAREN))
         return NULL;
 
-    Statement* init = NULL;
-    Expr*      cond = NULL;
-    Expr*      post = NULL;
+    Item* init = NULL;
+    Expr* cond = NULL;
+    Expr* post = NULL;
 
     if (loop_tok.type == TOK_FOR) {
-        init = parse_expr_stmt(parser);
+        if (parse_has_decl(parser)) {
+            Block* init_block = vertex_block_new();
+            if (!parse_decl(parser, init_block))
+                return NULL;
+            init = ITEM(init_block, block);
+        } else {
+            init = parse_expr_stmt(parser);
+            if (init->type != STMT_EXPR_STMT || init->expr->type != EXPR_BIN_OP ||
+                init->expr->bin_op.type != OP_ASSIGN) {
+                error_at(parser->src, SPAN(init, item), "Expected an assignment expression.");
+                return NULL;
+            }
+        }
+
         if (!init)
             return NULL;
 
@@ -350,23 +333,23 @@ static Statement* parse_loop(Parser* parser) {
     if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
         return NULL;
 
-    Statement* body = parse_stmt(parser);
+    Item* body = parse_stmt(parser);
     if (!body)
         return NULL;
 
-    return STMT(vertex_loop_new(parse_span_merge(loop_tok.lexeme, SPAN(body, stmt)), init, cond,
+    return ITEM(vertex_loop_new(parse_span_merge(loop_tok.lexeme, SPAN(body, item)), init, cond,
                                 post, body),
                 loop);
 }
 
-static Statement* parse_stmt(Parser* parser) {
+static Item* parse_stmt(Parser* parser) {
     assert(parser);
 
     switch (lex_peek(parser->lexer).type) {
     case TOK_RET:
         return parse_ret(parser);
     case TOK_LBRACE:
-        return parse_block(parser);
+        return ITEM(parse_block(parser), block);
     case TOK_SEMI: {
         Token tok = lex_next(parser->lexer);
         return vertex_empty_new(tok.lexeme);
@@ -381,13 +364,139 @@ static Statement* parse_stmt(Parser* parser) {
     }
 }
 
+static PType* parse_declspec(Parser* parser) {
+    assert(parser);
+
+    if (!parse_consume(parser, A3_CS("type name"), TOK_INT))
+        return NULL;
+
+    return ptype_builtin_new(TOK_INT);
+}
+
+static Item* parse_declarator(Parser* parser, PType* type) {
+    assert(parser);
+    assert(type);
+
+    Token first = lex_peek(parser->lexer);
+    if ((first.type != TOK_OP || first.op_type != TOK_OP_STAR) && first.type != TOK_IDENT) {
+        parse_error(parser, first, "Expected a pointer specifier or identifier.");
+        return NULL;
+    }
+
+    Token next;
+    while ((next = lex_peek(parser->lexer)).type == TOK_OP && next.op_type == TOK_OP_STAR) {
+        lex_next(parser->lexer);
+        type = ptype_ptr_to(type);
+    }
+
+    Token ident = lex_next(parser->lexer);
+    if (ident.type != TOK_IDENT) {
+        parse_error(parser, ident, "Expected an identifier.");
+        return NULL;
+    }
+
+    return vertex_decl_new(first.lexeme.ptr != ident.lexeme.ptr
+                               ? parse_span_merge(first.lexeme, ident.lexeme)
+                               : ident.lexeme,
+                           ident.lexeme, type);
+}
+
+static bool parse_decl(Parser* parser, Block* block) {
+    assert(parser);
+    assert(block);
+
+    PType* base = parse_declspec(parser);
+    if (!base)
+        return false;
+    assert(base->type == PTY_BUILTIN);
+
+    bool first = true;
+    while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_SEMI) {
+        if (!first && !parse_consume(parser, A3_CS("comma"), TOK_COMMA))
+            return false;
+        first = false;
+
+        Item* decl = parse_declarator(parser, base);
+        if (!decl)
+            return false;
+        A3_SLL_ENQUEUE(&block->body, decl, link);
+
+        Token next = lex_peek(parser->lexer);
+        if (next.type == TOK_OP && next.op_type == TOK_OP_EQ) {
+            lex_next(parser->lexer);
+
+            Expr* init_rhs = parse_expr(parser, INFIX_PRECEDENCE[TOK_OP_EQ][1]);
+            if (!init_rhs)
+                return false;
+
+            Expr* init = vertex_bin_op_new(
+                parse_span_merge(VERTEX(decl, item)->span, VERTEX(init_rhs, expr)->span), OP_ASSIGN,
+                vertex_var_new(decl->name), init_rhs);
+            Item* init_stmt = vertex_expr_stmt_new(SPAN(init, expr), init);
+            A3_SLL_ENQUEUE(&block->body, init_stmt, link);
+        }
+    }
+
+    return parse_consume(parser, A3_CS("semicolon"), TOK_SEMI);
+}
+
+static bool parse_block_item(Parser* parser, Block* block) {
+    assert(parser);
+    assert(block);
+
+    if (parse_has_decl(parser))
+        return parse_decl(parser, block);
+
+    Item* res = parse_stmt(parser);
+    if (!res)
+        return false;
+
+    A3_SLL_ENQUEUE(&block->body, res, link);
+
+    return true;
+}
+
+static Block* parse_block(Parser* parser) {
+    assert(parser);
+
+    Token left_tok = lex_next(parser->lexer);
+    assert(left_tok.type == TOK_LBRACE);
+
+    Block* block = vertex_block_new();
+
+    Token next;
+    while ((next = lex_peek(parser->lexer)).type != TOK_RBRACE && next.type != TOK_EOF) {
+        if (next.type == TOK_ERR) {
+            parser->status = false;
+
+            while (next.type != TOK_SEMI && next.type != TOK_EOF)
+                next = lex_next(parser->lexer);
+        }
+
+        if (!parse_block_item(parser, block))
+            break;
+    }
+    next = lex_peek(parser->lexer);
+
+    if (next.type == TOK_ERR)
+        return NULL;
+
+    Token right_tok = lex_next(parser->lexer);
+    if (right_tok.type != TOK_RBRACE) {
+        parse_error(parser, right_tok, "Expected a closing brace.");
+        return NULL;
+    }
+
+    SPAN(block, item.block) = parse_span_merge(left_tok.lexeme, right_tok.lexeme);
+    return block;
+}
+
 Vertex* parse(Parser* parser) {
     assert(parser);
 
-    Statement* body = parse_block(parser);
+    Block* body = parse_block(parser);
     if (!body)
         return NULL;
-    assert(body->type == STMT_BLOCK);
 
     Token next = lex_peek(parser->lexer);
     if (next.type != TOK_EOF) {
@@ -398,5 +507,5 @@ Vertex* parse(Parser* parser) {
     if (!parser->status)
         return NULL;
 
-    return VERTEX(vertex_fn_new(A3_CS("main"), &body->block), fn);
+    return VERTEX(vertex_fn_new(A3_CS("main"), body), fn);
 }

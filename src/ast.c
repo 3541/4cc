@@ -55,38 +55,49 @@ Expr* vertex_lit_num_new(A3CString span, int64_t num) {
     return &ret->expr;
 }
 
-Statement* vertex_expr_stmt_new(A3CString span, Expr* expr) {
+Item* vertex_expr_stmt_new(A3CString span, Expr* expr) {
     assert(expr);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret =
-        (Vertex) { .span = span, .type = V_STMT, .stmt = { .type = STMT_EXPR_STMT, .expr = expr } };
+        (Vertex) { .span = span, .type = V_STMT, .item = { .type = STMT_EXPR_STMT, .expr = expr } };
 
-    return &ret->stmt;
+    return &ret->item;
 }
 
-Statement* vertex_ret_new(A3CString span, Expr* expr) {
+Item* vertex_ret_new(A3CString span, Expr* expr) {
     assert(expr);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .span = span, .type = V_STMT, .stmt = { .type = STMT_RET, .expr = expr } };
+    *ret = (Vertex) { .span = span, .type = V_STMT, .item = { .type = STMT_RET, .expr = expr } };
 
-    return &ret->stmt;
+    return &ret->item;
 }
 
-Statement* vertex_empty_new(A3CString span) {
+Item* vertex_empty_new(A3CString span) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .span = span, .type = V_STMT, .stmt.type = STMT_EMPTY };
+    *ret = (Vertex) { .span = span, .type = V_STMT, .item.type = STMT_EMPTY };
 
-    return &ret->stmt;
+    return &ret->item;
+}
+
+Item* vertex_decl_new(A3CString span, A3CString name, PType* type) {
+    assert(span.ptr);
+    assert(name.ptr);
+    assert(type);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .span = span, .type = V_DECL, .item = { .name = name, .decl_ptype = type } };
+
+    return &ret->item;
 }
 
 Block* vertex_block_new(void) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .type = V_STMT, .span = A3_CS_NULL, .stmt = { .type = STMT_BLOCK } };
-    A3_SLL_INIT(&ret->stmt.block.body);
+    *ret = (Vertex) { .type = V_STMT, .span = A3_CS_NULL, .item = { .type = STMT_BLOCK } };
+    A3_SLL_INIT(&ret->item.block.body);
 
-    return &ret->stmt.block;
+    return &ret->item.block;
 }
 
 Fn* vertex_fn_new(A3CString name, Block* body) {
@@ -108,7 +119,7 @@ Expr* vertex_var_new(A3CString span) {
     return &ret->expr;
 }
 
-If* vertex_if_new(A3CString span, Expr* cond, Statement* body_true, Statement* body_false) {
+If* vertex_if_new(A3CString span, Expr* cond, Item* body_true, Item* body_false) {
     assert(span.ptr);
     assert(cond);
     assert(body_true);
@@ -117,14 +128,14 @@ If* vertex_if_new(A3CString span, Expr* cond, Statement* body_true, Statement* b
     *ret = (Vertex) {
         .span = span,
         .type = V_STMT,
-        .stmt = { .type    = STMT_IF,
+        .item = { .type    = STMT_IF,
                   .if_stmt = { .cond = cond, .body_true = body_true, .body_false = body_false } }
     };
 
-    return &ret->stmt.if_stmt;
+    return &ret->item.if_stmt;
 }
 
-Loop* vertex_loop_new(A3CString span, Statement* init, Expr* cond, Expr* post, Statement* body) {
+Loop* vertex_loop_new(A3CString span, Item* init, Expr* cond, Expr* post, Item* body) {
     assert(span.ptr);
     assert(cond);
     assert(body);
@@ -133,10 +144,10 @@ Loop* vertex_loop_new(A3CString span, Statement* init, Expr* cond, Expr* post, S
     *ret =
         (Vertex) { .span = span,
                    .type = V_STMT,
-                   .stmt = { .type = STMT_LOOP,
+                   .item = { .type = STMT_LOOP,
                              .loop = { .init = init, .cond = cond, .post = post, .body = body } } };
 
-    return &ret->stmt.loop;
+    return &ret->item.loop;
 }
 
 static bool visit_bin_op(AstVisitor* visitor, BinOp* op) {
@@ -172,7 +183,7 @@ static bool visit_var(AstVisitor* visitor, Var* var) {
     return true;
 }
 
-static bool visit_expr_stmt(AstVisitor* visitor, Statement* stmt) {
+static bool visit_expr_stmt(AstVisitor* visitor, Item* stmt) {
     assert(visitor);
     assert(stmt);
     assert(stmt->type == STMT_EXPR_STMT);
@@ -180,7 +191,7 @@ static bool visit_expr_stmt(AstVisitor* visitor, Statement* stmt) {
     return vertex_visit(visitor, VERTEX(stmt->expr, expr));
 }
 
-static bool visit_ret(AstVisitor* visitor, Statement* stmt) {
+static bool visit_ret(AstVisitor* visitor, Item* stmt) {
     assert(visitor);
     assert(stmt);
     assert(stmt->type == STMT_RET);
@@ -193,9 +204,9 @@ static bool visit_if(AstVisitor* visitor, If* if_stmt) {
     assert(if_stmt);
 
     A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->cond, expr)));
-    A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->body_true, stmt)));
+    A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->body_true, item)));
     if (if_stmt->body_false)
-        return vertex_visit(visitor, VERTEX(if_stmt->body_false, stmt));
+        return vertex_visit(visitor, VERTEX(if_stmt->body_false, item));
     return true;
 }
 
@@ -203,8 +214,8 @@ static bool visit_block(AstVisitor* visitor, Block* block) {
     assert(visitor);
     assert(block);
 
-    A3_SLL_FOR_EACH(Statement, stmt, &block->body, link) {
-        A3_TRYB(vertex_visit(visitor, VERTEX(stmt, stmt)));
+    A3_SLL_FOR_EACH(Item, stmt, &block->body, link) {
+        A3_TRYB(vertex_visit(visitor, VERTEX(stmt, item)));
     }
 
     return true;
@@ -215,12 +226,20 @@ static bool visit_loop(AstVisitor* visitor, Loop* loop) {
     assert(loop);
 
     if (loop->init)
-        A3_TRYB(vertex_visit(visitor, VERTEX(loop->init, stmt)));
+        A3_TRYB(vertex_visit(visitor, VERTEX(loop->init, item)));
     if (loop->cond)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->cond, expr)));
-    A3_TRYB(vertex_visit(visitor, VERTEX(loop->body, stmt)));
+    A3_TRYB(vertex_visit(visitor, VERTEX(loop->body, item)));
     if (loop->post)
         return vertex_visit(visitor, VERTEX(loop->post, expr));
+    return true;
+}
+
+static bool visit_decl(AstVisitor* visitor, Item* decl) {
+    assert(visitor);
+    assert(decl);
+    assert(VERTEX(decl, item)->type == V_DECL);
+
     return true;
 }
 
@@ -228,7 +247,7 @@ static bool visit_fn(AstVisitor* visitor, Fn* fn) {
     assert(visitor);
     assert(fn);
 
-    return vertex_visit(visitor, VERTEX(fn->body, stmt.block));
+    return vertex_visit(visitor, VERTEX(fn->body, item.block));
 }
 
 #define VISIT(VISITOR, NAME, VERTEX) ((((VISITOR)->NAME) ?: NAME)((VISITOR), (VERTEX)))
@@ -251,24 +270,44 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
         }
         break;
     case V_STMT:
-        switch (vertex->stmt.type) {
+        switch (vertex->item.type) {
         case STMT_EXPR_STMT:
-            return VISIT(visitor, visit_expr_stmt, &vertex->stmt);
+            return VISIT(visitor, visit_expr_stmt, &vertex->item);
         case STMT_RET:
-            return VISIT(visitor, visit_ret, &vertex->stmt);
+            return VISIT(visitor, visit_ret, &vertex->item);
         case STMT_IF:
-            return VISIT(visitor, visit_if, &vertex->stmt.if_stmt);
+            return VISIT(visitor, visit_if, &vertex->item.if_stmt);
         case STMT_BLOCK:
-            return VISIT(visitor, visit_block, &vertex->stmt.block);
+            return VISIT(visitor, visit_block, &vertex->item.block);
         case STMT_EMPTY:
             return true;
         case STMT_LOOP:
-            return VISIT(visitor, visit_loop, &vertex->stmt.loop);
+            return VISIT(visitor, visit_loop, &vertex->item.loop);
         }
         break;
+    case V_DECL:
+        return VISIT(visitor, visit_decl, &vertex->item);
     case V_FN:
         return VISIT(visitor, visit_fn, &vertex->fn);
     }
 
     A3_UNREACHABLE();
+}
+
+PType* ptype_builtin_new(TokenType type) {
+    assert(type == TOK_INT);
+
+    A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
+    *ret = (PType) { .type = PTY_BUILTIN, .builtin = type };
+
+    return ret;
+}
+
+PType* ptype_ptr_to(PType* type) {
+    assert(type);
+
+    A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
+    *ret = (PType) { .type = PTY_PTR, .parent = type };
+
+    return ret;
 }

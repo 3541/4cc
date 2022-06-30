@@ -54,11 +54,15 @@ static Scope* scope_new(Scope* parent) {
     return ret;
 }
 
+static Obj* scope_find_in(Scope* scope, A3CString name) {
+    return A3_HT_FIND(A3CString, Obj)(&scope->scope, name);
+}
+
 static Obj* scope_find(Scope* scope, A3CString name) {
     assert(scope);
     assert(name.ptr);
 
-    Obj* ret = A3_HT_FIND(A3CString, Obj)(&scope->scope, name);
+    Obj* ret = scope_find_in(scope, name);
     if (!ret && scope->parent)
         return scope_find(scope->parent, name);
 
@@ -68,6 +72,9 @@ static Obj* scope_find(Scope* scope, A3CString name) {
 static Obj* scope_add(Scope* scope, Obj obj) {
     assert(scope);
     assert(obj.name.ptr);
+
+    obj.stack_offset = scope->stack_depth;
+    scope->stack_depth += type_size(obj.type);
 
     bool res = A3_HT_INSERT(A3CString, Obj)(&scope->scope, obj.name, obj);
     assert(res);
@@ -186,15 +193,32 @@ static Type const* type_ptr_to(Registry* reg, Type const* type) {
     return ret;
 }
 
+static Type const* type_from_ptype(Registry* reg, PType* ptype) {
+    assert(reg);
+    assert(ptype);
+
+    Type const* ret = NULL;
+    switch (ptype->type) {
+    case PTY_BASE:
+        A3_PANIC("Todo: custom types.");
+    case PTY_PTR:
+        ret = type_ptr_to(reg, type_from_ptype(reg, ptype->parent));
+        break;
+    case PTY_BUILTIN:
+        assert(ptype->builtin == TOK_INT);
+        ret = BUILTIN_TYPES[TY_INT];
+        break;
+    }
+
+    return ret;
+}
+
 static bool type_binary_op(AstVisitor* visitor, BinOp* op) {
     assert(visitor);
     assert(op);
 
     A3_TRYB(vertex_visit(visitor, VERTEX(op->lhs, expr)));
     A3_TRYB(vertex_visit(visitor, VERTEX(op->rhs, expr)));
-
-    // TODO: Check compatibility.
-    /*    */
 
     switch (op->type) {
     case OP_DIV:
@@ -229,8 +253,16 @@ static bool type_binary_op(AstVisitor* visitor, BinOp* op) {
 
         // fallthrough
     case OP_SUB:
-    case OP_ASSIGN:
         // TODO: Typechecking for assignment.
+        EXPR(op, bin_op)->res_type = op->lhs->res_type;
+        break;
+    case OP_ASSIGN:
+        if (op->lhs->res_type != op->rhs->res_type) {
+            type_error_mismatch(visitor->ctx, VERTEX(op, expr.bin_op), op->lhs->res_type,
+                                op->rhs->res_type);
+            return false;
+        }
+
         EXPR(op, bin_op)->res_type = op->lhs->res_type;
         break;
     case OP_EQ:
@@ -286,6 +318,24 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
     return true;
 }
 
+static bool type_decl(AstVisitor* visitor, Item* decl) {
+    assert(visitor);
+    assert(decl);
+    assert(VERTEX(decl, item)->type == V_DECL);
+
+    Registry* reg = visitor->ctx;
+
+    if (scope_find_in(reg->current_scope, decl->name)) {
+        type_error(reg, VERTEX(decl, item), "Redeclaration of existing variable.");
+        return false;
+    }
+
+    decl->decl_type = type_from_ptype(reg, decl->decl_ptype);
+    scope_add(reg->current_scope, (Obj) { .name = decl->name, .type = decl->decl_type });
+
+    return true;
+}
+
 static bool type_var(AstVisitor* visitor, Var* var) {
     assert(visitor);
     assert(var);
@@ -297,18 +347,10 @@ static bool type_var(AstVisitor* visitor, Var* var) {
         return false;
     }
 
+    var->obj = scope_find(reg->current_scope, var->name);
     if (!var->obj) {
-        Obj* obj = scope_find(reg->current_scope, var->name);
-
-        if (!obj) {
-            obj = scope_add(reg->current_scope,
-                            (Obj) { .name         = var->name,
-                                    .stack_offset = reg->current_scope->stack_depth,
-                                    .type         = BUILTIN_TYPES[TY_INT] });
-            reg->current_scope->stack_depth += type_size(obj->type);
-        }
-
-        var->obj = obj;
+        type_error(reg, VERTEX(var, expr.var), "Variable used without declaration.");
+        return false;
     }
 
     EXPR(var, var)->res_type = var->obj->type;
@@ -319,16 +361,20 @@ static bool type_block(AstVisitor* visitor, Block* block) {
     assert(visitor);
     assert(block);
 
-    Registry* reg = visitor->ctx;
+    Registry* reg       = visitor->ctx;
+    bool      has_scope = block->scope;
 
-    reg_scope_push(reg);
-    block->scope = reg->current_scope;
-
-    A3_SLL_FOR_EACH(Statement, stmt, &block->body, link) {
-        A3_TRYB(vertex_visit(visitor, VERTEX(stmt, stmt)));
+    if (!has_scope) {
+        reg_scope_push(reg);
+        block->scope = reg->current_scope;
     }
 
-    reg_scope_pop(reg);
+    A3_SLL_FOR_EACH(Item, item, &block->body, link) {
+        A3_TRYB(vertex_visit(visitor, VERTEX(item, item)));
+    }
+
+    if (!has_scope)
+        reg_scope_pop(reg);
 
     return true;
 }
@@ -337,17 +383,22 @@ static bool type_loop(AstVisitor* visitor, Loop* loop) {
     assert(visitor);
     assert(loop);
 
-    reg_scope_push(visitor->ctx);
+    Registry* reg = visitor->ctx;
+    reg_scope_push(reg);
 
-    if (loop->init)
-        A3_TRYB(vertex_visit(visitor, VERTEX(loop->init, stmt)));
+    if (loop->init) {
+        if (loop->init->type == STMT_BLOCK)
+            loop->init->block.scope = reg->current_scope;
+
+        A3_TRYB(vertex_visit(visitor, VERTEX(loop->init, item)));
+    }
     if (loop->cond)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->cond, expr)));
-    A3_TRYB(vertex_visit(visitor, VERTEX(loop->body, stmt)));
+    A3_TRYB(vertex_visit(visitor, VERTEX(loop->body, item)));
     if (loop->post)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->post, expr)));
 
-    reg_scope_pop(visitor->ctx);
+    reg_scope_pop(reg);
     return true;
 }
 
@@ -357,7 +408,7 @@ static bool type_fn(AstVisitor* visitor, Fn* fn) {
     assert(visitor);
     assert(fn);
 
-    A3_TRYB(vertex_visit(visitor, VERTEX(fn->body, stmt.block)));
+    A3_TRYB(vertex_visit(visitor, VERTEX(fn->body, item.block)));
     fn->body->scope->stack_depth = align_up(fn->body->scope->stack_depth, 16);
 
     return true;
@@ -379,6 +430,7 @@ bool type(Registry* reg, A3CString src, Vertex* root) {
             .visit_var      = type_var,
             .visit_block    = type_block,
             .visit_loop     = type_loop,
+            .visit_decl     = type_decl,
             .visit_fn       = type_fn,
         },
         root);
