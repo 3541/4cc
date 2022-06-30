@@ -70,7 +70,7 @@ static A3CString parse_span_merge(A3CString lhs, A3CString rhs) {
     assert(rhs.ptr);
     assert(lhs.ptr < rhs.ptr);
 
-    return a3_cstring_new(lhs.ptr, lhs.len + rhs.len + ((size_t)(rhs.ptr - lhs.ptr) - lhs.len));
+    return a3_cstring_new(lhs.ptr, (size_t)(rhs.ptr + rhs.len - lhs.ptr));
 }
 
 static bool parse_has_next(Parser* parser) {
@@ -188,7 +188,8 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
 
         lex_next(parser->lexer);
         Expr* rhs = parse_expr(parser, PREFIX_PRECEDENCE[tok.op_type]);
-        lhs       = vertex_unary_op_new(tok.lexeme, parse_unary_op(tok.op_type), rhs);
+        lhs       = vertex_unary_op_new(parse_span_merge(tok.lexeme, SPAN(rhs, expr)),
+                                        parse_unary_op(tok.op_type), rhs);
         break;
     case TOK_IDENT:
         lhs = parse_var(parser);
