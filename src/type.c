@@ -253,7 +253,6 @@ static bool type_binary_op(AstVisitor* visitor, BinOp* op) {
 
         // fallthrough
     case OP_SUB:
-        // TODO: Typechecking for assignment.
         EXPR(op, bin_op)->res_type = op->lhs->res_type;
         break;
     case OP_ASSIGN:
@@ -289,14 +288,14 @@ static bool type_unary_op(AstVisitor* visitor, UnaryOp* op) {
         EXPR(op, unary_op)->res_type = type_ptr_to(visitor->ctx, op->operand->res_type);
         break;
     case OP_DEREF:
-        // TODO: Only dereference actual pointers.
-        /*        if (op->operand->res_type->type != TY_PTR) {
-                    A3String op_name = type_name(op->operand->res_type);
-                    type_error(visitor->ctx, VERTEX(op->operand, expr),
-                               "Tried to dereference non-pointer type " A3_S_F ".",
-           A3_S_FORMAT(op_name)); a3_string_free(&op_name); return false;
-                    }*/
-        EXPR(op, unary_op)->res_type = op->operand->res_type->parent ?: BUILTIN_TYPES[TY_INT];
+        if (op->operand->res_type->type != TY_PTR) {
+            A3String op_name = type_name(op->operand->res_type);
+            type_error(visitor->ctx, VERTEX(op->operand, expr),
+                       "Tried to dereference non-pointer type " A3_S_F ".", A3_S_FORMAT(op_name));
+            a3_string_free(&op_name);
+            return false;
+        }
+        EXPR(op, unary_op)->res_type = op->operand->res_type->parent;
 
         break;
     case OP_NEG:
