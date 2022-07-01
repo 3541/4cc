@@ -1,1 +1,1 @@
-int main(void) { int x[3]; *x = 1; *(x + 1) = 2; *(x + 2) = 3; return *x + *(x + 1) + *(x + 2); }
+int main(void) { int a[2]; a[0] = 1; a[1] = 2; return *(a + 1); }

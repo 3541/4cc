@@ -179,6 +179,26 @@ static Expr* parse_call(Parser* parser, Expr* callee) {
     return ret;
 }
 
+static Expr* parse_index(Parser* parser, Expr* base) {
+    assert(parser);
+    assert(base);
+
+    Token tok_left = lex_next(parser->lexer);
+    assert(tok_left.type == TOK_LBRACKET);
+
+    Expr* index = parse_expr(parser, 0);
+
+    Token next = lex_next(parser->lexer);
+    if (next.type != TOK_RBRACKET) {
+        parse_error(parser, next, "Expected a closing bracket.");
+        return NULL;
+    }
+
+    return vertex_unary_op_new(
+        parse_span_merge(SPAN(base, expr), next.lexeme), OP_DEREF,
+        vertex_bin_op_new(parse_span_merge(tok_left.lexeme, next.lexeme), OP_ADD, base, index));
+}
+
 static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
     [TOK_PLUS]  = 11,
     [TOK_MINUS] = 11,
@@ -198,7 +218,7 @@ static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
     [TOK_STAR] = { 9, 10 }, [TOK_SLASH] = { 9, 10 }
 };
 
-static uint8_t POSTFIX_PRECEDENCE[TOK_COUNT] = { [TOK_LPAREN] = 13 };
+static uint8_t POSTFIX_PRECEDENCE[TOK_COUNT] = { [TOK_LPAREN] = 13, [TOK_LBRACKET] = 13 };
 
 static Expr* parse_expr(Parser* parser, uint8_t precedence) {
     assert(parser);
@@ -244,10 +264,16 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
             if (POSTFIX_PRECEDENCE[tok_op.type] < precedence)
                 break;
 
-            if (tok_op.type == TOK_LPAREN)
+            switch (tok_op.type) {
+            case TOK_LPAREN:
                 lhs = parse_call(parser, lhs);
-            else
+                break;
+            case TOK_LBRACKET:
+                lhs = parse_index(parser, lhs);
+                break;
+            default:
                 A3_PANIC("Todo: other postfix operators.");
+            }
 
             continue;
         }

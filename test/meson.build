@@ -88,8 +88,11 @@ tests = {
   ],
   'array': [
     'simple',
+    'pointer',
+    '2d',
     'index',
-    '2d'
+    'index_2d',
+    'pointer_index'
   ]
 }
 

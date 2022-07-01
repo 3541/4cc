@@ -144,6 +144,7 @@ A3String type_name(Type const* type) {
 
             A3String param_name = type_name(param->decl_type);
             a3_buf_write_str(&buf, A3_S_CONST(param_name));
+            a3_buf_write_byte(&buf, '\0');
             a3_string_free(&param_name);
         }
 
@@ -155,7 +156,6 @@ A3String type_name(Type const* type) {
         A3Buffer buf = { .data = type_name(type->parent) };
         buf.tail     = buf.data.len;
         a3_buf_init(&buf, buf.data.len, 512);
-        fprintf(stderr, "len: %zu\n", buf.data.len);
         a3_buf_write_fmt(&buf, "[%zu]", type->len);
         return A3_CS_MUT(a3_buf_read_ptr(&buf));
     }
