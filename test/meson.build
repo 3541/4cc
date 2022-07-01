@@ -88,7 +88,7 @@ tests = {
   ]
 }
 
-libtest = static_library('testlib', 'test.c')
+libtest = static_library('testlib', 'test.c', override_options: 'b_sanitize=none')
 
 foreach suite, ts : tests
   foreach t : ts
