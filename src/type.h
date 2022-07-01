@@ -11,10 +11,12 @@
 
 #include <stdbool.h>
 
+#include <a3/sll.h>
 #include <a3/str.h>
 
 // ast.h
 typedef struct Vertex Vertex;
+typedef struct Item   Item;
 
 typedef struct Type     Type;
 typedef struct Registry Registry;
@@ -31,7 +33,10 @@ typedef struct Type {
 
     union {
         Type const* parent;
-        Type const* ret;
+        struct {
+            A3_SLL(, Item) params;
+            Type const* ret;
+        };
     };
 } Type;
 
@@ -42,8 +47,6 @@ typedef struct Obj {
 } Obj;
 
 extern Type const* BUILTIN_TYPES[1];
-
-size_t scope_stack_depth(Scope*);
 
 Registry* type_registry_new(void);
 A3String  type_name(Type const*);

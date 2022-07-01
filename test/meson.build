@@ -83,6 +83,8 @@ tests = {
   'fn': [
     'simple',
     'multiple',
+    'params',
+    'recursive'
   ]
 }
 

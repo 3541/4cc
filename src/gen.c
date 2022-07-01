@@ -268,11 +268,11 @@ static bool gen_var(AstVisitor* visitor, Var* var) {
     return true;
 }
 
+static char* CALL_REGISTERS[] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
+
 static bool gen_call(AstVisitor* visitor, Call* call) {
     assert(visitor);
     assert(call);
-
-    static char* CALL_REGISTERS[] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
 
     size_t args = 0;
     A3_SLL_FOR_EACH(Arg, arg, &call->args, link) {
@@ -295,15 +295,21 @@ static bool gen_fn(AstVisitor* visitor, Fn* fn) {
     assert(visitor);
     assert(fn);
 
-    printf("global " A3_S_F "\n"
-           "section .text\n"
+    printf("\nglobal " A3_S_F "\n"
            "" A3_S_F ":\n"
            "push rbp\n"
            "mov rbp, rsp\n"
            "sub rsp, %zu\n",
-           A3_S_FORMAT(fn->name), A3_S_FORMAT(fn->name), scope_stack_depth(fn->body->scope));
+           A3_S_FORMAT(fn->name), A3_S_FORMAT(fn->name), fn->stack_depth);
+
+    size_t i = 0;
+    A3_SLL_FOR_EACH(Item, param, &fn->type->params, link) {
+        printf("mov [rbp - %zu], %s\n", param->obj->stack_offset, CALL_REGISTERS[i++]);
+        assert(i <= 6);
+    }
 
     A3_TRYB(vertex_visit(visitor, VERTEX(fn->body, item.block)));
+    assert(!((Generator*)visitor->ctx)->stack_depth);
 
     puts(".ret:\n"
          "mov rsp, rbp\n"
@@ -368,6 +374,8 @@ bool gen(A3CString src, Vertex* root) {
     assert(root->type == V_UNIT);
 
     Generator gen = { .src = src, .stack_depth = 0, .label = 0 };
+
+    puts("section .text");
 
     bool ret = vertex_visit(
         &(AstVisitor) {

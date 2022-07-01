@@ -109,7 +109,7 @@ Fn* vertex_fn_new(A3CString span, A3CString name, PType* type, Block* body) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret = (Vertex) { .type = V_FN,
                       .span = span,
-                      .fn   = { .name = name, .body = body, .ptype = type } };
+                      .fn   = { .name = name, .stack_depth = 0, .body = body, .ptype = type } };
 
     return &ret->fn;
 }
@@ -360,6 +360,7 @@ PType* ptype_fn(PType* ret_type) {
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
     *ret = (PType) { .type = PTY_FN, .ret = ret_type };
+    A3_SLL_INIT(&ret->params);
 
     return ret;
 }

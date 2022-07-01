@@ -72,6 +72,7 @@ typedef struct Fn {
     A3CString name;
     A3_SLL_LINK(Fn) link;
     Block* body;
+    size_t stack_depth;
 
     union {
         PType*      ptype;
@@ -146,10 +147,14 @@ typedef struct PType {
     PTypeType type;
 
     union {
-        TokenType builtin;
-        A3CString name;
-        PType*    parent;
-        PType*    ret;
+        TokenType builtin; // PTY_BUILTIN
+        A3CString name;    // PTY_BASE
+        PType*    parent;  // PTY_PTR
+        // PTY_FN
+        struct {
+            A3_SLL(, Item) params;
+            PType* ret;
+        };
     };
 } PType;
 
@@ -172,8 +177,11 @@ typedef struct Item {
         struct {
             A3CString name;
             union {
-                PType*      decl_ptype;
-                Type const* decl_type;
+                PType* decl_ptype;
+                struct {
+                    Type const* decl_type;
+                    Obj*        obj;
+                };
             };
         };
     };

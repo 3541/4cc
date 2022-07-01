@@ -31,6 +31,7 @@ typedef struct Parser {
 static Expr*  parse_expr(Parser*, uint8_t precedence);
 static Item*  parse_stmt(Parser*);
 static Block* parse_block(Parser*);
+static Item*  parse_declarator(Parser*, PType* type);
 static bool   parse_decl(Parser*, Block*);
 
 Parser* parse_new(A3CString src, Lexer* lexer) {
@@ -421,13 +422,29 @@ static PType* parse_decl_suffix(Parser* parser, PType* base) {
     Token next = lex_next(parser->lexer);
     assert(next.type == TOK_LPAREN);
 
-    if (lex_peek(parser->lexer).type == TOK_VOID)
+    PType* ret = ptype_fn(base);
+
+    if (lex_peek(parser->lexer).type == TOK_VOID) {
         lex_next(parser->lexer);
+    } else {
+        bool first = true;
+        while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_RPAREN) {
+            if (!first && !parse_consume(parser, A3_CS("comma"), TOK_COMMA))
+                return NULL;
+            first = false;
+
+            PType* param_type = parse_declspec(parser);
+            Item*  param      = parse_declarator(parser, param_type);
+            assert(VERTEX(param, item)->type == V_DECL);
+
+            A3_SLL_ENQUEUE(&ret->params, param, link);
+        }
+    }
 
     if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
         return NULL;
 
-    return ptype_fn(base);
+    return ret;
 }
 
 static Item* parse_declarator(Parser* parser, PType* type) {

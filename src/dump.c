@@ -251,15 +251,15 @@ static bool dump_fn(AstVisitor* visitor, Fn* fn) {
     assert(fn);
     assert(fn->type->type == TY_FN);
 
-    A3String  return_type = type_name(fn->type->ret);
-    A3CString return_name = return_type.ptr ? A3_S_CONST(return_type) : A3_CS("(untyped)");
+    A3String  fn_type   = type_name(fn->type);
+    A3CString type_name = fn_type.ptr ? A3_S_CONST(fn_type) : A3_CS("(untyped)");
 
-    dump_print(visitor->ctx, "FN<" A3_S_F ">(" A3_S_F ")", A3_S_FORMAT(return_name),
+    dump_print(visitor->ctx, "FN<" A3_S_F ">(" A3_S_F ")", A3_S_FORMAT(type_name),
                A3_S_FORMAT(fn->name));
     A3_TRYB(dump_child(visitor, VERTEX(fn->body, item.block)));
 
-    if (return_type.ptr)
-        a3_string_free(&return_type);
+    if (fn_type.ptr)
+        a3_string_free(&fn_type);
 
     return true;
 }
