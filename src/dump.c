@@ -188,7 +188,7 @@ static bool dump_decl(AstVisitor* visitor, Item* decl) {
     assert(visitor);
     assert(VERTEX(decl, item)->type == V_DECL);
 
-    A3String  type = type_name(decl->decl_type);
+    A3String  type = type_name(decl->obj->type);
     A3CString name = type.ptr ? A3_S_CONST(type) : A3_CS("(untyped)");
 
     dump_print(visitor->ctx, "DECL<" A3_S_F ">(" A3_S_F ")", A3_S_FORMAT(name),

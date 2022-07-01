@@ -182,10 +182,7 @@ typedef struct Item {
             A3CString name;
             union {
                 PType* decl_ptype;
-                struct {
-                    Type const* decl_type;
-                    Obj*        obj;
-                };
+                Obj*   obj;
             };
         };
     };

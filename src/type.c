@@ -142,7 +142,7 @@ A3String type_name(Type const* type) {
                 a3_buf_write_str(&buf, A3_CS(", "));
             first = false;
 
-            A3String param_name = type_name(param->decl_type);
+            A3String param_name = type_name(param->obj->type);
             a3_buf_write_str(&buf, A3_S_CONST(param_name));
             a3_buf_write_byte(&buf, '\0');
             a3_string_free(&param_name);
@@ -251,7 +251,9 @@ static Type const* type_fn_from_ptype(Registry* reg, PType const* ptype) {
 
     A3_SLL_FOR_EACH(Item, decl, &ptype->params, link) {
         assert(VERTEX(decl, item)->type == V_DECL);
-        decl->decl_type = type_from_ptype(reg, decl->decl_ptype);
+        decl->obj =
+            scope_add(reg->current_scope,
+                      (Obj) { .name = decl->name, .type = type_from_ptype(reg, decl->decl_ptype) });
         A3_SLL_ENQUEUE(&ret->params, decl, link);
     }
 
@@ -410,9 +412,9 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
         return false;
     }
 
-    decl->decl_type = type_from_ptype(reg, decl->decl_ptype);
     decl->obj =
-        scope_add(reg->current_scope, (Obj) { .name = decl->name, .type = decl->decl_type });
+        scope_add(reg->current_scope,
+                  (Obj) { .name = decl->name, .type = type_from_ptype(reg, decl->decl_ptype) });
 
     return true;
 }
@@ -509,16 +511,9 @@ static bool type_fn(AstVisitor* visitor, Fn* fn) {
     Registry* reg = visitor->ctx;
 
     reg_scope_push(reg);
-    fn->type            = type_from_ptype(reg, fn->ptype);
     fn->body->scope     = reg->current_scope;
     fn->body->scope->fn = fn;
-
-    A3_SLL_FOR_EACH(Item, decl, &fn->type->params, link) {
-        assert(VERTEX(decl, item)->type == V_DECL);
-
-        decl->obj =
-            scope_add(reg->current_scope, (Obj) { .name = decl->name, .type = decl->decl_type });
-    }
+    fn->type            = type_from_ptype(reg, fn->ptype);
 
     A3_TRYB(vertex_visit(visitor, VERTEX(fn->body, item.block)));
     fn->stack_depth = align_up(fn->stack_depth, 16);
