@@ -149,7 +149,7 @@ A3String type_name(Type const* type) {
 
         a3_buf_write_byte(&buf, ')');
 
-        return buf.data;
+        return A3_CS_MUT(a3_buf_read_ptr(&buf));
     }
     }
 
@@ -245,7 +245,8 @@ static Type const* type_fn_from_ptype(Registry* reg, PType const* ptype) {
         free(ret);
         ret = (Type*)*entry;
     } else {
-        A3_HT_INSERT(A3CString, TypePtr)(&reg->fns, A3_S_CONST(name), ret);
+        A3String ht_name = a3_string_clone(name);
+        A3_HT_INSERT(A3CString, TypePtr)(&reg->fns, A3_S_CONST(ht_name), ret);
     }
 
     a3_string_free(&name);
