@@ -240,7 +240,7 @@ static Token lex_op(Lexer* lexer) {
 static Token lex_paren(Lexer* lexer) {
     assert(lexer);
 
-    A3CString lexeme = lex_consume_one(lexer, A3_CS("parenthesis or brace"), A3_CS("(){}"));
+    A3CString lexeme = lex_consume_one(lexer, A3_CS("parenthesis or brace"), A3_CS("(){}[]"));
     if (!a3_string_cptr(lexeme))
         return lex_recover(lexer);
 
@@ -253,6 +253,10 @@ static Token lex_paren(Lexer* lexer) {
         return (Token) { .type = TOK_LBRACE, .lexeme = lexeme };
     case '}':
         return (Token) { .type = TOK_RBRACE, .lexeme = lexeme };
+    case '[':
+        return (Token) { .type = TOK_LBRACKET, .lexeme = lexeme };
+    case ']':
+        return (Token) { .type = TOK_RBRACKET, .lexeme = lexeme };
     default:
         A3_UNREACHABLE();
     }
@@ -326,6 +330,8 @@ Token lex_peek(Lexer* lexer) {
     case ')':
     case '{':
     case '}':
+    case '[':
+    case ']':
         lexer->peek = lex_paren(lexer);
         break;
     case ';':

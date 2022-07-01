@@ -66,9 +66,26 @@ static void gen_stack_pop(Generator* gen, char* reg) {
     gen->stack_depth--;
 }
 
+static void gen_load(Type const* type) {
+    assert(type);
+
+    if (type->type == TY_ARRAY)
+        return;
+
+    puts("mov rax, [rax]");
+}
+
+static void gen_store(Generator* gen) {
+    assert(gen);
+
+    gen_stack_pop(gen, "rdi");
+    puts("mov [rdi], rax");
+}
+
 static bool gen_lit(AstVisitor* visitor, Literal* lit) {
     assert(visitor);
     assert(lit->type == LIT_NUM);
+    (void)visitor;
 
     printf("mov rax, %" PRId64 "\n", lit->num);
     return true;
@@ -105,15 +122,12 @@ static bool gen_assign(AstVisitor* visitor, BinOp* op) {
     A3_TRYB(gen_addr(visitor, op->lhs));
     gen_stack_push(visitor->ctx);
     vertex_visit(visitor, VERTEX(op->rhs, expr));
-    gen_stack_pop(visitor->ctx, "rdi");
-
-    puts("mov [rdi], rax");
+    gen_store(visitor->ctx);
 
     return true;
 }
 
-static bool gen_add_sub(AstVisitor* visitor, BinOp* op) {
-    assert(visitor);
+static bool gen_add_sub(BinOp* op) {
     assert(op);
     assert(op->type == OP_ADD || op->type == OP_SUB);
 
@@ -167,7 +181,7 @@ static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
     switch (op->type) {
     case OP_ADD:
     case OP_SUB: {
-        A3_TRYB(gen_add_sub(visitor, op));
+        A3_TRYB(gen_add_sub(op));
         break;
     }
     case OP_MUL:
@@ -237,7 +251,7 @@ static bool gen_unary_op(AstVisitor* visitor, UnaryOp* op) {
         puts("neg rax");
         break;
     case OP_DEREF:
-        puts("mov rax, [rax]");
+        gen_load(EXPR(op, unary_op)->res_type);
         break;
     case OP_ADDR:
         // Handled earlier.
@@ -263,7 +277,7 @@ static bool gen_var(AstVisitor* visitor, Var* var) {
     assert(var);
 
     A3_TRYB(gen_addr(visitor, EXPR(var, var)));
-    puts("mov rax, [rax]");
+    gen_load(var->obj->type);
 
     return true;
 }

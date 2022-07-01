@@ -85,6 +85,11 @@ tests = {
     'multiple',
     'params',
     'recursive'
+  ],
+  'array': [
+    'simple',
+    'index',
+    '2d'
   ]
 }
 

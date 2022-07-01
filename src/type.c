@@ -50,7 +50,7 @@ typedef struct Registry {
     A3CString src;
 } Registry;
 
-Type const* BUILTIN_TYPES[] = { [TY_INT] = &(Type) { .type = TY_INT } };
+Type const* BUILTIN_TYPES[4] = { [TY_INT] = &(Type) { .type = TY_INT } };
 
 static Type const* type_from_ptype(Registry* reg, PType* ptype);
 
@@ -151,6 +151,14 @@ A3String type_name(Type const* type) {
 
         return A3_CS_MUT(a3_buf_read_ptr(&buf));
     }
+    case TY_ARRAY: {
+        A3Buffer buf = { .data = type_name(type->parent) };
+        buf.tail     = buf.data.len;
+        a3_buf_init(&buf, buf.data.len, 512);
+        fprintf(stderr, "len: %zu\n", buf.data.len);
+        a3_buf_write_fmt(&buf, "[%zu]", type->len);
+        return A3_CS_MUT(a3_buf_read_ptr(&buf));
+    }
     }
 
     A3_UNREACHABLE();
@@ -172,6 +180,8 @@ size_t type_size(Type const* type) {
         return sizeof(void*);
     case TY_FN:
         return sizeof(void (*)(void));
+    case TY_ARRAY:
+        return type_size(type->parent) * type->len;
     }
 
     A3_UNREACHABLE();
@@ -223,6 +233,13 @@ static Type const* type_ptr_to(Registry* reg, Type const* type) {
     return ret;
 }
 
+static Type const* type_array_of(Type const* type, size_t len) {
+    A3_UNWRAPNI(Type*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Type) { .type = TY_ARRAY, .parent = type, .len = len };
+
+    return ret;
+}
+
 static Type const* type_fn_from_ptype(Registry* reg, PType const* ptype) {
     assert(reg);
     assert(ptype);
@@ -263,6 +280,8 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
         A3_PANIC("Todo: custom types.");
     case PTY_PTR:
         return type_ptr_to(reg, type_from_ptype(reg, ptype->parent));
+    case PTY_ARRAY:
+        return type_array_of(type_from_ptype(reg, ptype->parent), ptype->len);
     case PTY_FN:
         return type_fn_from_ptype(reg, ptype);
     case PTY_BUILTIN:
@@ -316,7 +335,9 @@ static bool type_bin_op(AstVisitor* visitor, BinOp* op) {
         EXPR(op, bin_op)->res_type = op->lhs->res_type;
         break;
     case OP_ASSIGN:
-        if (op->lhs->res_type != op->rhs->res_type) {
+        if (op->lhs->res_type != op->rhs->res_type &&
+            (op->lhs->res_type->type != TY_PTR || op->rhs->res_type->type != TY_ARRAY ||
+             op->lhs->res_type->parent != op->rhs->res_type->parent)) {
             type_error_mismatch(visitor->ctx, VERTEX(op, expr.bin_op), op->lhs->res_type,
                                 op->rhs->res_type);
             return false;
@@ -348,7 +369,7 @@ static bool type_unary_op(AstVisitor* visitor, UnaryOp* op) {
         EXPR(op, unary_op)->res_type = type_ptr_to(visitor->ctx, op->operand->res_type);
         break;
     case OP_DEREF:
-        if (op->operand->res_type->type != TY_PTR) {
+        if (op->operand->res_type->type != TY_PTR && op->operand->res_type->type != TY_ARRAY) {
             A3String op_name = type_name(op->operand->res_type);
             type_error(visitor->ctx, VERTEX(op->operand, expr),
                        "Tried to dereference non-pointer type " A3_S_F ".", A3_S_FORMAT(op_name));

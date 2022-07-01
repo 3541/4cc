@@ -31,7 +31,8 @@ typedef struct Parser {
 static Expr*  parse_expr(Parser*, uint8_t precedence);
 static Item*  parse_stmt(Parser*);
 static Block* parse_block(Parser*);
-static Item*  parse_declarator(Parser*, PType* type);
+static Item*  parse_declarator(Parser*, PType*);
+static PType* parse_decl_suffix(Parser*, PType*);
 static bool   parse_decl(Parser*, Block*);
 
 Parser* parse_new(A3CString src, Lexer* lexer) {
@@ -415,12 +416,9 @@ static PType* parse_declspec(Parser* parser) {
     return ptype_builtin_new(TOK_INT);
 }
 
-static PType* parse_decl_suffix(Parser* parser, PType* base) {
+static PType* parse_decl_suffix_fn(Parser* parser, PType* base) {
     assert(parser);
     assert(base);
-
-    Token next = lex_next(parser->lexer);
-    assert(next.type == TOK_LPAREN);
 
     PType* ret = ptype_fn(base);
 
@@ -447,6 +445,39 @@ static PType* parse_decl_suffix(Parser* parser, PType* base) {
     return ret;
 }
 
+static PType* parse_decl_suffix_array(Parser* parser, PType* base) {
+    assert(parser);
+    assert(base);
+
+    Token next = lex_next(parser->lexer);
+    if (next.type != TOK_LIT_NUM) {
+        parse_error(parser, next, "Expected a numeric literal.");
+        return NULL;
+    }
+
+    if (!parse_consume(parser, A3_CS("closing bracket"), TOK_RBRACKET))
+        return NULL;
+
+    Token following = lex_peek(parser->lexer);
+    if (following.type == TOK_LPAREN || following.type == TOK_LBRACKET)
+        base = parse_decl_suffix(parser, base);
+
+    return ptype_array(base, (size_t)next.lit_num);
+}
+
+static PType* parse_decl_suffix(Parser* parser, PType* base) {
+    assert(parser);
+    assert(base);
+
+    Token next = lex_next(parser->lexer);
+    assert(next.type == TOK_LPAREN || next.type == TOK_LBRACKET);
+
+    if (next.type == TOK_LPAREN)
+        return parse_decl_suffix_fn(parser, base);
+
+    return parse_decl_suffix_array(parser, base);
+}
+
 static Item* parse_declarator(Parser* parser, PType* type) {
     assert(parser);
     assert(type);
@@ -468,7 +499,8 @@ static Item* parse_declarator(Parser* parser, PType* type) {
         return NULL;
     }
 
-    if (lex_peek(parser->lexer).type == TOK_LPAREN)
+    Token next = lex_peek(parser->lexer);
+    if (next.type == TOK_LPAREN || next.type == TOK_LBRACKET)
         type = parse_decl_suffix(parser, type);
 
     if (!type)

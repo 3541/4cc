@@ -365,6 +365,15 @@ PType* ptype_fn(PType* ret_type) {
     return ret;
 }
 
+PType* ptype_array(PType* base, size_t len) {
+    assert(base);
+
+    A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
+    *ret = (PType) { .type = PTY_ARRAY, .parent = base, .len = len };
+
+    return ret;
+}
+
 Arg* arg_new(Expr* expr) {
     assert(expr);
 

@@ -141,7 +141,7 @@ typedef struct Loop {
     Item* body;
 } Loop;
 
-typedef enum PTypeType { PTY_PTR, PTY_BASE, PTY_BUILTIN, PTY_FN } PTypeType;
+typedef enum PTypeType { PTY_PTR, PTY_BASE, PTY_BUILTIN, PTY_FN, PTY_ARRAY } PTypeType;
 
 typedef struct PType {
     PTypeType type;
@@ -149,11 +149,15 @@ typedef struct PType {
     union {
         TokenType builtin; // PTY_BUILTIN
         A3CString name;    // PTY_BASE
-        PType*    parent;  // PTY_PTR
         // PTY_FN
         struct {
             A3_SLL(, Item) params;
             PType* ret;
+        };
+        // PTY_ARRAY and PTY_PTR.
+        struct {
+            PType* parent;
+            size_t len; // PTY_ARRAY
         };
     };
 } PType;
@@ -247,5 +251,6 @@ bool   vertex_visit(AstVisitor*, Vertex*);
 PType* ptype_builtin_new(TokenType);
 PType* ptype_ptr_to(PType*);
 PType* ptype_fn(PType* ret_type);
+PType* ptype_array(PType*, size_t);
 
 Arg* arg_new(Expr*);

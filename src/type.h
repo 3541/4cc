@@ -22,17 +22,16 @@ typedef struct Type     Type;
 typedef struct Registry Registry;
 typedef struct Scope    Scope;
 
-typedef enum TypeType {
-    TY_INT,
-    TY_PTR,
-    TY_FN,
-} TypeType;
+typedef enum TypeType { TY_ARRAY, TY_FN, TY_INT, TY_PTR } TypeType;
 
 typedef struct Type {
     TypeType type;
 
     union {
-        Type const* parent;
+        struct {
+            Type const* parent;
+            size_t      len;
+        };
         struct {
             A3_SLL(, Item) params;
             Type const* ret;
@@ -46,7 +45,7 @@ typedef struct Obj {
     size_t      stack_offset;
 } Obj;
 
-extern Type const* BUILTIN_TYPES[1];
+extern Type const* BUILTIN_TYPES[4];
 
 Registry* type_registry_new(void);
 A3String  type_name(Type const*);
