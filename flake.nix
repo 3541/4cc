@@ -8,7 +8,7 @@
       url = "github:edolstra/flake-compat";
       flake = false;
     };
-    a3.url = "github:3541/liba3/v0.4.1";
+    a3.url = "github:3541/liba3/v0.4.2";
   };
 
   outputs = { self, nixpkgs, utils, a3, ... }:
