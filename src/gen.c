@@ -145,10 +145,10 @@ static bool gen_add_sub(BinOp* op) {
             ptr_type   = op->rhs->res_type;
         } else {
             scalar_reg = "rdi";
-            ptr_type   = op->rhs->res_type;
+            ptr_type   = op->lhs->res_type;
         }
 
-        printf("imul %s, %zu\n", scalar_reg, type_size(ptr_type));
+        printf("imul %s, %zu\n", scalar_reg, type_size(ptr_type->parent));
     }
 
     printf("%s rax, rdi\n", insn);
