@@ -21,7 +21,8 @@ warnings_wanted = {
     '-Wformat-nonliteral', '-Wformat-security', '-Wlogical-op', '-Wmissing-declarations',
     '-Wmissing-include-dirs', '-Wnull-dereference', '-Wpacked', '-Wshadow', '-Wstack-protector',
     '-Wundef', '-Wcast-align', '-Wbad-function-cast', '-Wimplicit', '-Wmissing-prototypes',
-    '-Wnested-externs', '-Wstrict-prototypes', '-Wconversion', '-Wpointer-arith', '-Wno-pedantic'
+    '-Wnested-externs', '-Wstrict-prototypes', '-Wconversion', '-Wpointer-arith', '-Wno-pedantic',
+    '-Wno-missing-field-initializers'
   ],
 
   'msvc': [

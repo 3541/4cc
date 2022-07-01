@@ -131,7 +131,7 @@ static bool gen_add_sub(BinOp* op) {
     assert(op);
     assert(op->type == OP_ADD || op->type == OP_SUB);
 
-    size_t count_scalar = type_is_scalar(op->lhs->res_type) + type_is_scalar(op->rhs->res_type);
+    int count_scalar = type_is_scalar(op->lhs->res_type) + type_is_scalar(op->rhs->res_type);
     assert(op->type == OP_SUB || count_scalar != 0);
 
     char const* insn = op->type == OP_ADD ? "add" : "sub";
