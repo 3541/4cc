@@ -15,4 +15,5 @@ if asm_result.returncode == 0:
     sys.exit(-1)
 
 if asm_result.returncode != 255:
-    print(f"FAIL: Expected status 255, but got {str(asm_result.exitcode)}")
+    print(f"FAIL: Expected status 255, but got {str(asm_result.returncode)}")
+    sys.exit(-1)
