@@ -1,3 +1,5 @@
+fs = import('fs')
+
 python = find_program('python3')
 tests = {
   'expr': [
@@ -117,6 +119,63 @@ foreach suite, ts : tests
         path / t + '.c',
         path / t + '.out'
       ],
+    )
+  endforeach
+endforeach
+
+extra_stage = 2
+foreach stage : range(1, extra_stage)
+  extra_tests = run_command(
+    [
+      python,
+      meson.current_source_dir() / 'extra_tests.py',
+      'valid',
+      meson.current_source_dir() / 'extra',
+      stage.to_string()
+    ],
+    check: true
+  ).stdout().strip().split('\n')
+
+  foreach t : extra_tests
+    name = fs.stem(t)
+    correct = executable(name, t)
+
+    test(
+      'extra' / stage.to_string() / name,
+      python,
+      depends: correct,
+      args: [
+        meson.current_source_dir() / 'test.py',
+        fcc,
+        libtest,
+        t,
+        correct
+      ]
+    )
+  endforeach
+
+  extra_invalid = run_command(
+    [
+      python,
+      meson.current_source_dir() / 'extra_tests.py',
+      'invalid',
+      meson.current_source_dir() / 'extra',
+      stage.to_string()
+    ],
+    check: true
+  ).stdout().strip().split('\n')
+
+  foreach t : extra_invalid
+    name = fs.stem(t)
+
+    test(
+      'extra' / stage.to_string() / 'invalid' / name,
+      python,
+      args: [
+        meson.current_source_dir() / 'test_invalid.py',
+        fcc,
+        t
+      ]
     )
   endforeach
 endforeach

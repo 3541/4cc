@@ -28,7 +28,12 @@ object.close()
 exit = subprocess.run([binary_path]).returncode
 os.remove(binary_path)
 
-output = open(output_path).read().strip()
+if output_path.endswith(".out"):
+    output = open(output_path).read().strip()
+else:
+    p = subprocess.run([output_path])
+    output = str(p.returncode)
+
 if str(exit) != output:
     print(f"FAIL: Expected status {output}, but got {exit}.")
     sys.exit(-1)
