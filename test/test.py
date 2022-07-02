@@ -7,11 +7,8 @@ import tempfile
 
 cc = sys.argv[1]
 test_lib = sys.argv[2]
-test_path = sys.argv[3]
-test_name = sys.argv[4]
-
-input_path = os.sep.join([test_path, test_name + '.c'])
-output_path = os.sep.join([test_path, test_name + '.out'])
+input_path = sys.argv[3]
+output_path = sys.argv[4]
 
 asm = tempfile.NamedTemporaryFile(suffix = ".asm")
 object = tempfile.NamedTemporaryFile(suffix = ".o")

@@ -104,6 +104,8 @@ libtest = static_library('testlib', 'test.c', override_options: 'b_sanitize=none
 
 foreach suite, ts : tests
   foreach t : ts
+    path = meson.current_source_dir() / suite
+
     test(
       suite / t,
       python,
@@ -112,8 +114,8 @@ foreach suite, ts : tests
         meson.current_source_dir() / 'test.py',
         fcc,
         libtest,
-        meson.current_source_dir() / suite,
-        t
+        path / t + '.c',
+        path / t + '.out'
       ],
     )
   endforeach
