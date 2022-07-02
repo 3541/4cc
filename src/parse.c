@@ -462,7 +462,12 @@ static PType* parse_decl_suffix_fn(Parser* parser, PType* base) {
             first = false;
 
             PType* param_type = parse_declspec(parser);
-            Item*  param      = parse_declarator(parser, param_type);
+            if (!param_type)
+                return NULL;
+
+            Item* param = parse_declarator(parser, param_type);
+            if (!param)
+                return NULL;
             assert(VERTEX(param, item)->type == V_DECL);
 
             A3_SLL_ENQUEUE(&ret->params, param, link);
