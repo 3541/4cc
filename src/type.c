@@ -380,11 +380,30 @@ static bool type_unary_op(AstVisitor* visitor, UnaryOp* op) {
             a3_string_free(&op_name);
             return false;
         }
-        EXPR(op, unary_op)->res_type = op->operand->res_type->parent;
 
+        EXPR(op, unary_op)->res_type = op->operand->res_type->parent;
+        break;
+    case OP_NOT:
+        if (!type_is_scalar(op->operand->res_type) && op->operand->res_type->type != TY_PTR) {
+            A3String op_name = type_name(op->operand->res_type);
+            type_error(visitor->ctx, VERTEX(op->operand, expr),
+                       "Invalid operation for aggregate type " A3_S_F ".", A3_S_FORMAT(op_name));
+            a3_string_free(&op_name);
+            return false;
+        }
+
+        EXPR(op, unary_op)->res_type = BUILTIN_TYPES[TY_INT];
         break;
     case OP_NEG:
     case OP_UNARY_ADD:
+        if (!type_is_scalar(op->operand->res_type)) {
+            A3String op_name = type_name(op->operand->res_type);
+            type_error(visitor->ctx, VERTEX(op->operand, expr),
+                       "Invalid operation for non-scalar type " A3_S_F ".", A3_S_FORMAT(op_name));
+            a3_string_free(&op_name);
+            return false;
+        }
+
         EXPR(op, unary_op)->res_type = op->operand->res_type;
         break;
     }

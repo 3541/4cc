@@ -260,6 +260,11 @@ static bool gen_unary_op(AstVisitor* visitor, UnaryOp* op) {
     case OP_DEREF:
         gen_load(EXPR(op, unary_op)->res_type);
         break;
+    case OP_NOT:
+        puts("test rax, rax\n"
+             "setz al\n"
+             "movzx rax, al");
+        break;
     case OP_ADDR:
         // Handled earlier.
         A3_UNREACHABLE();

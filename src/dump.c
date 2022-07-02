@@ -135,6 +135,9 @@ static bool dump_unary_op(AstVisitor* visitor, UnaryOp* op) {
     case OP_DEREF:
         op_str = "*";
         break;
+    case OP_NOT:
+        op_str = "!";
+        break;
     }
 
     A3String type = dump_get_type(EXPR(op, unary_op)->res_type);
