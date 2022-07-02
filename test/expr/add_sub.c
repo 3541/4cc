@@ -1,1 +1,1 @@
-int main(void) { return 2+36-3; }
+int main(void) { return 2 + 36 - 3; }

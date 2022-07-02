@@ -1,1 +1,4 @@
-int main(void) { int word = 1; return word; }
+int main(void) {
+    int word = 1;
+    return word;
+}

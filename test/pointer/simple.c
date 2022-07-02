@@ -1,1 +1,4 @@
-int main(void) { int x = 2; return *&x; }
+int main(void) {
+    int x = 2;
+    return *&x;
+}
