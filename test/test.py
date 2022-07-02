@@ -11,15 +11,13 @@ test_path = sys.argv[3]
 test_name = sys.argv[4]
 
 input_path = os.sep.join([test_path, test_name + '.c'])
-if not os.path.exists(input_path):
-    input_path = os.sep.join([test_path, test_name + '.txt'])
 output_path = os.sep.join([test_path, test_name + '.out'])
 
 asm = tempfile.NamedTemporaryFile(suffix = ".asm")
 object = tempfile.NamedTemporaryFile(suffix = ".o")
 binary_path = os.path.splitext(object.name)[0]
 
-asm_result = subprocess.check_output([cc, open(input_path).read().strip()])
+asm_result = subprocess.check_output([cc, input_path])
 print(f"Output:\n{asm_result.decode('utf-8')}", file = sys.stderr)
 asm.write(asm_result)
 asm.flush()

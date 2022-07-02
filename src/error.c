@@ -35,11 +35,26 @@ void verror_at(A3CString src, A3CString highlight, char* fmt, va_list args) {
 
     assert(a3_string_cptr(highlight) >= a3_string_cptr(src));
 
-    int offset = (int)(a3_string_cptr(highlight) - a3_string_cptr(src));
+    A3CString line = highlight;
+    while (line.ptr > src.ptr && *line.ptr != '\n') {
+        line.ptr--;
+        line.len++;
+    }
+    if (*line.ptr == '\n') {
+        line.ptr++;
+        line.len--;
+    }
+
+    while (line.ptr[line.len - 1] != '\n' && line.len < src.len)
+        line.len++;
+    if (line.ptr[line.len - 1] == '\n')
+        line.len--;
+
+    int offset = (int)(a3_string_cptr(highlight) - a3_string_cptr(line));
     fprintf(stderr,
             "Error: " A3_S_F "\n"
             "%*s",
-            A3_S_FORMAT(src), offset + (int)sizeof("Error: ") - 1, "");
+            A3_S_FORMAT(line), offset + (int)sizeof("Error: ") - 1, "");
     for (size_t i = 0; i < a3_string_len(highlight); i++)
         fputc('^', stderr);
     fputc(' ', stderr);
