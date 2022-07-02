@@ -394,6 +394,7 @@ static bool type_unary_op(AstVisitor* visitor, UnaryOp* op) {
 
         EXPR(op, unary_op)->res_type = BUILTIN_TYPES[TY_INT];
         break;
+    case OP_BW_NOT:
     case OP_NEG:
     case OP_UNARY_ADD:
         if (!type_is_scalar(op->operand->res_type)) {

@@ -265,6 +265,9 @@ static bool gen_unary_op(AstVisitor* visitor, UnaryOp* op) {
              "setz al\n"
              "movzx rax, al");
         break;
+    case OP_BW_NOT:
+        puts("not rax");
+        break;
     case OP_ADDR:
         // Handled earlier.
         A3_UNREACHABLE();
