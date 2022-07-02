@@ -93,6 +93,10 @@ tests = {
     'index',
     'index_2d',
     'pointer_index'
+  ],
+  'char': [
+    'simple',
+    'arithmetic'
   ]
 }
 

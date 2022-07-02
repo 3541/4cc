@@ -25,6 +25,9 @@
 #include "error.h"
 #include "type.h"
 
+static char* REGISTERS_8[]  = { "dil", "sil", "dl", "cl", "r8b", "r9b" };
+static char* REGISTERS_64[] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
+
 typedef struct Generator {
     A3CString src;
     size_t    stack_depth;
@@ -75,11 +78,15 @@ static void gen_load(Type const* type) {
     puts("mov rax, [rax]");
 }
 
-static void gen_store(Generator* gen) {
+static void gen_store(Generator* gen, Type const* type) {
     assert(gen);
 
     gen_stack_pop(gen, "rdi");
-    puts("mov [rdi], rax");
+
+    if (type_size(type) == 1)
+        puts("mov BYTE [rdi], al");
+    else
+        puts("mov [rdi], rax");
 }
 
 static bool gen_lit(AstVisitor* visitor, Literal* lit) {
@@ -122,7 +129,7 @@ static bool gen_assign(AstVisitor* visitor, BinOp* op) {
     A3_TRYB(gen_addr(visitor, op->lhs));
     gen_stack_push(visitor->ctx);
     vertex_visit(visitor, VERTEX(op->rhs, expr));
-    gen_store(visitor->ctx);
+    gen_store(visitor->ctx, EXPR(op, bin_op)->res_type);
 
     return true;
 }
@@ -282,8 +289,6 @@ static bool gen_var(AstVisitor* visitor, Var* var) {
     return true;
 }
 
-static char* CALL_REGISTERS[] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
-
 static bool gen_call(AstVisitor* visitor, Call* call) {
     assert(visitor);
     assert(call);
@@ -297,7 +302,7 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
     assert(args <= 6);
 
     for (size_t i = 0; i < args; i++)
-        gen_stack_pop(visitor->ctx, CALL_REGISTERS[args - i - 1]);
+        gen_stack_pop(visitor->ctx, REGISTERS_64[args - i - 1]);
 
     printf("extern " A3_S_F "\n"
            "call " A3_S_F "\n",
@@ -321,7 +326,10 @@ static bool gen_decl(AstVisitor* visitor, Item* decl) {
 
     size_t i = 0;
     A3_SLL_FOR_EACH(Item, param, &decl->obj->type->params, link) {
-        printf("mov [rbp - %zu], %s\n", param->obj->stack_offset, CALL_REGISTERS[i++]);
+        if (type_size(param->obj->type) == 1)
+            printf("movsx BYTE [rbp - %zu], %s\n", param->obj->stack_offset, REGISTERS_8[i++]);
+        else
+            printf("mov [rbp - %zu], %s\n", param->obj->stack_offset, REGISTERS_64[i++]);
         assert(i <= 6);
     }
 

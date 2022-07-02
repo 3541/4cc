@@ -50,7 +50,9 @@ typedef struct Registry {
     A3CString src;
 } Registry;
 
-Type const* BUILTIN_TYPES[4] = { [TY_INT] = &(Type) { .type = TY_INT } };
+Type const* BUILTIN_TYPES[2] = {
+    [TY_INT] = &(Type) { .type = TY_INT }, [TY_CHAR] = &(Type) { .type = TY_CHAR }
+};
 
 static Type const* type_from_ptype(Registry* reg, PType* ptype);
 
@@ -81,9 +83,6 @@ static Obj* scope_add(Scope* scope, Obj obj) {
     assert(scope);
     assert(obj.name.ptr);
 
-    scope->fn->obj->stack_depth += type_size(obj.type);
-    obj.stack_offset = scope->fn->obj->stack_depth;
-
     bool res = A3_HT_INSERT(A3CString, Obj)(&scope->scope, obj.name, obj);
     assert(res);
     (void)res;
@@ -108,6 +107,7 @@ Registry* type_registry_new(void) {
     A3_UNWRAPNI(Registry*, ret, calloc(1, sizeof(*ret)));
     A3_HT_INIT(TypePtr, TypePtr)(&ret->ptrs_to, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
     A3_HT_INIT(A3CString, TypePtr)(&ret->fns, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
+    reg_scope_push(ret);
 
     return ret;
 }
@@ -118,6 +118,8 @@ A3String type_name(Type const* type) {
     switch (type->type) {
     case TY_INT:
         return a3_string_clone(A3_CS("int"));
+    case TY_CHAR:
+        return a3_string_clone(A3_CS("char"));
     case TY_PTR: {
         A3String base = type_name(type->parent);
         A3String ret  = a3_string_alloc(base.len + 1);
@@ -133,7 +135,7 @@ A3String type_name(Type const* type) {
         a3_buf_write_str(&buf, A3_CS(" (*)("));
         if (!A3_SLL_HEAD(&type->params)) {
             a3_buf_write_str(&buf, A3_CS("void)"));
-            return buf.data;
+            return A3_CS_MUT(a3_buf_read_ptr(&buf));
         }
 
         bool first = true;
@@ -144,7 +146,6 @@ A3String type_name(Type const* type) {
 
             A3String param_name = type_name(param->obj->type);
             a3_buf_write_str(&buf, A3_S_CONST(param_name));
-            a3_buf_write_byte(&buf, '\0');
             a3_string_free(&param_name);
         }
 
@@ -167,7 +168,7 @@ A3String type_name(Type const* type) {
 bool type_is_scalar(Type const* type) {
     assert(type);
 
-    return type->type == TY_INT;
+    return type->type == TY_INT || type->type == TY_CHAR;
 }
 
 size_t type_size(Type const* type) {
@@ -176,6 +177,8 @@ size_t type_size(Type const* type) {
     switch (type->type) {
     case TY_INT:
         return sizeof(int64_t);
+    case TY_CHAR:
+        return sizeof(char);
     case TY_PTR:
         return sizeof(void*);
     case TY_FN:
@@ -251,9 +254,6 @@ static Type const* type_fn_from_ptype(Registry* reg, PType const* ptype) {
 
     A3_SLL_FOR_EACH(Item, decl, &ptype->params, link) {
         assert(VERTEX(decl, item)->type == V_DECL);
-        decl->obj =
-            scope_add(reg->current_scope,
-                      (Obj) { .name = decl->name, .type = type_from_ptype(reg, decl->decl_ptype) });
         A3_SLL_ENQUEUE(&ret->params, decl, link);
     }
 
@@ -287,8 +287,14 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
     case PTY_FN:
         return type_fn_from_ptype(reg, ptype);
     case PTY_BUILTIN:
-        assert(ptype->builtin == TOK_INT);
-        return BUILTIN_TYPES[TY_INT];
+        switch (ptype->builtin) {
+        case TOK_INT:
+            return BUILTIN_TYPES[TY_INT];
+        case TOK_CHAR:
+            return BUILTIN_TYPES[TY_CHAR];
+        default:
+            A3_UNREACHABLE();
+        }
     }
 
     return ret;
@@ -304,11 +310,6 @@ static bool type_bin_op(AstVisitor* visitor, BinOp* op) {
     switch (op->type) {
     case OP_DIV:
     case OP_MUL:
-        if (op->lhs->res_type != op->rhs->res_type) {
-            type_error_mismatch(visitor->ctx, VERTEX(op, expr.bin_op), op->lhs->res_type,
-                                op->rhs->res_type);
-            return false;
-        }
         if (!type_is_scalar(op->lhs->res_type)) {
             A3String name = type_name(op->lhs->res_type);
             type_error(visitor->ctx, VERTEX(op->lhs, expr),
@@ -337,7 +338,8 @@ static bool type_bin_op(AstVisitor* visitor, BinOp* op) {
         EXPR(op, bin_op)->res_type = op->lhs->res_type;
         break;
     case OP_ASSIGN:
-        if (op->lhs->res_type != op->rhs->res_type &&
+        if ((!type_is_scalar(op->lhs->res_type) || !type_is_scalar(op->rhs->res_type)) &&
+            op->lhs->res_type != op->rhs->res_type &&
             (op->lhs->res_type->type != TY_PTR || op->rhs->res_type->type != TY_ARRAY ||
              op->lhs->res_type->parent != op->rhs->res_type->parent)) {
             type_error_mismatch(visitor->ctx, VERTEX(op, expr.bin_op), op->lhs->res_type,
@@ -402,6 +404,42 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
 
 static size_t align_up(size_t n, size_t align) { return (n + align - 1) & ~(align - 1); }
 
+static bool type_fn(AstVisitor* visitor, Item* decl) {
+    assert(visitor);
+    assert(decl);
+    assert(VERTEX(decl, item)->type == V_DECL && decl->decl_ptype->type == PTY_FN);
+
+    Registry* reg = visitor->ctx;
+
+    if (decl->body) {
+        reg_scope_push(reg);
+        reg->current_scope->fn = decl;
+        decl->body->scope      = reg->current_scope;
+    }
+
+    size_t stack_depth = 0;
+    A3_SLL_FOR_EACH(Item, param, &decl->decl_ptype->params, link) {
+        Type const* type = type_from_ptype(reg, param->decl_ptype);
+        stack_depth += type_size(type);
+        param->obj =
+            scope_add(reg->current_scope,
+                      (Obj) { .name = param->name, .type = type, .stack_offset = stack_depth });
+    }
+
+    decl->obj = scope_add(reg->current_scope->parent,
+                          (Obj) { .name        = decl->name,
+                                  .type        = type_from_ptype(reg, decl->decl_ptype),
+                                  .stack_depth = stack_depth });
+
+    if (decl->body) {
+        A3_TRYB(vertex_visit(visitor, VERTEX(decl->body, item.block)));
+        decl->obj->stack_depth = align_up(decl->obj->stack_depth, 16);
+        reg_scope_pop(reg);
+    }
+
+    return true;
+}
+
 static bool type_decl(AstVisitor* visitor, Item* decl) {
     assert(visitor);
     assert(decl);
@@ -414,24 +452,15 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
         return false;
     }
 
-    if (decl->decl_ptype->type == PTY_FN) {
-        reg_scope_push(reg);
-        decl->body->scope     = reg->current_scope;
-        decl->body->scope->fn = decl;
-    }
+    if (decl->decl_ptype->type == PTY_FN)
+        return type_fn(visitor, decl);
 
-    decl->obj =
-        scope_add(reg->current_scope,
-                  (Obj) { .name = decl->name, .type = type_from_ptype(reg, decl->decl_ptype) });
-
-    if (decl->obj->type->type == TY_FN) {
-        if (decl->body) {
-            A3_TRYB(vertex_visit(visitor, VERTEX(decl->body, item.block)));
-            decl->obj->stack_depth = align_up(decl->obj->stack_depth, 16);
-        }
-
-        reg_scope_pop(reg);
-    }
+    Type const* type = type_from_ptype(reg, decl->decl_ptype);
+    reg->current_scope->fn->obj->stack_depth += type_size(type);
+    decl->obj = scope_add(reg->current_scope,
+                          (Obj) { .name         = decl->name,
+                                  .type         = type,
+                                  .stack_offset = reg->current_scope->fn->obj->stack_depth });
 
     return true;
 }

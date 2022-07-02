@@ -318,7 +318,7 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
 }
 
 PType* ptype_builtin_new(TokenType type) {
-    assert(type == TOK_INT);
+    assert(type == TOK_INT || type == TOK_CHAR);
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
     *ret = (PType) { .type = PTY_BUILTIN, .builtin = type };

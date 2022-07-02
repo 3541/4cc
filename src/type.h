@@ -22,7 +22,7 @@ typedef struct Type     Type;
 typedef struct Registry Registry;
 typedef struct Scope    Scope;
 
-typedef enum TypeType { TY_ARRAY, TY_FN, TY_INT, TY_PTR } TypeType;
+typedef enum TypeType { TY_INT, TY_CHAR, TY_ARRAY, TY_FN, TY_PTR } TypeType;
 
 typedef struct Type {
     TypeType type;
@@ -48,7 +48,7 @@ typedef struct Obj {
     };
 } Obj;
 
-extern Type const* BUILTIN_TYPES[4];
+extern Type const* BUILTIN_TYPES[2];
 
 Registry* type_registry_new(void);
 A3String  type_name(Type const*);

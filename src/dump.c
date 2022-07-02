@@ -50,6 +50,24 @@ static bool dump_child(AstVisitor* visitor, Vertex* child) {
     return res;
 }
 
+static A3String dump_get_type(Type const* type) {
+    if (!type)
+        return a3_string_clone(A3_CS("(untyped)"));
+
+    A3String ret = type_name(type);
+    if (!ret.ptr)
+        return a3_string_clone(A3_CS("(untyped)"));
+
+    return ret;
+}
+
+static A3String dump_obj_type(Obj* obj) {
+    if (!obj)
+        return a3_string_clone(A3_CS("(untypted)"));
+
+    return dump_get_type(obj->type);
+}
+
 static bool dump_bin_op(AstVisitor* visitor, BinOp* op) {
     assert(visitor);
     assert(op);
@@ -91,7 +109,9 @@ static bool dump_bin_op(AstVisitor* visitor, BinOp* op) {
         break;
     }
 
-    dump_print(visitor->ctx, "BIN_OP(%s)", op_str);
+    A3String type = dump_get_type(EXPR(op, bin_op)->res_type);
+    dump_print(visitor->ctx, "BIN_OP<" A3_S_F ">(%s)", A3_S_FORMAT(type), op_str);
+    a3_string_free(&type);
 
     A3_TRYB(dump_child(visitor, VERTEX(op->lhs, expr)));
     return dump_child(visitor, VERTEX(op->rhs, expr));
@@ -117,7 +137,9 @@ static bool dump_unary_op(AstVisitor* visitor, UnaryOp* op) {
         break;
     }
 
-    dump_print(visitor->ctx, "UNARY_OP(%s)", op_str);
+    A3String type = dump_get_type(EXPR(op, unary_op)->res_type);
+    dump_print(visitor->ctx, "UNARY_OP<" A3_S_F ">(%s)", A3_S_FORMAT(type), op_str);
+    a3_string_free(&type);
 
     return dump_child(visitor, VERTEX(op->operand, expr));
 }
@@ -139,17 +161,11 @@ static bool dump_var(AstVisitor* visitor, Var* var) {
     assert(visitor);
     assert(var);
 
-    A3String name = A3_S_NULL;
-    if (var->obj && var->obj->type)
-        name = type_name(var->obj->type);
-
-    A3CString ty = name.ptr ? A3_S_CONST(name) : A3_CS("(untyped)");
-    dump_print(visitor->ctx, "VAR<" A3_S_F ">(" A3_S_F ")", A3_S_FORMAT(ty),
+    A3String type = dump_obj_type(var->obj);
+    dump_print(visitor->ctx, "VAR<" A3_S_F ">(" A3_S_F ")", A3_S_FORMAT(type),
                A3_S_FORMAT(var->name));
 
-    if (name.ptr)
-        a3_string_free(&name);
-
+    a3_string_free(&type);
     return true;
 }
 
@@ -236,16 +252,13 @@ static bool dump_fn(AstVisitor* visitor, Item* fn) {
     assert(fn);
     assert(fn->obj->type->type == TY_FN);
 
-    A3String  fn_type   = type_name(fn->obj->type);
-    A3CString type_name = fn_type.ptr ? A3_S_CONST(fn_type) : A3_CS("(untyped)");
-
-    dump_print(visitor->ctx, "FN<" A3_S_F ">(" A3_S_F ")", A3_S_FORMAT(type_name),
+    A3String type = dump_obj_type(fn->obj);
+    dump_print(visitor->ctx, "FN<" A3_S_F ">(" A3_S_F ")", A3_S_FORMAT(type),
                A3_S_FORMAT(fn->name));
     if (fn->body)
         A3_TRYB(dump_child(visitor, VERTEX(fn->body, item.block)));
 
-    if (fn_type.ptr)
-        a3_string_free(&fn_type);
+    a3_string_free(&type);
 
     return true;
 }

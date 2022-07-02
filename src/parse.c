@@ -86,7 +86,8 @@ static bool parse_has_next(Parser* parser) {
 static bool parse_has_decl(Parser* parser) {
     assert(parser);
 
-    return lex_peek(parser->lexer).type == TOK_INT;
+    Token next = lex_peek(parser->lexer);
+    return next.type == TOK_INT || next.type == TOK_CHAR;
 }
 
 static BinOpType parse_bin_op(TokenType type) {
@@ -436,10 +437,13 @@ static Item* parse_stmt(Parser* parser) {
 static PType* parse_declspec(Parser* parser) {
     assert(parser);
 
-    if (!parse_consume(parser, A3_CS("type name"), TOK_INT))
+    Token next = lex_next(parser->lexer);
+    if (next.type != TOK_INT && next.type != TOK_CHAR) {
+        parse_error(parser, next, "Expected a type name.");
         return NULL;
+    }
 
-    return ptype_builtin_new(TOK_INT);
+    return ptype_builtin_new(next.type);
 }
 
 static PType* parse_decl_suffix_fn(Parser* parser, PType* base) {
