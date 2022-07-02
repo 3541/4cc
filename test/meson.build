@@ -123,7 +123,7 @@ foreach suite, ts : tests
   endforeach
 endforeach
 
-extra_stage = 3
+extra_stage = 4
 foreach stage : range(1, extra_stage)
   extra_tests = run_command(
     [
