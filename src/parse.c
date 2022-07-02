@@ -152,7 +152,11 @@ static Expr* parse_var(Parser* parser) {
 static Expr* parse_call(Parser* parser, Expr* callee) {
     assert(parser);
     assert(callee);
-    assert(callee->type == EXPR_VAR);
+
+    if (callee->type != EXPR_VAR) {
+        parse_error(parser, lex_next(parser->lexer), "Call of non-function.");
+        return NULL;
+    }
 
     Token tok_left = lex_next(parser->lexer);
     assert(tok_left.type == TOK_LPAREN);
@@ -283,6 +287,9 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
 
             continue;
         }
+
+        if (!lhs)
+            return NULL;
 
         if (!INFIX_PRECEDENCE[tok_op.type][0] || INFIX_PRECEDENCE[tok_op.type][0] < precedence)
             break;
