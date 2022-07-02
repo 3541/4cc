@@ -42,7 +42,10 @@ typedef struct Type {
 typedef struct Obj {
     A3CString   name;
     Type const* type;
-    size_t      stack_offset;
+    union {
+        size_t stack_offset;
+        size_t stack_depth; // TY_FN.
+    };
 } Obj;
 
 extern Type const* BUILTIN_TYPES[4];

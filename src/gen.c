@@ -305,24 +305,27 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
     return true;
 }
 
-static bool gen_fn(AstVisitor* visitor, Fn* fn) {
+static bool gen_decl(AstVisitor* visitor, Item* decl) {
     assert(visitor);
-    assert(fn);
+    assert(decl);
+
+    if (!decl->obj || decl->obj->type->type != TY_FN)
+        return true;
 
     printf("\nglobal " A3_S_F "\n"
            "" A3_S_F ":\n"
            "push rbp\n"
            "mov rbp, rsp\n"
            "sub rsp, %zu\n",
-           A3_S_FORMAT(fn->name), A3_S_FORMAT(fn->name), fn->stack_depth);
+           A3_S_FORMAT(decl->name), A3_S_FORMAT(decl->name), decl->obj->stack_depth);
 
     size_t i = 0;
-    A3_SLL_FOR_EACH(Item, param, &fn->type->params, link) {
+    A3_SLL_FOR_EACH(Item, param, &decl->obj->type->params, link) {
         printf("mov [rbp - %zu], %s\n", param->obj->stack_offset, CALL_REGISTERS[i++]);
         assert(i <= 6);
     }
 
-    A3_TRYB(vertex_visit(visitor, VERTEX(fn->body, item.block)));
+    A3_TRYB(vertex_visit(visitor, VERTEX(decl->body, item.block)));
     assert(!((Generator*)visitor->ctx)->stack_depth);
 
     puts(".ret:\n"
@@ -401,7 +404,7 @@ bool gen(A3CString src, Vertex* root) {
             .visit_call     = gen_call,
             .visit_ret      = gen_ret,
             .visit_if       = gen_if,
-            .visit_fn       = gen_fn,
+            .visit_decl     = gen_decl,
             .visit_loop     = gen_loop,
         },
         root);

@@ -30,7 +30,6 @@ typedef struct PType  PType;
 typedef enum VertexType {
     V_DECL,
     V_EXPR,
-    V_FN,
     V_STMT,
     V_UNIT,
 } VertexType;
@@ -66,19 +65,6 @@ typedef struct Block {
     A3_SLL(body, Item) body;
     Scope* scope;
 } Block;
-
-typedef struct Fn Fn;
-typedef struct Fn {
-    A3CString name;
-    A3_SLL_LINK(Fn) link;
-    Block* body;
-    size_t stack_depth;
-
-    union {
-        PType*      ptype;
-        Type const* type;
-    };
-} Fn;
 
 typedef struct BinOp {
     BinOpType type;
@@ -184,12 +170,15 @@ typedef struct Item {
                 PType* decl_ptype;
                 Obj*   obj;
             };
+            union {
+                Block* body; // TY_FN.
+            };
         };
     };
 } Item;
 
 typedef struct Unit {
-    A3_SLL(fns, Fn) fns;
+    A3_SLL(items, Item) items;
 } Unit;
 
 typedef struct Vertex {
@@ -199,7 +188,6 @@ typedef struct Vertex {
     union {
         Expr expr;
         Item item;
-        Fn   fn;
         Unit unit;
     };
 } Vertex;
@@ -226,7 +214,6 @@ typedef struct AstVisitor {
     bool (*visit_if)(AstVisitor*, If*);
     bool (*visit_block)(AstVisitor*, Block*);
     bool (*visit_loop)(AstVisitor*, Loop*);
-    bool (*visit_fn)(AstVisitor*, Fn*);
 } AstVisitor;
 
 Expr*  vertex_bin_op_new(A3CString span, BinOpType, Expr* lhs, Expr* rhs);
@@ -240,7 +227,6 @@ Item*  vertex_empty_new(A3CString span);
 Item*  vertex_decl_new(A3CString span, A3CString name, PType*);
 If*    vertex_if_new(A3CString span, Expr* cond, Item* body_true, Item* body_false);
 Block* vertex_block_new(void);
-Fn*    vertex_fn_new(A3CString span, A3CString name, PType* type, Block* body);
 Loop*  vertex_loop_new(A3CString span, Item* init, Expr* cond, Expr* post, Item* body);
 Unit*  vertex_unit_new(void);
 bool   vertex_visit(AstVisitor*, Vertex*);

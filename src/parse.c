@@ -627,7 +627,7 @@ static Block* parse_block(Parser* parser) {
     return block;
 }
 
-static Fn* parse_fn(Parser* parser) {
+static Item* parse_fn(Parser* parser) {
     assert(parser);
 
     PType* base = parse_declspec(parser);
@@ -639,11 +639,10 @@ static Fn* parse_fn(Parser* parser) {
     if (!body)
         return NULL;
 
-    Fn* ret = vertex_fn_new(parse_span_merge(SPAN(decl, item), SPAN(body, item.block)), decl->name,
-                            decl->decl_ptype, body);
-    free(VERTEX(decl, item));
+    decl->body       = body;
+    SPAN(decl, item) = parse_span_merge(SPAN(decl, item), SPAN(body, item.block));
 
-    return ret;
+    return decl;
 }
 
 Vertex* parse(Parser* parser) {
@@ -652,11 +651,11 @@ Vertex* parse(Parser* parser) {
     Unit* unit = vertex_unit_new();
 
     while (parse_has_next(parser)) {
-        Fn* fn = parse_fn(parser);
+        Item* fn = parse_fn(parser);
         if (!fn)
             break;
 
-        A3_SLL_ENQUEUE(&unit->fns, fn, link);
+        A3_SLL_ENQUEUE(&unit->items, fn, link);
     }
 
     Token next = lex_peek(parser->lexer);

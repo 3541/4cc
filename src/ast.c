@@ -100,20 +100,6 @@ Block* vertex_block_new(void) {
     return &ret->item.block;
 }
 
-Fn* vertex_fn_new(A3CString span, A3CString name, PType* type, Block* body) {
-    assert(span.ptr);
-    assert(name.ptr);
-    assert(type);
-    assert(body);
-
-    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .type = V_FN,
-                      .span = span,
-                      .fn   = { .name = name, .stack_depth = 0, .body = body, .ptype = type } };
-
-    return &ret->fn;
-}
-
 Expr* vertex_var_new(A3CString span) {
     assert(span.ptr);
 
@@ -170,7 +156,7 @@ Loop* vertex_loop_new(A3CString span, Item* init, Expr* cond, Expr* post, Item* 
 Unit* vertex_unit_new(void) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret = (Vertex) { .type = V_UNIT };
-    A3_SLL_INIT(&ret->unit.fns);
+    A3_SLL_INIT(&ret->unit.items);
 
     return &ret->unit;
 }
@@ -265,14 +251,10 @@ static bool visit_decl(AstVisitor* visitor, Item* decl) {
     assert(decl);
     assert(VERTEX(decl, item)->type == V_DECL);
 
+    if (decl->body)
+        return vertex_visit(visitor, VERTEX(decl->body, item.block));
+
     return true;
-}
-
-static bool visit_fn(AstVisitor* visitor, Fn* fn) {
-    assert(visitor);
-    assert(fn);
-
-    return vertex_visit(visitor, VERTEX(fn->body, item.block));
 }
 
 static bool visit_call(AstVisitor* visitor, Call* call) {
@@ -294,8 +276,8 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
 
     switch (vertex->type) {
     case V_UNIT:
-        A3_SLL_FOR_EACH(Fn, fn, &vertex->unit.fns, link) {
-            A3_TRYB(vertex_visit(visitor, VERTEX(fn, fn)));
+        A3_SLL_FOR_EACH(Item, item, &vertex->unit.items, link) {
+            A3_TRYB(vertex_visit(visitor, VERTEX(item, item)));
         }
         return true;
     case V_EXPR:
@@ -330,8 +312,6 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
         break;
     case V_DECL:
         return VISIT(visitor, visit_decl, &vertex->item);
-    case V_FN:
-        return VISIT(visitor, visit_fn, &vertex->fn);
     }
 
     A3_UNREACHABLE();

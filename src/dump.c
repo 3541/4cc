@@ -184,21 +184,6 @@ static bool dump_ret(AstVisitor* visitor, Item* ret) {
     return dump_child(visitor, VERTEX(ret->expr, expr));
 }
 
-static bool dump_decl(AstVisitor* visitor, Item* decl) {
-    assert(visitor);
-    assert(VERTEX(decl, item)->type == V_DECL);
-
-    A3String  type = type_name(decl->obj->type);
-    A3CString name = type.ptr ? A3_S_CONST(type) : A3_CS("(untyped)");
-
-    dump_print(visitor->ctx, "DECL<" A3_S_F ">(" A3_S_F ")", A3_S_FORMAT(name),
-               A3_S_FORMAT(decl->name));
-
-    if (type.ptr)
-        a3_string_free(&type);
-    return true;
-}
-
 static bool dump_if(AstVisitor* visitor, If* if_stmt) {
     assert(visitor);
     assert(if_stmt);
@@ -246,21 +231,40 @@ static bool dump_loop(AstVisitor* visitor, Loop* loop) {
     return true;
 }
 
-static bool dump_fn(AstVisitor* visitor, Fn* fn) {
+static bool dump_fn(AstVisitor* visitor, Item* fn) {
     assert(visitor);
     assert(fn);
-    assert(fn->type->type == TY_FN);
+    assert(fn->obj->type->type == TY_FN);
 
-    A3String  fn_type   = type_name(fn->type);
+    A3String  fn_type   = type_name(fn->obj->type);
     A3CString type_name = fn_type.ptr ? A3_S_CONST(fn_type) : A3_CS("(untyped)");
 
     dump_print(visitor->ctx, "FN<" A3_S_F ">(" A3_S_F ")", A3_S_FORMAT(type_name),
                A3_S_FORMAT(fn->name));
-    A3_TRYB(dump_child(visitor, VERTEX(fn->body, item.block)));
+    if (fn->body)
+        A3_TRYB(dump_child(visitor, VERTEX(fn->body, item.block)));
 
     if (fn_type.ptr)
         a3_string_free(&fn_type);
 
+    return true;
+}
+
+static bool dump_decl(AstVisitor* visitor, Item* decl) {
+    assert(visitor);
+    assert(VERTEX(decl, item)->type == V_DECL);
+
+    if (decl->obj->type->type == TY_FN)
+        return dump_fn(visitor, decl);
+
+    A3String  type = type_name(decl->obj->type);
+    A3CString name = type.ptr ? A3_S_CONST(type) : A3_CS("(untyped)");
+
+    dump_print(visitor->ctx, "DECL<" A3_S_F ">(" A3_S_F ")", A3_S_FORMAT(name),
+               A3_S_FORMAT(decl->name));
+
+    if (type.ptr)
+        a3_string_free(&type);
     return true;
 }
 
@@ -283,7 +287,6 @@ bool dump(Vertex* root) {
             .visit_if        = dump_if,
             .visit_block     = dump_block,
             .visit_loop      = dump_loop,
-            .visit_fn        = dump_fn,
         },
         root);
 
