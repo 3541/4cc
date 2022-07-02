@@ -251,8 +251,11 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
 
         lex_next(parser->lexer);
         Expr* rhs = parse_expr(parser, PREFIX_PRECEDENCE[tok.type]);
-        lhs       = vertex_unary_op_new(parse_span_merge(tok.lexeme, SPAN(rhs, expr)),
-                                        parse_unary_op(tok.type), rhs);
+        if (!rhs)
+            return NULL;
+
+        lhs = vertex_unary_op_new(parse_span_merge(tok.lexeme, SPAN(rhs, expr)),
+                                  parse_unary_op(tok.type), rhs);
         break;
 
         return NULL;
@@ -285,8 +288,11 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
         lex_next(parser->lexer);
 
         Expr* rhs = parse_expr(parser, INFIX_PRECEDENCE[tok_op.type][1]);
-        lhs       = vertex_bin_op_new(parse_span_merge(SPAN(lhs, expr), SPAN(rhs, expr)),
-                                      parse_bin_op(tok_op.type), lhs, rhs);
+        if (!rhs)
+            return NULL;
+
+        lhs = vertex_bin_op_new(parse_span_merge(SPAN(lhs, expr), SPAN(rhs, expr)),
+                                parse_bin_op(tok_op.type), lhs, rhs);
     }
 
     return lhs;

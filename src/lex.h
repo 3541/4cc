@@ -47,10 +47,10 @@ typedef enum TokenType {
     TOK_VOID,
     TOK_WHILE,
 
-    TOK_COUNT,
-
     TOK_EOF,
-    TOK_ERR
+    TOK_ERR,
+
+    TOK_COUNT
 } TokenType;
 
 typedef struct Token {
