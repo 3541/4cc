@@ -19,6 +19,9 @@
 // ast.h
 typedef struct Vertex Vertex;
 
+// config.h
+typedef struct Config Config;
+
 #define GEN_OK  true
 #define GEN_ERR false
-bool gen(FILE* out, A3CString src, Vertex*);
+bool gen(Config const*, A3CString src, Vertex*);

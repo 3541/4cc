@@ -22,6 +22,7 @@
 #include <a3/util.h>
 
 #include "ast.h"
+#include "config.h"
 #include "error.h"
 #include "type.h"
 
@@ -29,11 +30,11 @@ static char* REGISTERS_8[]  = { "dil", "sil", "dl", "cl", "r8b", "r9b" };
 static char* REGISTERS_64[] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
 
 typedef struct Generator {
-    FILE*     out;
-    A3CString src;
-    size_t    stack_depth;
-    size_t    label;
-    size_t    line;
+    Config const* cfg;
+    A3CString     src;
+    size_t        stack_depth;
+    size_t        label;
+    size_t        line;
 } Generator;
 
 static size_t gen_label(Generator* gen) {
@@ -62,8 +63,8 @@ static void gen_asm(Generator* gen, char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
 
-    vfprintf(gen->out, fmt, args);
-    fputc('\n', gen->out);
+    vfprintf(gen->cfg->out, fmt, args);
+    fputc('\n', gen->cfg->out);
 
     va_end(args);
 }
@@ -113,7 +114,7 @@ static bool gen_line(AstVisitor* visitor, Vertex* vertex) {
     if (gen->line >= vertex->span.line)
         return true;
 
-    gen_asm(gen, "%%line %zu+0", vertex->span.line);
+    gen_asm(gen, "%%line %zu+0 " A3_S_F, vertex->span.line, A3_S_FORMAT(gen->cfg->src));
     gen->line = vertex->span.line;
 
     return true;
@@ -477,13 +478,13 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
     return true;
 }
 
-bool gen(FILE* out, A3CString src, Vertex* root) {
-    assert(out);
+bool gen(Config const* cfg, A3CString src, Vertex* root) {
+    assert(cfg);
     assert(src.ptr);
     assert(root);
     assert(root->type == V_UNIT);
 
-    Generator gen = { .out = out, .src = src, .stack_depth = 0, .label = 0, .line = 0 };
+    Generator gen = { .cfg = cfg, .src = src, .stack_depth = 0, .label = 0, .line = 0 };
 
     gen_asm(&gen, "section .data");
     A3_SLL_FOR_EACH(Item, decl, &root->unit.items, link) {
@@ -494,18 +495,20 @@ bool gen(FILE* out, A3CString src, Vertex* root) {
 
         gen_asm(&gen, "global " A3_S_F, A3_S_FORMAT(decl->obj->name));
         if (decl->lit_str.ptr) {
-            fprintf(gen.out, A3_S_F ": db ", A3_S_FORMAT(decl->obj->name));
+            fprintf(gen.cfg->out, A3_S_F ": db ", A3_S_FORMAT(decl->obj->name));
 
             for (size_t i = 0; i < decl->lit_str.len; i++)
-                fprintf(gen.out, "%d,", decl->lit_str.ptr[i]);
+                fprintf(gen.cfg->out, "%d,", decl->lit_str.ptr[i]);
             gen_asm(&gen, "0");
         } else {
             gen_asm(&gen, A3_S_F ": dq 0", A3_S_FORMAT(decl->obj->name));
         }
     }
 
-    gen_asm(&gen, "\nsection .text\n"
-                  "%%line 0+0");
+    gen_asm(&gen,
+            "\nsection .text\n"
+            "%%line 0+0 " A3_S_F,
+            A3_S_FORMAT(gen.cfg->src));
 
     bool ret = vertex_visit(
         &(AstVisitor) {

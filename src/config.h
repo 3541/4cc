@@ -9,9 +9,12 @@
 
 #pragma once
 
+#include <stdio.h>
+
 #include <a3/str.h>
 
 typedef struct Config {
     A3CString src;
-    A3CString out;
+    A3CString out_path;
+    FILE*     out;
 } Config;

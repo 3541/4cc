@@ -78,15 +78,20 @@ static Config arg_parse(size_t argc, char const* argv[]) {
 
         switch (argv[i][1]) {
         case 'o':
+            if (ret.out_path.ptr) {
+                fprintf(stderr, "-o specified multiple times.\n");
+                exit(-1);
+            }
+
             if (argv[i][2]) {
-                ret.out = a3_cstring_from(&argv[i][2]);
+                ret.out_path = a3_cstring_from(&argv[i][2]);
             } else {
                 if (i + 1 >= argc || !*argv[i + 1]) {
                     fprintf(stderr, "Missing output file.\n");
                     exit(-1);
                 }
 
-                ret.out = a3_cstring_from(argv[++i]);
+                ret.out_path = a3_cstring_from(argv[++i]);
             }
 
             break;
@@ -111,10 +116,10 @@ int main(int argc, char const* argv[]) {
     if (!src.ptr)
         return -1;
 
-    FILE* out = stdout;
-    if (cfg.out.ptr)
-        out = fopen(a3_string_cstr(cfg.out), "w");
-    if (!out) {
+    cfg.out = stdout;
+    if (cfg.out_path.ptr)
+        cfg.out = fopen(a3_string_cstr(cfg.out_path), "w");
+    if (!cfg.out) {
         fprintf(stderr, "Failed to open output file.\n");
         return -1;
     }
@@ -132,7 +137,7 @@ int main(int argc, char const* argv[]) {
 
     dump(root);
 
-    if (!gen(out, src, root))
+    if (!gen(&cfg, src, root))
         return -1;
 
     return 0;
