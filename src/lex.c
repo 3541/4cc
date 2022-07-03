@@ -300,10 +300,10 @@ static Token lex_ident_or_kw(Lexer* lexer) {
     static struct {
         A3CString name;
         TokenType type;
-    } KEYWORDS[] = { { A3_CS("return"), TOK_RET },  { A3_CS("if"), TOK_IF },
-                     { A3_CS("else"), TOK_ELSE },   { A3_CS("for"), TOK_FOR },
-                     { A3_CS("while"), TOK_WHILE }, { A3_CS("int"), TOK_INT },
-                     { A3_CS("void"), TOK_VOID },   { A3_CS("char"), TOK_CHAR } };
+    } const KEYWORDS[] = { { A3_CS("return"), TOK_RET },  { A3_CS("if"), TOK_IF },
+                           { A3_CS("else"), TOK_ELSE },   { A3_CS("for"), TOK_FOR },
+                           { A3_CS("while"), TOK_WHILE }, { A3_CS("int"), TOK_INT },
+                           { A3_CS("void"), TOK_VOID },   { A3_CS("char"), TOK_CHAR } };
 
     A3CString lexeme = lex_consume_until(lexer, is_not_ident);
     if (!a3_string_cptr(lexeme))
@@ -317,25 +317,119 @@ static Token lex_ident_or_kw(Lexer* lexer) {
     return (Token) { .type = TOK_IDENT, .lexeme = lexeme };
 }
 
+static size_t lex_escape(A3CString e, uint8_t* o) {
+    switch (*e.ptr) {
+    case '\'':
+        *o = '\'';
+        return 1;
+    case '"':
+        *o = '"';
+        return 1;
+    case '?':
+        *o = '?';
+        return 1;
+    case '\\':
+        *o = '\\';
+        return 1;
+    case 'a':
+        *o = '\a';
+        return 1;
+    case 'b':
+        *o = '\b';
+        return 1;
+    case 'e':
+        *o = '\e';
+        return 1;
+    case 'f':
+        *o = '\f';
+        return 1;
+    case 'n':
+        *o = '\n';
+        return 1;
+    case 'r':
+        *o = '\r';
+        return 1;
+    case 't':
+        *o = '\t';
+        return 1;
+    case 'v':
+        *o = '\v';
+        return 1;
+    case 'x': {
+        size_t  i   = 1;
+        uint8_t num = 0;
+        for (; i < MIN(3, e.len) && isxdigit(e.ptr[i]); i++) {
+            num *= 16;
+
+            uint8_t c = (uint8_t)tolower(e.ptr[i]);
+            if ('a' <= c && c <= 'f')
+                num += (uint8_t)(c - 'a' + 10);
+            else
+                num += (uint8_t)(c - '0');
+        }
+
+        *o = num;
+        return i;
+    }
+    default:
+        if (is_digit(*e.ptr) && *e.ptr < '8') {
+            uint16_t num = 0;
+
+            size_t i = 0;
+            for (; i < MIN(3, e.len) && is_digit(e.ptr[i]) && e.ptr[i] < '8'; i++) {
+                num *= 8;
+                num += (uint16_t)(e.ptr[i] - '0');
+            }
+
+            if (num > UINT8_MAX)
+                return 0;
+
+            *o = (uint8_t)num;
+            return i;
+        }
+
+        return 0;
+    }
+}
+
 static Token lex_lit_str(Lexer* lexer) {
     assert(lexer);
     assert(lex_peek_byte(lexer) == '"');
 
     A3CString s   = lex_peek_str(lexer);
-    A3CString lit = a3_cstring_new(s.ptr + 1, 1);
+    A3Buffer* buf = a3_buf_new(32, 1024);
 
-    while (lit.ptr[lit.len - 1] && lit.ptr[lit.len - 1] != '"' && lit.ptr[lit.len - 1] != '\n' &&
-           lit.len < s.len - 1)
-        lit.len++;
-    if (lit.ptr[lit.len - 1] != '"') {
+    for (size_t i = 1; i < s.len; i++) {
+        switch (s.ptr[i]) {
+        case '"':
+            s.len = i + 1;
+            break;
+        case '\\': {
+            uint8_t c;
+            i++;
+            size_t len;
+            if (i >= s.len ||
+                !(len = lex_escape(A3_S_CONST(a3_string_offset(A3_CS_MUT(s), i)), &c))) {
+                lex_error(lexer, "Invalid escape sequence.");
+                return lex_recover(lexer);
+            }
+
+            a3_buf_write_byte(buf, c);
+            i += len - 1;
+            break;
+        }
+        default:
+            a3_buf_write_byte(buf, s.ptr[i]);
+        }
+    }
+
+    if (s.ptr[s.len - 1] != '"') {
         lex_error(lexer, "Bad string literal.");
         return lex_recover(lexer);
     }
-    s.len = lit.len + 1;
-    lit.len--;
 
     lex_consume_any(lexer, s.len);
-    return (Token) { .type = TOK_LIT_STR, .lexeme = s, .lit_str = lit };
+    return (Token) { .type = TOK_LIT_STR, .lexeme = s, .lit_str = a3_buf_read_ptr(buf) };
 }
 
 Token lex_peek(Lexer* lexer) {

@@ -30,13 +30,13 @@ exit = result.returncode
 os.remove(binary_path)
 
 if output_path.endswith(".out"):
-    output = open(output_path).read().strip()
+    output = open(output_path).read()
 else:
     p = subprocess.run([output_path])
     output = str(p.returncode)
 
-if output.isdigit():
-    expected_status = output
+if output.strip().isdigit():
+    expected_status = output.strip()
 else:
     expected_status = "0"
 
@@ -45,5 +45,6 @@ if str(exit) != expected_status:
     sys.exit(-1)
 
 stdout = result.stdout.decode("utf-8")
-if not output.isdigit() and stdout != output:
+if not output.strip().isdigit() and stdout != output:
     print(f"FAIL: Expected output \"{output}\", but got \"{stdout}\".")
+    sys.exit(-1)

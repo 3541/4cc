@@ -113,6 +113,23 @@ tests = {
     'index',
     'arithmetic',
     'arg'
+  ],
+  'escape': [
+    'single_quote',
+    'double_quote',
+    'question',
+    'backslash',
+    'bell',
+    'backspace',
+    'escape',
+    'form_feed',
+    'lf',
+    'cr',
+    'tab',
+    'vtab',
+    'text',
+    'octal',
+    'hex'
   ]
 }
 
