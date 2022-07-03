@@ -1,5 +1,7 @@
 fs = import('fs')
 
+c = meson.get_compiler('c')
+
 python = find_program('python3')
 tests = {
   'expr': [
@@ -123,6 +125,7 @@ foreach suite, ts : tests
   endforeach
 endforeach
 
+test_bin_cflags = c.get_supported_arguments('-w')
 foreach stage : ['1', '2', '3', '4', '5']
   extra_tests = run_command(
     [
@@ -137,7 +140,12 @@ foreach stage : ['1', '2', '3', '4', '5']
 
   foreach t : extra_tests
     name = fs.stem(t)
-    correct = executable(stage + '_' + name, t, override_options: 'warning_level=0')
+    correct = executable(
+      stage + '_' + name,
+      t,
+      override_options: 'warning_level=0',
+      c_args: test_bin_cflags
+    )
 
     test(
       'extra' / stage / name,
