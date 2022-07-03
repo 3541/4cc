@@ -29,6 +29,7 @@ static char* REGISTERS_8[]  = { "dil", "sil", "dl", "cl", "r8b", "r9b" };
 static char* REGISTERS_64[] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
 
 typedef struct Generator {
+    FILE*     out;
     A3CString src;
     size_t    stack_depth;
     size_t    label;
@@ -54,11 +55,24 @@ static void gen_error(Generator* gen, Vertex* vertex, char* fmt, ...) {
     va_end(args);
 }
 
+A3_FORMAT_FN(2, 3)
+static void gen_asm(Generator* gen, char* fmt, ...) {
+    assert(gen);
+
+    va_list args;
+    va_start(args, fmt);
+
+    vfprintf(gen->out, fmt, args);
+    fputc('\n', gen->out);
+
+    va_end(args);
+}
+
 static void gen_stack_push(Generator* gen) {
     assert(gen);
     assert(gen);
 
-    puts("push rax");
+    gen_asm(gen, "push rax");
     gen->stack_depth++;
 }
 
@@ -66,17 +80,18 @@ static void gen_stack_pop(Generator* gen, char* reg) {
     assert(gen);
     assert(gen->stack_depth);
 
-    printf("pop %s\n", reg);
+    gen_asm(gen, "pop %s", reg);
     gen->stack_depth--;
 }
 
-static void gen_load(Type const* type) {
+static void gen_load(Generator* gen, Type const* type) {
+    assert(gen);
     assert(type);
 
     if (type->type == TY_ARRAY)
         return;
 
-    puts("mov rax, [rax]");
+    gen_asm(gen, "mov rax, [rax]");
 }
 
 static void gen_store(Generator* gen, Type const* type) {
@@ -85,9 +100,9 @@ static void gen_store(Generator* gen, Type const* type) {
     gen_stack_pop(gen, "rdi");
 
     if (type_size(type) == 1)
-        puts("mov BYTE [rdi], al");
+        gen_asm(gen, "mov BYTE [rdi], al");
     else
-        puts("mov [rdi], rax");
+        gen_asm(gen, "mov [rdi], rax");
 }
 
 static bool gen_line(AstVisitor* visitor, Vertex* vertex) {
@@ -95,10 +110,10 @@ static bool gen_line(AstVisitor* visitor, Vertex* vertex) {
     assert(vertex);
 
     Generator* gen = visitor->ctx;
-    if (gen->line == vertex->span.line)
+    if (gen->line >= vertex->span.line)
         return true;
 
-    printf("%%line %zu+0\n", vertex->span.line);
+    gen_asm(gen, "%%line %zu+0", vertex->span.line);
     gen->line = vertex->span.line;
 
     return true;
@@ -107,9 +122,8 @@ static bool gen_line(AstVisitor* visitor, Vertex* vertex) {
 static bool gen_lit(AstVisitor* visitor, Literal* lit) {
     assert(visitor);
     assert(lit->type == LIT_NUM);
-    (void)visitor;
 
-    printf("mov rax, %" PRId64 "\n", lit->num);
+    gen_asm(visitor->ctx, "mov rax, %" PRId64, lit->num);
     return true;
 }
 
@@ -120,9 +134,9 @@ static bool gen_addr(AstVisitor* visitor, Expr* lvalue) {
     switch (lvalue->type) {
     case EXPR_VAR:
         if (lvalue->var.obj->global)
-            printf("lea rax, [rel " A3_S_F "]\n", A3_S_FORMAT(lvalue->var.obj->name));
+            gen_asm(visitor->ctx, "lea rax, [rel " A3_S_F "]", A3_S_FORMAT(lvalue->var.obj->name));
         else
-            printf("lea rax, [rbp - %zu]\n", lvalue->var.obj->stack_offset);
+            gen_asm(visitor->ctx, "lea rax, [rbp - %zu]", lvalue->var.obj->stack_offset);
         break;
     case EXPR_UNARY_OP:
         if (lvalue->unary_op.type == OP_DEREF) {
@@ -152,7 +166,8 @@ static bool gen_assign(AstVisitor* visitor, BinOp* op) {
     return true;
 }
 
-static bool gen_add_sub(BinOp* op) {
+static bool gen_add_sub(Generator* gen, BinOp* op) {
+    assert(gen);
     assert(op);
     assert(op->type == OP_ADD || op->type == OP_SUB);
 
@@ -174,17 +189,18 @@ static bool gen_add_sub(BinOp* op) {
         }
 
         if (type_size(ptr_type->parent) != 1)
-            printf("imul %s, %zu\n", scalar_reg, type_size(ptr_type->parent));
+            gen_asm(gen, "imul %s, %zu", scalar_reg, type_size(ptr_type->parent));
     }
 
-    printf("%s rax, rdi\n", insn);
+    gen_asm(gen, "%s rax, rdi", insn);
 
     // Pointer difference is in units of elements.
     if (op->type == OP_SUB && count_scalar == 0) {
-        printf("cqo\n"
-               "mov rsi, %zu\n"
-               "idiv rsi\n",
-               type_size(op->lhs->res_type));
+        gen_asm(gen,
+                "cqo\n"
+                "mov rsi, %zu\n"
+                "idiv rsi",
+                type_size(op->lhs->res_type));
     }
 
     return true;
@@ -198,18 +214,20 @@ static bool gen_bool_op(AstVisitor* visitor, BinOp* op) {
     A3_TRYB(vertex_visit(visitor, VERTEX(op->lhs, expr)));
 
     size_t label = gen_label(visitor->ctx);
-    printf("test rax, rax\n"
-           "setnz al\n"
-           "movzx rax, al\n"
-           "%s .end%zu\n",
-           op->type == OP_AND ? "jz" : "jnz", label);
+    gen_asm(visitor->ctx,
+            "test rax, rax\n"
+            "setnz al\n"
+            "movzx rax, al\n"
+            "%s .end%zu",
+            op->type == OP_AND ? "jz" : "jnz", label);
 
     A3_TRYB(vertex_visit(visitor, VERTEX(op->rhs, expr)));
-    printf("test rax, rax\n"
-           "setnz al\n"
-           "movzx rax, al\n"
-           ".end%zu:\n",
-           label);
+    gen_asm(visitor->ctx,
+            "test rax, rax\n"
+            "setnz al\n"
+            "movzx rax, al\n"
+            ".end%zu:",
+            label);
 
     return true;
 }
@@ -233,15 +251,15 @@ static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
     switch (op->type) {
     case OP_ADD:
     case OP_SUB: {
-        A3_TRYB(gen_add_sub(op));
+        A3_TRYB(gen_add_sub(visitor->ctx, op));
         break;
     }
     case OP_MUL:
-        puts("imul rax, rdi");
+        gen_asm(visitor->ctx, "imul rax, rdi");
         break;
     case OP_DIV:
-        puts("cqo\n"
-             "idiv rdi");
+        gen_asm(visitor->ctx, "cqo\n"
+                              "idiv rdi");
         break;
     case OP_EQ:
     case OP_NE:
@@ -249,7 +267,7 @@ static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
     case OP_LE:
     case OP_GT:
     case OP_GE: {
-        puts("cmp rax, rdi");
+        gen_asm(visitor->ctx, "cmp rax, rdi");
 
         char* insn;
         switch (op->type) {
@@ -275,9 +293,10 @@ static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
             A3_UNREACHABLE();
         }
 
-        printf("%s al\n"
-               "movzx rax, al\n",
-               insn);
+        gen_asm(visitor->ctx,
+                "%s al\n"
+                "movzx rax, al",
+                insn);
         break;
     }
     case OP_ASSIGN:
@@ -302,18 +321,18 @@ static bool gen_unary_op(AstVisitor* visitor, UnaryOp* op) {
     case OP_UNARY_ADD:
         break;
     case OP_NEG:
-        puts("neg rax");
+        gen_asm(visitor->ctx, "neg rax");
         break;
     case OP_DEREF:
-        gen_load(EXPR(op, unary_op)->res_type);
+        gen_load(visitor->ctx, EXPR(op, unary_op)->res_type);
         break;
     case OP_NOT:
-        puts("test rax, rax\n"
-             "setz al\n"
-             "movzx rax, al");
+        gen_asm(visitor->ctx, "test rax, rax\n"
+                              "setz al\n"
+                              "movzx rax, al");
         break;
     case OP_BW_NOT:
-        puts("not rax");
+        gen_asm(visitor->ctx, "not rax");
         break;
     case OP_ADDR:
         // Handled earlier.
@@ -330,7 +349,7 @@ static bool gen_ret(AstVisitor* visitor, Item* ret) {
     assert(ret->type == STMT_RET);
 
     A3_TRYB(vertex_visit(visitor, VERTEX(ret->expr, expr)));
-    puts("jmp .ret");
+    gen_asm(visitor->ctx, "jmp .ret");
     return true;
 }
 
@@ -339,7 +358,7 @@ static bool gen_var(AstVisitor* visitor, Var* var) {
     assert(var);
 
     A3_TRYB(gen_addr(visitor, EXPR(var, var)));
-    gen_load(var->obj->type);
+    gen_load(visitor->ctx, var->obj->type);
 
     return true;
 }
@@ -360,8 +379,8 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
         gen_stack_pop(visitor->ctx, REGISTERS_64[args - i - 1]);
 
     if (!call->obj)
-        printf("extern " A3_S_F "\n", A3_S_FORMAT(call->name));
-    printf("call " A3_S_F "\n", A3_S_FORMAT(call->name));
+        gen_asm(visitor->ctx, "extern " A3_S_F, A3_S_FORMAT(call->name));
+    gen_asm(visitor->ctx, "call " A3_S_F, A3_S_FORMAT(call->name));
 
     return true;
 }
@@ -373,30 +392,33 @@ static bool gen_decl(AstVisitor* visitor, Item* decl) {
     if (!decl->obj || decl->obj->type->type != TY_FN)
         return true;
 
-    printf("\nglobal " A3_S_F "\n"
-           "" A3_S_F ":\n"
-           "push rbp\n"
-           "mov rbp, rsp\n"
-           "sub rsp, %zu\n",
-           A3_S_FORMAT(decl->name), A3_S_FORMAT(decl->name), decl->obj->stack_depth);
+    gen_asm(visitor->ctx,
+            "\nglobal " A3_S_F "\n"
+            "" A3_S_F ":\n"
+            "push rbp\n"
+            "mov rbp, rsp\n"
+            "sub rsp, %zu",
+            A3_S_FORMAT(decl->name), A3_S_FORMAT(decl->name), decl->obj->stack_depth);
 
     size_t i = 0;
     A3_SLL_FOR_EACH(Item, param, &decl->obj->type->params, link) {
         if (type_size(param->obj->type) == 1)
-            printf("movsx BYTE [rbp - %zu], %s\n", param->obj->stack_offset, REGISTERS_8[i++]);
+            gen_asm(visitor->ctx, "movsx BYTE [rbp - %zu], %s", param->obj->stack_offset,
+                    REGISTERS_8[i++]);
         else
-            printf("mov [rbp - %zu], %s\n", param->obj->stack_offset, REGISTERS_64[i++]);
+            gen_asm(visitor->ctx, "mov [rbp - %zu], %s", param->obj->stack_offset,
+                    REGISTERS_64[i++]);
         assert(i <= 6);
     }
 
     A3_TRYB(vertex_visit(visitor, VERTEX(decl->body, item.block)));
     assert(!((Generator*)visitor->ctx)->stack_depth);
 
-    puts("mov rax, 0\n"
-         ".ret:\n"
-         "mov rsp, rbp\n"
-         "pop rbp\n"
-         "ret");
+    gen_asm(visitor->ctx, "mov rax, 0\n"
+                          ".ret:\n"
+                          "mov rsp, rbp\n"
+                          "pop rbp\n"
+                          "ret");
 
     return true;
 }
@@ -408,17 +430,20 @@ static bool gen_if(AstVisitor* visitor, If* if_stmt) {
     size_t label = gen_label(visitor->ctx);
 
     A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->cond, expr)));
-    printf("test rax, rax\n"
-           "jz .else%zu\n",
-           label);
+    gen_asm(visitor->ctx,
+            "test rax, rax\n"
+            "jz .else%zu",
+            label);
     A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->body_true, item)));
-    printf("jmp .end%zu\n", label);
+    gen_asm(visitor->ctx,
+            "jmp .end%zu\n"
+            ".else%zu:",
+            label, label);
 
-    printf(".else%zu:\n", label);
     if (if_stmt->body_false)
         A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->body_false, item)));
 
-    printf(".end%zu:\n", label);
+    gen_asm(visitor->ctx, ".end%zu:", label);
     return true;
 }
 
@@ -431,53 +456,56 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
     if (loop->init)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->init, item)));
 
-    printf(".begin%zu:\n", label);
+    gen_asm(visitor->ctx, ".begin%zu:", label);
     if (loop->cond) {
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->cond, expr)));
-        printf("test rax, rax\n"
-               "jz .end%zu\n",
-               label);
+        gen_asm(visitor->ctx,
+                "test rax, rax\n"
+                "jz .end%zu",
+                label);
     }
 
     A3_TRYB(vertex_visit(visitor, VERTEX(loop->body, item)));
     if (loop->post)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->post, expr)));
 
-    printf("jmp .begin%zu\n"
-           ".end%zu:\n",
-           label, label);
+    gen_asm(visitor->ctx,
+            "jmp .begin%zu\n"
+            ".end%zu:",
+            label, label);
 
     return true;
 }
 
-bool gen(A3CString src, Vertex* root) {
+bool gen(FILE* out, A3CString src, Vertex* root) {
+    assert(out);
     assert(src.ptr);
     assert(root);
     assert(root->type == V_UNIT);
 
-    Generator gen = { .src = src, .stack_depth = 0, .label = 0, .line = 0 };
+    Generator gen = { .out = out, .src = src, .stack_depth = 0, .label = 0, .line = 0 };
 
-    puts("section .data");
+    gen_asm(&gen, "section .data");
     A3_SLL_FOR_EACH(Item, decl, &root->unit.items, link) {
         assert(VERTEX(decl, item)->type == V_DECL);
 
         if (decl->obj->type->type == TY_FN)
             continue;
 
-        printf("global " A3_S_F "\n", A3_S_FORMAT(decl->obj->name));
+        gen_asm(&gen, "global " A3_S_F, A3_S_FORMAT(decl->obj->name));
         if (decl->lit_str.ptr) {
-            printf(A3_S_F ": db ", A3_S_FORMAT(decl->obj->name));
+            fprintf(gen.out, A3_S_F ": db ", A3_S_FORMAT(decl->obj->name));
 
             for (size_t i = 0; i < decl->lit_str.len; i++)
-                printf("%d,", decl->lit_str.ptr[i]);
-            puts("0");
+                fprintf(gen.out, "%d,", decl->lit_str.ptr[i]);
+            gen_asm(&gen, "0");
         } else {
-            printf(A3_S_F ": dq 0\n", A3_S_FORMAT(decl->obj->name));
+            gen_asm(&gen, A3_S_F ": dq 0", A3_S_FORMAT(decl->obj->name));
         }
     }
 
-    puts("\nsection .text\n"
-         "%line 0+0");
+    gen_asm(&gen, "\nsection .text\n"
+                  "%%line 0+0");
 
     bool ret = vertex_visit(
         &(AstVisitor) {

@@ -12,6 +12,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdio.h>
 
 #include <a3/str.h>
 
@@ -20,4 +21,4 @@ typedef struct Vertex Vertex;
 
 #define GEN_OK  true
 #define GEN_ERR false
-bool gen(A3CString src, Vertex*);
+bool gen(FILE* out, A3CString src, Vertex*);

@@ -18,6 +18,7 @@
 #include <a3/str.h>
 
 #include "ast.h"
+#include "config.h"
 #include "dump.h"
 #include "error.h"
 #include "gen.h"
@@ -25,10 +26,10 @@
 #include "parse.h"
 #include "type.h"
 
-static A3CString file_read(char const* path) {
-    assert(path);
+static A3CString file_read(A3CString path) {
+    assert(path.ptr);
 
-    FILE* file = fopen(path, "r");
+    FILE* file = fopen(a3_string_cstr(path), "r");
     if (!file) {
         fputs("Failed to open file.\n", stderr);
         return A3_CS_NULL;
@@ -51,17 +52,72 @@ static A3CString file_read(char const* path) {
     return a3_buf_read_ptr(&buf);
 }
 
-int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s <FILE>\n", argv[0]);
-        return -1;
+static void usage(char const* name, int status) {
+    assert(name);
+
+    fprintf(stderr, "Usage: %s [-o <FILE>] <FILE>\n", name);
+    exit(status);
+}
+
+static Config arg_parse(size_t argc, char const* argv[]) {
+    if (argc < 2)
+        usage(argv[0], -1);
+
+    Config ret = { 0 };
+
+    for (size_t i = 1; i < argc; i++) {
+        if (*argv[i] != '-') {
+            if (ret.src.ptr) {
+                fprintf(stderr, "Multiple source files specified.\n");
+                exit(-1);
+            }
+
+            ret.src = a3_cstring_from(argv[i]);
+            continue;
+        }
+
+        switch (argv[i][1]) {
+        case 'o':
+            if (argv[i][2]) {
+                ret.out = a3_cstring_from(&argv[i][2]);
+            } else {
+                if (i + 1 >= argc || !*argv[i + 1]) {
+                    fprintf(stderr, "Missing output file.\n");
+                    exit(-1);
+                }
+
+                ret.out = a3_cstring_from(argv[++i]);
+            }
+
+            break;
+        case 'h':
+            usage(argv[0], 0);
+            break;
+        default:
+            fprintf(stderr, "Unrecognized option \"%s\".\n", argv[i]);
+            usage(argv[0], -1);
+        }
     }
 
+    return ret;
+}
+
+int main(int argc, char const* argv[]) {
     a3_log_init(stderr, A3_LOG_INFO);
 
-    A3CString src = file_read(argv[1]);
+    Config cfg = arg_parse((size_t)argc, argv);
+
+    A3CString src = file_read(cfg.src);
     if (!src.ptr)
         return -1;
+
+    FILE* out = stdout;
+    if (cfg.out.ptr)
+        out = fopen(a3_string_cstr(cfg.out), "w");
+    if (!out) {
+        fprintf(stderr, "Failed to open output file.\n");
+        return -1;
+    }
 
     Lexer*  lexer  = lex_new(src);
     Parser* parser = parse_new(src, lexer);
@@ -76,7 +132,7 @@ int main(int argc, char* argv[]) {
 
     dump(root);
 
-    if (!gen(src, root))
+    if (!gen(out, src, root))
         return -1;
 
     return 0;
