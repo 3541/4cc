@@ -34,6 +34,7 @@ typedef enum TokenType {
     TOK_LBRACE,
     TOK_LBRACKET,
     TOK_LIT_NUM,
+    TOK_LIT_STR,
     TOK_LPAREN,
     TOK_LT,
     TOK_LT_EQ,
@@ -62,7 +63,8 @@ typedef struct Token {
     A3CString lexeme;
 
     union {
-        int64_t lit_num;
+        int64_t   lit_num;
+        A3CString lit_str;
     };
 } Token;
 

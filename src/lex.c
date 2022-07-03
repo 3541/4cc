@@ -317,6 +317,27 @@ static Token lex_ident_or_kw(Lexer* lexer) {
     return (Token) { .type = TOK_IDENT, .lexeme = lexeme };
 }
 
+static Token lex_lit_str(Lexer* lexer) {
+    assert(lexer);
+    assert(lex_peek_byte(lexer) == '"');
+
+    A3CString s   = lex_peek_str(lexer);
+    A3CString lit = a3_cstring_new(s.ptr + 1, 1);
+
+    while (lit.ptr[lit.len - 1] && lit.ptr[lit.len - 1] != '"' && lit.ptr[lit.len - 1] != '\n' &&
+           lit.len < s.len - 1)
+        lit.len++;
+    if (lit.ptr[lit.len - 1] != '"') {
+        lex_error(lexer, "Bad string literal.");
+        return lex_recover(lexer);
+    }
+    s.len = lit.len + 1;
+    lit.len--;
+
+    lex_consume_any(lexer, s.len);
+    return (Token) { .type = TOK_LIT_STR, .lexeme = s, .lit_str = lit };
+}
+
 Token lex_peek(Lexer* lexer) {
     assert(lexer);
 
@@ -364,6 +385,9 @@ Token lex_peek(Lexer* lexer) {
     case ',':
         lexer->peek = (Token) { .type   = TOK_COMMA,
                                 .lexeme = lex_consume_one(lexer, A3_CS("comma"), A3_CS(",")) };
+        break;
+    case '"':
+        lexer->peek = lex_lit_str(lexer);
         break;
     default:
         if (is_digit(next)) {

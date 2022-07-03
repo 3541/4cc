@@ -174,7 +174,8 @@ typedef struct Item {
                 Obj*   obj;
             };
             union {
-                Block* body; // TY_FN.
+                Block*    body; // TY_FN.
+                A3CString lit_str;
             };
         };
     };
@@ -222,7 +223,7 @@ typedef struct AstVisitor {
 Expr*  vertex_bin_op_new(A3CString span, BinOpType, Expr* lhs, Expr* rhs);
 Expr*  vertex_unary_op_new(A3CString span, UnaryOpType, Expr* operand);
 Expr*  vertex_lit_num_new(A3CString span, int64_t);
-Expr*  vertex_var_new(A3CString span);
+Expr*  vertex_var_new(A3CString span, A3CString name);
 Expr*  vertex_call_new(A3CString span, A3CString name);
 Item*  vertex_expr_stmt_new(A3CString span, Expr* expr);
 Item*  vertex_ret_new(A3CString span, Expr* expr);

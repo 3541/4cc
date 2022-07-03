@@ -105,6 +105,11 @@ tests = {
   'global': [
     'simple',
     'array'
+  ],
+  'string': [
+    'empty',
+    'index',
+    'arithmetic'
   ]
 }
 

@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include <a3/buffer.h>
 #include <a3/str.h>
 #include <a3/util.h>
 
@@ -24,6 +25,8 @@
 typedef struct Parser {
     A3CString src;
     Lexer*    lexer;
+    Unit*     current_unit;
+    size_t    lit_count;
     size_t    error_depth;
     bool      status;
 } Parser;
@@ -37,7 +40,12 @@ static bool   parse_decl(Parser*, Block*);
 
 Parser* parse_new(A3CString src, Lexer* lexer) {
     A3_UNWRAPNI(Parser*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Parser) { .src = src, .lexer = lexer, .error_depth = 0, .status = true };
+    *ret = (Parser) { .src          = src,
+                      .lexer        = lexer,
+                      .current_unit = NULL,
+                      .lit_count    = 0,
+                      .error_depth  = 0,
+                      .status       = true };
     return ret;
 }
 
@@ -150,7 +158,7 @@ static Expr* parse_var(Parser* parser) {
     Token tok = lex_next(parser->lexer);
     assert(tok.type == TOK_IDENT);
 
-    return vertex_var_new(tok.lexeme);
+    return vertex_var_new(tok.lexeme, tok.lexeme);
 }
 
 static Expr* parse_call(Parser* parser, Expr* callee) {
@@ -212,6 +220,30 @@ static Expr* parse_index(Parser* parser, Expr* base) {
         vertex_bin_op_new(parse_span_merge(tok_left.lexeme, next.lexeme), OP_ADD, base, index));
 }
 
+static A3CString parse_lit_name(Parser* parser) {
+    A3Buffer* buf = a3_buf_new(32, 128);
+
+    if (!a3_buf_write_fmt(buf, "__4cc_lit%zu", parser->lit_count++))
+        return A3_CS_NULL;
+
+    return a3_buf_read_ptr(buf);
+}
+
+static Expr* parse_lit_str(Parser* parser) {
+    assert(parser);
+
+    Token tok = lex_next(parser->lexer);
+    assert(tok.type == TOK_LIT_STR);
+
+    A3CString name        = parse_lit_name(parser);
+    Item*     global_decl = vertex_decl_new(
+            tok.lexeme, name, ptype_array(ptype_builtin_new(TOK_CHAR), tok.lit_str.len + 1));
+    global_decl->lit_str = tok.lit_str;
+    A3_SLL_ENQUEUE(&parser->current_unit->items, global_decl, link);
+
+    return vertex_var_new(tok.lexeme, name);
+}
+
 static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
     [TOK_PLUS] = 15, [TOK_MINUS] = 15, [TOK_AMP] = 15,
     [TOK_STAR] = 15, [TOK_BANG] = 15,  [TOK_TILDE] = 15,
@@ -253,6 +285,9 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
         lhs = vertex_lit_num_new(tok.lexeme, tok.lit_num);
         break;
     }
+    case TOK_LIT_STR:
+        lhs = parse_lit_str(parser);
+        break;
     case TOK_IDENT:
         lhs = parse_var(parser);
         break;
@@ -600,7 +635,7 @@ static bool parse_decl(Parser* parser, Block* block) {
 
             Expr* init = vertex_bin_op_new(
                 parse_span_merge(VERTEX(decl, item)->span, VERTEX(init_rhs, expr)->span), OP_ASSIGN,
-                vertex_var_new(decl->name), init_rhs);
+                vertex_var_new(decl->name, decl->name), init_rhs);
             Item* init_stmt = vertex_expr_stmt_new(SPAN(init, expr), init);
             A3_SLL_ENQUEUE(&block->body, init_stmt, link);
         }
@@ -660,9 +695,9 @@ static Block* parse_block(Parser* parser) {
     return block;
 }
 
-static bool parse_fn(Parser* parser, Unit* unit, Item* decl) {
+static bool parse_fn(Parser* parser, Item* decl) {
     assert(parser);
-    assert(unit);
+    assert(parser->current_unit);
     assert(decl);
     assert(decl->decl_ptype->type == PTY_FN);
 
@@ -673,13 +708,13 @@ static bool parse_fn(Parser* parser, Unit* unit, Item* decl) {
     decl->body       = body;
     SPAN(decl, item) = parse_span_merge(SPAN(decl, item), SPAN(body, item.block));
 
-    A3_SLL_ENQUEUE(&unit->items, decl, link);
+    A3_SLL_ENQUEUE(&parser->current_unit->items, decl, link);
     return true;
 }
 
-static bool parse_global_var(Parser* parser, Unit* unit, PType* base) {
+static bool parse_global_var(Parser* parser, PType* base) {
     assert(parser);
-    assert(unit);
+    assert(parser->current_unit);
     assert(base);
 
     while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_SEMI) {
@@ -687,15 +722,15 @@ static bool parse_global_var(Parser* parser, Unit* unit, PType* base) {
             return false;
 
         Item* decl = parse_declarator(parser, base);
-        A3_SLL_ENQUEUE(&unit->items, decl, link);
+        A3_SLL_ENQUEUE(&parser->current_unit->items, decl, link);
     }
 
     return parse_consume(parser, A3_CS("semicolon"), TOK_SEMI);
 }
 
-static bool parse_global_decl(Parser* parser, Unit* unit) {
+static bool parse_global_decl(Parser* parser) {
     assert(parser);
-    assert(unit);
+    assert(parser->current_unit);
 
     PType* base = parse_declspec(parser);
     if (!base)
@@ -706,19 +741,20 @@ static bool parse_global_decl(Parser* parser, Unit* unit) {
         return false;
 
     if (decl->decl_ptype->type == PTY_FN)
-        return parse_fn(parser, unit, decl);
+        return parse_fn(parser, decl);
 
-    A3_SLL_ENQUEUE(&unit->items, decl, link);
-    return parse_global_var(parser, unit, base);
+    A3_SLL_ENQUEUE(&parser->current_unit->items, decl, link);
+    return parse_global_var(parser, base);
 }
 
 Vertex* parse(Parser* parser) {
     assert(parser);
 
-    Unit* unit = vertex_unit_new();
+    Unit* unit           = vertex_unit_new();
+    parser->current_unit = unit;
 
     while (parse_has_next(parser)) {
-        if (!parse_global_decl(parser, unit)) {
+        if (!parse_global_decl(parser)) {
             parser->status = false;
             break;
         }

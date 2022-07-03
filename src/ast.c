@@ -100,12 +100,13 @@ Block* vertex_block_new(void) {
     return &ret->item.block;
 }
 
-Expr* vertex_var_new(A3CString span) {
+Expr* vertex_var_new(A3CString span, A3CString name) {
     assert(span.ptr);
+    assert(name.ptr);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret =
-        (Vertex) { .span = span, .type = V_EXPR, .expr = { .type = EXPR_VAR, .var.name = span } };
+        (Vertex) { .span = span, .type = V_EXPR, .expr = { .type = EXPR_VAR, .var.name = name } };
 
     return &ret->expr;
 }

@@ -158,7 +158,8 @@ static bool gen_add_sub(BinOp* op) {
             ptr_type   = op->lhs->res_type;
         }
 
-        printf("imul %s, %zu\n", scalar_reg, type_size(ptr_type->parent));
+        if (type_size(ptr_type->parent) != 1)
+            printf("imul %s, %zu\n", scalar_reg, type_size(ptr_type->parent));
     }
 
     printf("%s rax, rdi\n", insn);
@@ -448,11 +449,19 @@ bool gen(A3CString src, Vertex* root) {
         if (decl->obj->type->type == TY_FN)
             continue;
 
-        printf("global " A3_S_F "\n" A3_S_F ": dq 0\n", A3_S_FORMAT(decl->obj->name),
-               A3_S_FORMAT(decl->obj->name));
+        printf("global " A3_S_F "\n", A3_S_FORMAT(decl->obj->name));
+        if (decl->lit_str.ptr) {
+            printf(A3_S_F ": db ", A3_S_FORMAT(decl->obj->name));
+
+            for (size_t i = 0; i < decl->lit_str.len; i++)
+                printf("%d,", decl->lit_str.ptr[i]);
+            puts("0");
+        } else {
+            printf(A3_S_F ": dq 0\n", A3_S_FORMAT(decl->obj->name));
+        }
     }
 
-    puts("section .text");
+    puts("\nsection .text");
 
     bool ret = vertex_visit(
         &(AstVisitor) {
