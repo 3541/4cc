@@ -60,7 +60,16 @@ typedef enum StmtType {
     STMT_RET,
 } StmtType;
 
-typedef enum UnaryOpType { OP_UNARY_ADD, OP_NEG, OP_ADDR, OP_DEREF, OP_NOT, OP_BW_NOT } UnaryOpType;
+typedef enum UnaryOpType {
+    OP_ADDR,
+    OP_BW_NOT,
+    OP_DEREF,
+    OP_NEG,
+    OP_NOT,
+    OP_SIZEOF,
+    OP_UNARY_ADD,
+} UnaryOpType;
+
 typedef enum ExprType { EXPR_BIN_OP, EXPR_UNARY_OP, EXPR_LIT, EXPR_VAR, EXPR_CALL } ExprType;
 typedef enum LiteralType { LIT_NUM } LiteralType;
 

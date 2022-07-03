@@ -130,6 +130,11 @@ tests = {
     'text',
     'octal',
     'hex'
+  ],
+  'sizeof': [
+    'int',
+    'ptr',
+    'array'
   ]
 }
 

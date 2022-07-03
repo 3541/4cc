@@ -50,8 +50,10 @@ typedef struct Registry {
     A3CString src;
 } Registry;
 
-Type const* BUILTIN_TYPES[2] = {
-    [TY_INT] = &(Type) { .type = TY_INT }, [TY_CHAR] = &(Type) { .type = TY_CHAR }
+Type const* BUILTIN_TYPES[3] = {
+    [TY_INT]   = &(Type) { .type = TY_INT },
+    [TY_CHAR]  = &(Type) { .type = TY_CHAR },
+    [TY_USIZE] = &(Type) { .type = TY_USIZE },
 };
 
 static Type const* type_from_ptype(Registry* reg, PType* ptype);
@@ -120,6 +122,8 @@ A3String type_name(Type const* type) {
         return a3_string_clone(A3_CS("int"));
     case TY_CHAR:
         return a3_string_clone(A3_CS("char"));
+    case TY_USIZE:
+        return a3_string_clone(A3_CS("size_t"));
     case TY_PTR: {
         A3String base = type_name(type->parent);
         A3String ret  = a3_string_alloc(base.len + 1);
@@ -168,7 +172,7 @@ A3String type_name(Type const* type) {
 bool type_is_scalar(Type const* type) {
     assert(type);
 
-    return type->type == TY_INT || type->type == TY_CHAR;
+    return type->type == TY_INT || type->type == TY_CHAR || type->type == TY_USIZE;
 }
 
 size_t type_size(Type const* type) {
@@ -179,6 +183,8 @@ size_t type_size(Type const* type) {
         return sizeof(int64_t);
     case TY_CHAR:
         return sizeof(char);
+    case TY_USIZE:
+        return sizeof(size_t);
     case TY_PTR:
         return sizeof(void*);
     case TY_FN:
@@ -416,6 +422,9 @@ static bool type_unary_op(AstVisitor* visitor, UnaryOp* op) {
         }
 
         EXPR(op, unary_op)->res_type = op->operand->res_type;
+        break;
+    case OP_SIZEOF:
+        EXPR(op, unary_op)->res_type = BUILTIN_TYPES[TY_USIZE];
         break;
     }
 

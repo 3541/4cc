@@ -41,7 +41,7 @@ else:
     expected_status = "0"
 
 if str(exit) != expected_status:
-    print(f"FAIL: Expected status {output}, but got {exit}.")
+    print(f"FAIL: Expected status {output.strip()}, but got {exit}.")
     sys.exit(-1)
 
 stdout = result.stdout.decode("utf-8")

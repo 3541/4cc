@@ -150,6 +150,8 @@ static UnaryOpType parse_unary_op(TokenType type) {
         return OP_NOT;
     case TOK_TILDE:
         return OP_BW_NOT;
+    case TOK_SIZEOF:
+        return OP_SIZEOF;
     default:
         A3_PANIC("Not a unary operator.");
     }
@@ -251,8 +253,8 @@ static Expr* parse_lit_str(Parser* parser) {
 }
 
 static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
-    [TOK_PLUS] = 15, [TOK_MINUS] = 15, [TOK_AMP] = 15,
-    [TOK_STAR] = 15, [TOK_BANG] = 15,  [TOK_TILDE] = 15,
+    [TOK_PLUS] = 15, [TOK_MINUS] = 15, [TOK_AMP] = 15,   [TOK_STAR] = 15,
+    [TOK_BANG] = 15, [TOK_TILDE] = 15, [TOK_SIZEOF] = 15
 };
 
 static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {

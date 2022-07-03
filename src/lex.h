@@ -46,6 +46,7 @@ typedef enum TokenType {
     TOK_RET,
     TOK_RPAREN,
     TOK_SEMI,
+    TOK_SIZEOF,
     TOK_SLASH,
     TOK_STAR,
     TOK_TILDE,
