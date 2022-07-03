@@ -520,7 +520,11 @@ static bool type_call(AstVisitor* visitor, Call* call) {
     assert(visitor);
     assert(call);
 
-    EXPR(call, call)->res_type = BUILTIN_TYPES[TY_INT];
+    Registry* reg = visitor->ctx;
+
+    call->obj = scope_find(reg->current_scope, call->name);
+
+    EXPR(call, call)->res_type = call->obj ? call->obj->type->ret : BUILTIN_TYPES[TY_INT];
 
     A3_SLL_FOR_EACH(Arg, arg, &call->args, link) {
         A3_TRYB(vertex_visit(visitor, VERTEX(arg->expr, expr)));

@@ -101,6 +101,7 @@ typedef struct Arg {
 typedef struct Call {
     A3CString name;
     A3_SLL(args, Arg) args;
+    Obj* obj;
 } Call;
 
 typedef struct Expr {

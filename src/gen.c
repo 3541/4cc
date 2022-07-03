@@ -340,9 +340,10 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
     for (size_t i = 0; i < args; i++)
         gen_stack_pop(visitor->ctx, REGISTERS_64[args - i - 1]);
 
-    printf("extern " A3_S_F "\n"
-           "call " A3_S_F "\n",
-           A3_S_FORMAT(call->name), A3_S_FORMAT(call->name));
+    if (!call->obj)
+        printf("extern " A3_S_F "\n", A3_S_FORMAT(call->name));
+    printf("call " A3_S_F "\n", A3_S_FORMAT(call->name));
+
     return true;
 }
 
