@@ -25,7 +25,8 @@ subprocess.run(["gcc", "-o", binary_path, object.name, test_lib], check = True)
 asm.close()
 object.close()
 
-exit = subprocess.run([binary_path]).returncode
+result = subprocess.run([binary_path], stdout = subprocess.PIPE)
+exit = result.returncode
 os.remove(binary_path)
 
 if output_path.endswith(".out"):
@@ -34,6 +35,15 @@ else:
     p = subprocess.run([output_path])
     output = str(p.returncode)
 
-if str(exit) != output:
+if output.isdigit():
+    expected_status = output
+else:
+    expected_status = "0"
+
+if str(exit) != expected_status:
     print(f"FAIL: Expected status {output}, but got {exit}.")
     sys.exit(-1)
+
+stdout = result.stdout.decode("utf-8")
+if not output.isdigit() and stdout != output:
+    print(f"FAIL: Expected output \"{output}\", but got \"{stdout}\".")

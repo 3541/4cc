@@ -111,7 +111,8 @@ tests = {
   'string': [
     'empty',
     'index',
-    'arithmetic'
+    'arithmetic',
+    'arg'
   ]
 }
 
