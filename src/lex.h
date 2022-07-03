@@ -61,6 +61,7 @@ typedef enum TokenType {
 typedef struct Token {
     TokenType type;
     A3CString lexeme;
+    size_t    line;
 
     union {
         int64_t   lit_num;

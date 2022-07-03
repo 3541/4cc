@@ -26,6 +26,7 @@ typedef struct Lexer {
     Token    peek;
     bool     peeking;
     A3Buffer src;
+    size_t   current_line;
     size_t   error_depth;
 } Lexer;
 
@@ -37,9 +38,9 @@ static void lex_error(Lexer const* lexer, char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
 
-    A3CString highlight = a3_buf_read_ptr(&lexer->src);
-    highlight.len       = 1;
-    verror_at(A3_S_CONST(lexer->src.data), highlight, fmt, args);
+    Span span     = { .text = a3_buf_read_ptr(&lexer->src), .line = lexer->current_line };
+    span.text.len = 1;
+    verror_at(A3_S_CONST(lexer->src.data), span, fmt, args);
 
     va_end(args);
 }
@@ -47,9 +48,10 @@ static void lex_error(Lexer const* lexer, char* fmt, ...) {
 Lexer* lex_new(A3CString src) {
     A3_UNWRAPNI(Lexer*, ret, calloc(1, sizeof(*ret)));
 
-    *ret = (Lexer) { .peeking     = false,
-                     .src         = { .data = A3_CS_MUT(src), .tail = a3_string_len(src) },
-                     .error_depth = 0 };
+    *ret = (Lexer) { .peeking      = false,
+                     .src          = { .data = A3_CS_MUT(src), .tail = a3_string_len(src) },
+                     .current_line = 0,
+                     .error_depth  = 0 };
     a3_buf_init(&ret->src, a3_string_len(src), a3_string_len(src));
     return ret;
 }
@@ -117,6 +119,8 @@ static A3CString lex_consume_until(Lexer* lexer, bool (*pred)(uint8_t)) {
     ret.len       = 0;
 
     while (!lex_is_eof(lexer) && !pred(lex_peek_byte(lexer))) {
+        if (lex_peek_byte(lexer) == '\n')
+            lexer->current_line++;
         lex_consume_any(lexer, 1);
         ret.len++;
     }
@@ -138,6 +142,11 @@ static void lex_consume_space(Lexer* lexer) {
     assert(lexer);
 
     lex_consume_until(lexer, is_not_space);
+}
+
+static Token tok_new(Lexer* lexer, Token tok) {
+    tok.line = lexer->current_line;
+    return tok;
 }
 
 static Token lex_recover(Lexer* lexer) {
@@ -163,9 +172,9 @@ static Token lex_lit_num(Lexer* lexer) {
     assert(offset > 0);
 
     lex_consume_any(lexer, (size_t)offset);
-    return (Token) { .type    = TOK_LIT_NUM,
-                     .lexeme  = a3_cstring_new(s.ptr, (size_t)offset),
-                     .lit_num = num };
+    return tok_new(lexer, (Token) { .type    = TOK_LIT_NUM,
+                                    .lexeme  = a3_cstring_new(s.ptr, (size_t)offset),
+                                    .lit_num = num });
 }
 
 static Token lex_op(Lexer* lexer) {
@@ -256,7 +265,7 @@ static Token lex_op(Lexer* lexer) {
         A3_UNREACHABLE();
     }
 
-    return (Token) { .type = type, .lexeme = lexeme };
+    return tok_new(lexer, (Token) { .type = type, .lexeme = lexeme });
 }
 
 static Token lex_paren(Lexer* lexer) {
@@ -268,17 +277,17 @@ static Token lex_paren(Lexer* lexer) {
 
     switch (a3_string_cptr(lexeme)[0]) {
     case '(':
-        return (Token) { .type = TOK_LPAREN, .lexeme = lexeme };
+        return tok_new(lexer, (Token) { .type = TOK_LPAREN, .lexeme = lexeme });
     case ')':
-        return (Token) { .type = TOK_RPAREN, .lexeme = lexeme };
+        return tok_new(lexer, (Token) { .type = TOK_RPAREN, .lexeme = lexeme });
     case '{':
-        return (Token) { .type = TOK_LBRACE, .lexeme = lexeme };
+        return tok_new(lexer, (Token) { .type = TOK_LBRACE, .lexeme = lexeme });
     case '}':
-        return (Token) { .type = TOK_RBRACE, .lexeme = lexeme };
+        return tok_new(lexer, (Token) { .type = TOK_RBRACE, .lexeme = lexeme });
     case '[':
-        return (Token) { .type = TOK_LBRACKET, .lexeme = lexeme };
+        return tok_new(lexer, (Token) { .type = TOK_LBRACKET, .lexeme = lexeme });
     case ']':
-        return (Token) { .type = TOK_RBRACKET, .lexeme = lexeme };
+        return tok_new(lexer, (Token) { .type = TOK_RBRACKET, .lexeme = lexeme });
     default:
         A3_UNREACHABLE();
     }
@@ -291,7 +300,7 @@ static Token lex_semi(Lexer* lexer) {
     if (!a3_string_cptr(lexeme))
         return lex_recover(lexer);
 
-    return (Token) { .type = TOK_SEMI, .lexeme = lexeme };
+    return tok_new(lexer, (Token) { .type = TOK_SEMI, .lexeme = lexeme });
 }
 
 static Token lex_ident_or_kw(Lexer* lexer) {
@@ -311,10 +320,10 @@ static Token lex_ident_or_kw(Lexer* lexer) {
 
     for (size_t i = 0; i < sizeof(KEYWORDS) / sizeof(KEYWORDS[0]); i++) {
         if (a3_string_cmp(lexeme, KEYWORDS[i].name) == 0)
-            return (Token) { .type = KEYWORDS[i].type, .lexeme = lexeme };
+            return tok_new(lexer, (Token) { .type = KEYWORDS[i].type, .lexeme = lexeme });
     }
 
-    return (Token) { .type = TOK_IDENT, .lexeme = lexeme };
+    return tok_new(lexer, (Token) { .type = TOK_IDENT, .lexeme = lexeme });
 }
 
 static size_t lex_escape(A3CString e, uint8_t* o) {
@@ -429,7 +438,8 @@ static Token lex_lit_str(Lexer* lexer) {
     }
 
     lex_consume_any(lexer, s.len);
-    return (Token) { .type = TOK_LIT_STR, .lexeme = s, .lit_str = a3_buf_read_ptr(buf) };
+    return tok_new(lexer,
+                   (Token) { .type = TOK_LIT_STR, .lexeme = s, .lit_str = a3_buf_read_ptr(buf) });
 }
 
 Token lex_peek(Lexer* lexer) {
@@ -477,8 +487,9 @@ Token lex_peek(Lexer* lexer) {
         lexer->peek = lex_semi(lexer);
         break;
     case ',':
-        lexer->peek = (Token) { .type   = TOK_COMMA,
-                                .lexeme = lex_consume_one(lexer, A3_CS("comma"), A3_CS(",")) };
+        lexer->peek = tok_new(
+            lexer, (Token) { .type   = TOK_COMMA,
+                             .lexeme = lex_consume_one(lexer, A3_CS("comma"), A3_CS(",")) });
         break;
     case '"':
         lexer->peek = lex_lit_str(lexer);

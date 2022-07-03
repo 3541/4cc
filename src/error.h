@@ -13,5 +13,10 @@
 
 #include <a3/str.h>
 
-void verror_at(A3CString src, A3CString highlight, char* fmt, va_list);
-void error_at(A3CString src, A3CString highlight, char* fmt, ...);
+typedef struct Span {
+    size_t    line;
+    A3CString text;
+} Span;
+
+void verror_at(A3CString src, Span, char* fmt, va_list);
+void error_at(A3CString src, Span, char* fmt, ...);

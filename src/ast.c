@@ -17,7 +17,7 @@
 #include <a3/str.h>
 #include <a3/util.h>
 
-Expr* vertex_bin_op_new(A3CString span, BinOpType type, Expr* lhs, Expr* rhs) {
+Expr* vertex_bin_op_new(Span span, BinOpType type, Expr* lhs, Expr* rhs) {
     assert(lhs);
     assert(rhs);
 
@@ -31,7 +31,7 @@ Expr* vertex_bin_op_new(A3CString span, BinOpType type, Expr* lhs, Expr* rhs) {
     return &ret->expr;
 }
 
-Expr* vertex_unary_op_new(A3CString span, UnaryOpType type, Expr* operand) {
+Expr* vertex_unary_op_new(Span span, UnaryOpType type, Expr* operand) {
     assert(operand);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
@@ -44,7 +44,7 @@ Expr* vertex_unary_op_new(A3CString span, UnaryOpType type, Expr* operand) {
     return &ret->expr;
 }
 
-Expr* vertex_lit_num_new(A3CString span, int64_t num) {
+Expr* vertex_lit_num_new(Span span, int64_t num) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret = (Vertex) {
         .span = span,
@@ -55,7 +55,7 @@ Expr* vertex_lit_num_new(A3CString span, int64_t num) {
     return &ret->expr;
 }
 
-Item* vertex_expr_stmt_new(A3CString span, Expr* expr) {
+Item* vertex_expr_stmt_new(Span span, Expr* expr) {
     assert(expr);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
@@ -65,7 +65,7 @@ Item* vertex_expr_stmt_new(A3CString span, Expr* expr) {
     return &ret->item;
 }
 
-Item* vertex_ret_new(A3CString span, Expr* expr) {
+Item* vertex_ret_new(Span span, Expr* expr) {
     assert(expr);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
@@ -74,15 +74,15 @@ Item* vertex_ret_new(A3CString span, Expr* expr) {
     return &ret->item;
 }
 
-Item* vertex_empty_new(A3CString span) {
+Item* vertex_empty_new(Span span) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret = (Vertex) { .span = span, .type = V_STMT, .item.type = STMT_EMPTY };
 
     return &ret->item;
 }
 
-Item* vertex_decl_new(A3CString span, A3CString name, PType* type) {
-    assert(span.ptr);
+Item* vertex_decl_new(Span span, A3CString name, PType* type) {
+    assert(span.text.ptr);
     assert(name.ptr);
     assert(type);
 
@@ -94,14 +94,14 @@ Item* vertex_decl_new(A3CString span, A3CString name, PType* type) {
 
 Block* vertex_block_new(void) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .type = V_STMT, .span = A3_CS_NULL, .item = { .type = STMT_BLOCK } };
+    *ret = (Vertex) { .type = V_STMT, .item = { .type = STMT_BLOCK } };
     A3_SLL_INIT(&ret->item.block.body);
 
     return &ret->item.block;
 }
 
-Expr* vertex_var_new(A3CString span, A3CString name) {
-    assert(span.ptr);
+Expr* vertex_var_new(Span span, A3CString name) {
+    assert(span.text.ptr);
     assert(name.ptr);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
@@ -111,8 +111,8 @@ Expr* vertex_var_new(A3CString span, A3CString name) {
     return &ret->expr;
 }
 
-Expr* vertex_call_new(A3CString span, A3CString name) {
-    assert(span.ptr);
+Expr* vertex_call_new(Span span, A3CString name) {
+    assert(span.text.ptr);
     assert(name.ptr);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
@@ -123,8 +123,8 @@ Expr* vertex_call_new(A3CString span, A3CString name) {
     return &ret->expr;
 }
 
-If* vertex_if_new(A3CString span, Expr* cond, Item* body_true, Item* body_false) {
-    assert(span.ptr);
+If* vertex_if_new(Span span, Expr* cond, Item* body_true, Item* body_false) {
+    assert(span.text.ptr);
     assert(cond);
     assert(body_true);
 
@@ -139,8 +139,8 @@ If* vertex_if_new(A3CString span, Expr* cond, Item* body_true, Item* body_false)
     return &ret->item.if_stmt;
 }
 
-Loop* vertex_loop_new(A3CString span, Item* init, Expr* cond, Expr* post, Item* body) {
-    assert(span.ptr);
+Loop* vertex_loop_new(Span span, Item* init, Expr* cond, Expr* post, Item* body) {
+    assert(span.text.ptr);
     assert(cond);
     assert(body);
 
@@ -274,6 +274,9 @@ static bool visit_call(AstVisitor* visitor, Call* call) {
 bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
     assert(visitor);
     assert(vertex);
+
+    if (visitor->pre)
+        visitor->pre(visitor, vertex);
 
     switch (vertex->type) {
     case V_UNIT:

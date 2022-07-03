@@ -25,17 +25,17 @@ static void verror_at_eof(A3CString src, char* fmt, va_list args) {
 }
 
 A3_FORMAT_FN(3, 0)
-void verror_at(A3CString src, A3CString highlight, char* fmt, va_list args) {
+void verror_at(A3CString src, Span span, char* fmt, va_list args) {
     assert(src.ptr);
 
-    if (!highlight.ptr) {
+    if (!span.text.ptr) {
         verror_at_eof(src, fmt, args);
         return;
     }
 
-    assert(a3_string_cptr(highlight) >= a3_string_cptr(src));
+    assert(a3_string_cptr(span.text) >= a3_string_cptr(src));
 
-    A3CString line = highlight;
+    A3CString line = span.text;
     while (line.ptr > src.ptr && *line.ptr != '\n') {
         line.ptr--;
         line.len++;
@@ -50,12 +50,13 @@ void verror_at(A3CString src, A3CString highlight, char* fmt, va_list args) {
     if (line.ptr[line.len - 1] == '\n')
         line.len--;
 
-    int offset = (int)(a3_string_cptr(highlight) - a3_string_cptr(line));
+    int offset = (int)(a3_string_cptr(span.text) - a3_string_cptr(line));
+    offset += fprintf(stderr, "Error (%zu): ", span.line);
     fprintf(stderr,
-            "Error: " A3_S_F "\n"
-            "%*s",
-            A3_S_FORMAT(line), offset + (int)sizeof("Error: ") - 1, "");
-    for (size_t i = 0; i < a3_string_len(highlight); i++)
+            A3_S_F "\n"
+                   "%*s",
+            A3_S_FORMAT(line), offset, "");
+    for (size_t i = 0; i < a3_string_len(span.text); i++)
         fputc('^', stderr);
     fputc(' ', stderr);
 
@@ -64,9 +65,9 @@ void verror_at(A3CString src, A3CString highlight, char* fmt, va_list args) {
 }
 
 A3_FORMAT_FN(3, 4)
-void error_at(A3CString src, A3CString highlight, char* fmt, ...) {
+void error_at(A3CString src, Span span, char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    verror_at(src, highlight, fmt, args);
+    verror_at(src, span, fmt, args);
     va_end(args);
 }

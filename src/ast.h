@@ -15,6 +15,7 @@
 #include <a3/str.h>
 #include <a3/util.h>
 
+#include "error.h"
 #include "lex.h"
 
 // type.h
@@ -186,8 +187,8 @@ typedef struct Unit {
 } Unit;
 
 typedef struct Vertex {
-    A3CString  span;
     VertexType type;
+    Span       span;
 
     union {
         Expr expr;
@@ -207,6 +208,7 @@ typedef bool (*AstVisitorCallback)(AstVisitor*, Vertex*);
 
 typedef struct AstVisitor {
     void* ctx;
+    bool (*pre)(AstVisitor*, Vertex*);
     bool (*visit_bin_op)(AstVisitor*, BinOp*);
     bool (*visit_unary_op)(AstVisitor*, UnaryOp*);
     bool (*visit_lit)(AstVisitor*, Literal*);
@@ -220,18 +222,18 @@ typedef struct AstVisitor {
     bool (*visit_loop)(AstVisitor*, Loop*);
 } AstVisitor;
 
-Expr*  vertex_bin_op_new(A3CString span, BinOpType, Expr* lhs, Expr* rhs);
-Expr*  vertex_unary_op_new(A3CString span, UnaryOpType, Expr* operand);
-Expr*  vertex_lit_num_new(A3CString span, int64_t);
-Expr*  vertex_var_new(A3CString span, A3CString name);
-Expr*  vertex_call_new(A3CString span, A3CString name);
-Item*  vertex_expr_stmt_new(A3CString span, Expr* expr);
-Item*  vertex_ret_new(A3CString span, Expr* expr);
-Item*  vertex_empty_new(A3CString span);
-Item*  vertex_decl_new(A3CString span, A3CString name, PType*);
-If*    vertex_if_new(A3CString span, Expr* cond, Item* body_true, Item* body_false);
+Expr*  vertex_bin_op_new(Span, BinOpType, Expr* lhs, Expr* rhs);
+Expr*  vertex_unary_op_new(Span, UnaryOpType, Expr* operand);
+Expr*  vertex_lit_num_new(Span, int64_t);
+Expr*  vertex_var_new(Span, A3CString name);
+Expr*  vertex_call_new(Span, A3CString name);
+Item*  vertex_expr_stmt_new(Span, Expr* expr);
+Item*  vertex_ret_new(Span, Expr* expr);
+Item*  vertex_empty_new(Span);
+Item*  vertex_decl_new(Span, A3CString name, PType*);
+If*    vertex_if_new(Span, Expr* cond, Item* body_true, Item* body_false);
 Block* vertex_block_new(void);
-Loop*  vertex_loop_new(A3CString span, Item* init, Expr* cond, Expr* post, Item* body);
+Loop*  vertex_loop_new(Span, Item* init, Expr* cond, Expr* post, Item* body);
 Unit*  vertex_unit_new(void);
 bool   vertex_visit(AstVisitor*, Vertex*);
 

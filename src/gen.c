@@ -32,6 +32,7 @@ typedef struct Generator {
     A3CString src;
     size_t    stack_depth;
     size_t    label;
+    size_t    line;
 } Generator;
 
 static size_t gen_label(Generator* gen) {
@@ -87,6 +88,20 @@ static void gen_store(Generator* gen, Type const* type) {
         puts("mov BYTE [rdi], al");
     else
         puts("mov [rdi], rax");
+}
+
+static bool gen_line(AstVisitor* visitor, Vertex* vertex) {
+    assert(visitor);
+    assert(vertex);
+
+    Generator* gen = visitor->ctx;
+    if (gen->line == vertex->span.line)
+        return true;
+
+    printf("%%line %zu+0\n", vertex->span.line);
+    gen->line = vertex->span.line;
+
+    return true;
 }
 
 static bool gen_lit(AstVisitor* visitor, Literal* lit) {
@@ -440,7 +455,7 @@ bool gen(A3CString src, Vertex* root) {
     assert(root);
     assert(root->type == V_UNIT);
 
-    Generator gen = { .src = src, .stack_depth = 0, .label = 0 };
+    Generator gen = { .src = src, .stack_depth = 0, .label = 0, .line = 0 };
 
     puts("section .data");
     A3_SLL_FOR_EACH(Item, decl, &root->unit.items, link) {
@@ -461,11 +476,13 @@ bool gen(A3CString src, Vertex* root) {
         }
     }
 
-    puts("\nsection .text");
+    puts("\nsection .text\n"
+         "%line 0+0");
 
     bool ret = vertex_visit(
         &(AstVisitor) {
             .ctx            = &gen,
+            .pre            = gen_line,
             .visit_bin_op   = gen_bin_op,
             .visit_unary_op = gen_unary_op,
             .visit_lit      = gen_lit,
