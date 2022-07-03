@@ -660,22 +660,56 @@ static Block* parse_block(Parser* parser) {
     return block;
 }
 
-static Item* parse_fn(Parser* parser) {
+static bool parse_fn(Parser* parser, Unit* unit, Item* decl) {
     assert(parser);
-
-    PType* base = parse_declspec(parser);
-    Item*  decl = parse_declarator(parser, base);
-    if (!decl)
-        return NULL;
+    assert(unit);
+    assert(decl);
+    assert(decl->decl_ptype->type == PTY_FN);
 
     Block* body = parse_block(parser);
     if (!body)
-        return NULL;
+        return false;
 
     decl->body       = body;
     SPAN(decl, item) = parse_span_merge(SPAN(decl, item), SPAN(body, item.block));
 
-    return decl;
+    A3_SLL_ENQUEUE(&unit->items, decl, link);
+    return true;
+}
+
+static bool parse_global_var(Parser* parser, Unit* unit, PType* base) {
+    assert(parser);
+    assert(unit);
+    assert(base);
+
+    while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_SEMI) {
+        if (!parse_consume(parser, A3_CS("comma"), TOK_COMMA))
+            return false;
+
+        Item* decl = parse_declarator(parser, base);
+        A3_SLL_ENQUEUE(&unit->items, decl, link);
+    }
+
+    return parse_consume(parser, A3_CS("semicolon"), TOK_SEMI);
+}
+
+static bool parse_global_decl(Parser* parser, Unit* unit) {
+    assert(parser);
+    assert(unit);
+
+    PType* base = parse_declspec(parser);
+    if (!base)
+        return false;
+
+    Item* decl = parse_declarator(parser, base);
+    if (!decl)
+        return false;
+
+    if (decl->decl_ptype->type == PTY_FN)
+        return parse_fn(parser, unit, decl);
+
+    A3_SLL_ENQUEUE(&unit->items, decl, link);
+    return parse_global_var(parser, unit, base);
 }
 
 Vertex* parse(Parser* parser) {
@@ -684,11 +718,10 @@ Vertex* parse(Parser* parser) {
     Unit* unit = vertex_unit_new();
 
     while (parse_has_next(parser)) {
-        Item* fn = parse_fn(parser);
-        if (!fn)
+        if (!parse_global_decl(parser, unit)) {
+            parser->status = false;
             break;
-
-        A3_SLL_ENQUEUE(&unit->items, fn, link);
+        }
     }
 
     Token next = lex_peek(parser->lexer);

@@ -451,15 +451,17 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
     A3_SLL_FOR_EACH(Item, param, &decl->decl_ptype->params, link) {
         Type const* type = type_from_ptype(reg, param->decl_ptype);
         stack_depth += type_size(type);
-        param->obj =
-            scope_add(reg->current_scope,
-                      (Obj) { .name = param->name, .type = type, .stack_offset = stack_depth });
+        param->obj = scope_add(reg->current_scope, (Obj) { .name         = param->name,
+                                                           .type         = type,
+                                                           .stack_offset = stack_depth,
+                                                           .global       = false });
     }
 
     decl->obj = scope_add(reg->current_scope->parent,
                           (Obj) { .name        = decl->name,
                                   .type        = type_from_ptype(reg, decl->decl_ptype),
-                                  .stack_depth = stack_depth });
+                                  .stack_depth = stack_depth,
+                                  .global      = true });
 
     if (decl->body) {
         A3_TRYB(vertex_visit(visitor, VERTEX(decl->body, item.block)));
@@ -485,12 +487,16 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
     if (decl->decl_ptype->type == PTY_FN)
         return type_fn(visitor, decl);
 
-    Type const* type = type_from_ptype(reg, decl->decl_ptype);
-    reg->current_scope->fn->obj->stack_depth += type_size(type);
-    decl->obj = scope_add(reg->current_scope,
-                          (Obj) { .name         = decl->name,
-                                  .type         = type,
-                                  .stack_offset = reg->current_scope->fn->obj->stack_depth });
+    Type const* type   = type_from_ptype(reg, decl->decl_ptype);
+    bool        global = !reg->current_scope->fn;
+    if (!global)
+        reg->current_scope->fn->obj->stack_depth += type_size(type);
+    decl->obj =
+        scope_add(reg->current_scope,
+                  (Obj) { .name         = decl->name,
+                          .type         = type,
+                          .global       = global,
+                          .stack_offset = !global ? reg->current_scope->fn->obj->stack_depth : 0 });
 
     return true;
 }

@@ -104,7 +104,10 @@ static bool gen_addr(AstVisitor* visitor, Expr* lvalue) {
 
     switch (lvalue->type) {
     case EXPR_VAR:
-        printf("lea rax, [rbp - %zu]\n", lvalue->var.obj->stack_offset);
+        if (lvalue->var.obj->global)
+            printf("lea rax, [rel " A3_S_F "]\n", A3_S_FORMAT(lvalue->var.obj->name));
+        else
+            printf("lea rax, [rbp - %zu]\n", lvalue->var.obj->stack_offset);
         break;
     case EXPR_UNARY_OP:
         if (lvalue->unary_op.type == OP_DEREF) {
@@ -437,6 +440,17 @@ bool gen(A3CString src, Vertex* root) {
     assert(root->type == V_UNIT);
 
     Generator gen = { .src = src, .stack_depth = 0, .label = 0 };
+
+    puts("section .data");
+    A3_SLL_FOR_EACH(Item, decl, &root->unit.items, link) {
+        assert(VERTEX(decl, item)->type == V_DECL);
+
+        if (decl->obj->type->type == TY_FN)
+            continue;
+
+        printf("global " A3_S_F "\n" A3_S_F ": dq 0\n", A3_S_FORMAT(decl->obj->name),
+               A3_S_FORMAT(decl->obj->name));
+    }
 
     puts("section .text");
 

@@ -101,6 +101,10 @@ tests = {
   'char': [
     'simple',
     'arithmetic'
+  ],
+  'global': [
+    'simple',
+    'array'
   ]
 }
 
