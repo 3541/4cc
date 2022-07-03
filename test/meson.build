@@ -123,25 +123,24 @@ foreach suite, ts : tests
   endforeach
 endforeach
 
-extra_stage = 6
-foreach stage : range(1, extra_stage)
+foreach stage : ['1', '2', '3', '4', '5']
   extra_tests = run_command(
     [
       python,
       meson.current_source_dir() / 'extra_tests.py',
       'valid',
       meson.current_source_dir() / 'extra',
-      stage.to_string()
+      stage
     ],
     check: true
   ).stdout().strip().split('\n')
 
   foreach t : extra_tests
     name = fs.stem(t)
-    correct = executable(stage.to_string() + '_' + name, t, override_options: 'warning_level=0')
+    correct = executable(stage + '_' + name, t, override_options: 'warning_level=0')
 
     test(
-      'extra' / stage.to_string() / name,
+      'extra' / stage / name,
       python,
       depends: correct,
       args: [
@@ -160,7 +159,7 @@ foreach stage : range(1, extra_stage)
       meson.current_source_dir() / 'extra_tests.py',
       'invalid',
       meson.current_source_dir() / 'extra',
-      stage.to_string()
+      stage
     ],
     check: true
   ).stdout().strip().split('\n')
@@ -169,7 +168,7 @@ foreach stage : range(1, extra_stage)
     name = fs.stem(t)
 
     test(
-      'extra' / stage.to_string() / 'invalid' / name,
+      'extra' / stage / 'invalid' / name,
       python,
       args: [
         meson.current_source_dir() / 'test_invalid.py',
