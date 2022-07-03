@@ -49,6 +49,8 @@ tests = {
   ],
   'stmt': [
     'block',
+    'block_scope',
+    'block_scope_assign',
     'empty'
   ],
   'if': [
