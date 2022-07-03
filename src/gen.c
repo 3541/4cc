@@ -171,12 +171,38 @@ static bool gen_add_sub(BinOp* op) {
     return true;
 }
 
+static bool gen_bool_op(AstVisitor* visitor, BinOp* op) {
+    assert(visitor);
+    assert(op);
+    assert(op->type == OP_OR || op->type == OP_AND);
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(op->lhs, expr)));
+
+    size_t label = gen_label(visitor->ctx);
+    printf("test rax, rax\n"
+           "setnz al\n"
+           "movzx rax, al\n"
+           "%s .end%zu\n",
+           op->type == OP_AND ? "jz" : "jnz", label);
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(op->rhs, expr)));
+    printf("test rax, rax\n"
+           "setnz al\n"
+           "movzx rax, al\n"
+           ".end%zu:\n",
+           label);
+
+    return true;
+}
+
 static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
     assert(visitor);
     assert(op);
 
     if (op->type == OP_ASSIGN)
         return gen_assign(visitor, op);
+    if (op->type == OP_OR || op->type == OP_AND)
+        return gen_bool_op(visitor, op);
 
     A3_TRYB(vertex_visit(visitor, VERTEX(op->rhs, expr)));
     gen_stack_push(visitor->ctx);
@@ -236,6 +262,8 @@ static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
         break;
     }
     case OP_ASSIGN:
+    case OP_OR:
+    case OP_AND:
         A3_UNREACHABLE();
     }
 
@@ -344,7 +372,8 @@ static bool gen_decl(AstVisitor* visitor, Item* decl) {
     A3_TRYB(vertex_visit(visitor, VERTEX(decl->body, item.block)));
     assert(!((Generator*)visitor->ctx)->stack_depth);
 
-    puts(".ret:\n"
+    puts("mov rax, 0\n"
+         ".ret:\n"
          "mov rsp, rbp\n"
          "pop rbp\n"
          "ret");

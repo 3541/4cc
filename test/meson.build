@@ -123,7 +123,7 @@ foreach suite, ts : tests
   endforeach
 endforeach
 
-extra_stage = 4
+extra_stage = 6
 foreach stage : range(1, extra_stage)
   extra_tests = run_command(
     [
@@ -138,7 +138,7 @@ foreach stage : range(1, extra_stage)
 
   foreach t : extra_tests
     name = fs.stem(t)
-    correct = executable(name, t)
+    correct = executable(stage.to_string() + '_' + name, t, override_options: 'warning_level=0')
 
     test(
       'extra' / stage.to_string() / name,

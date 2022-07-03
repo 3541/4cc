@@ -17,6 +17,7 @@
 
 typedef enum TokenType {
     TOK_AMP,
+    TOK_AMP_AMP,
     TOK_BANG,
     TOK_BANG_EQ,
     TOK_CHAR,
@@ -37,6 +38,7 @@ typedef enum TokenType {
     TOK_LT,
     TOK_LT_EQ,
     TOK_MINUS,
+    TOK_PIPE_PIPE,
     TOK_PLUS,
     TOK_RBRACE,
     TOK_RBRACKET,

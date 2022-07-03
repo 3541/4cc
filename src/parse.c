@@ -114,6 +114,10 @@ static BinOpType parse_bin_op(TokenType type) {
         return OP_GE;
     case TOK_EQ:
         return OP_ASSIGN;
+    case TOK_AMP_AMP:
+        return OP_AND;
+    case TOK_PIPE_PIPE:
+        return OP_OR;
     case TOK_AMP:
         A3_PANIC("TODO");
     default:
@@ -209,23 +213,28 @@ static Expr* parse_index(Parser* parser, Expr* base) {
 }
 
 static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
-    [TOK_PLUS] = 11, [TOK_MINUS] = 11, [TOK_AMP] = 11,
-    [TOK_STAR] = 11, [TOK_BANG] = 11,  [TOK_TILDE] = 11,
+    [TOK_PLUS] = 15, [TOK_MINUS] = 15, [TOK_AMP] = 15,
+    [TOK_STAR] = 15, [TOK_BANG] = 15,  [TOK_TILDE] = 15,
 };
 
 static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
     [TOK_EQ] = { 2, 1 },
 
-    [TOK_EQ_EQ] = { 3, 4 }, [TOK_BANG_EQ] = { 3, 4 },
+    [TOK_PIPE_PIPE] = { 3, 4 },
 
-    [TOK_GT] = { 5, 6 },    [TOK_GT_EQ] = { 5, 6 },   [TOK_LT] = { 5, 6 }, [TOK_LT_EQ] = { 5, 6 },
+    [TOK_AMP_AMP] = { 5, 6 },
 
-    [TOK_PLUS] = { 7, 8 },  [TOK_MINUS] = { 7, 8 },
+    [TOK_EQ_EQ] = { 7, 8 },     [TOK_BANG_EQ] = { 7, 8 },
 
-    [TOK_STAR] = { 9, 10 }, [TOK_SLASH] = { 9, 10 }
+    [TOK_GT] = { 9, 10 },       [TOK_GT_EQ] = { 9, 10 },
+    [TOK_LT] = { 9, 10 },       [TOK_LT_EQ] = { 9, 10 },
+
+    [TOK_PLUS] = { 11, 12 },    [TOK_MINUS] = { 11, 12 },
+
+    [TOK_STAR] = { 13, 14 },    [TOK_SLASH] = { 13, 14 }
 };
 
-static uint8_t POSTFIX_PRECEDENCE[TOK_COUNT] = { [TOK_LPAREN] = 13, [TOK_LBRACKET] = 13 };
+static uint8_t POSTFIX_PRECEDENCE[TOK_COUNT] = { [TOK_LPAREN] = 17, [TOK_LBRACKET] = 17 };
 
 static Expr* parse_expr(Parser* parser, uint8_t precedence) {
     assert(parser);

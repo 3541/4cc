@@ -357,6 +357,16 @@ static bool type_bin_op(AstVisitor* visitor, BinOp* op) {
     case OP_NE:
         EXPR(op, bin_op)->res_type = BUILTIN_TYPES[TY_INT];
         break;
+    case OP_OR:
+    case OP_AND:
+        if (!type_is_scalar(op->lhs->res_type) || !type_is_scalar(op->rhs->res_type)) {
+            type_error(visitor->ctx, VERTEX(op, expr.bin_op),
+                       "Non-scalar operand(s) not compatible with this operation.");
+            return false;
+        }
+
+        EXPR(op, bin_op)->res_type = BUILTIN_TYPES[TY_INT];
+        break;
     }
 
     return true;

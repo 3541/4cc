@@ -36,6 +36,7 @@ typedef enum VertexType {
 
 typedef enum BinOpType {
     OP_ADD,
+    OP_AND,
     OP_ASSIGN,
     OP_DIV,
     OP_EQ,
@@ -45,6 +46,7 @@ typedef enum BinOpType {
     OP_LT,
     OP_MUL,
     OP_NE,
+    OP_OR,
     OP_SUB,
 } BinOpType;
 

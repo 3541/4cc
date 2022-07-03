@@ -171,7 +171,7 @@ static Token lex_lit_num(Lexer* lexer) {
 static Token lex_op(Lexer* lexer) {
     assert(lexer);
 
-    A3CString lexeme = lex_consume_one(lexer, A3_CS("binary operator"), A3_CS("+-*/=!<>&~"));
+    A3CString lexeme = lex_consume_one(lexer, A3_CS("binary operator"), A3_CS("+-*/=!<>&~|"));
     if (!a3_string_cptr(lexeme))
         return lex_recover(lexer);
 
@@ -188,9 +188,6 @@ static Token lex_op(Lexer* lexer) {
         break;
     case '/':
         type = TOK_SLASH;
-        break;
-    case '&':
-        type = TOK_AMP;
         break;
     case '~':
         type = TOK_TILDE;
@@ -234,6 +231,26 @@ static Token lex_op(Lexer* lexer) {
         lexeme.len++;
         lex_consume_any(lexer, 1);
         type = TOK_GT_EQ;
+        break;
+    case '&':
+        if (lexeme.ptr[1] != '&') {
+            type = TOK_AMP;
+            break;
+        }
+
+        lexeme.len++;
+        lex_consume_any(lexer, 1);
+        type = TOK_AMP_AMP;
+        break;
+    case '|':
+        if (lexeme.ptr[1] != '|') {
+            lex_error(lexer, "Expected a '|'.");
+            return lex_recover(lexer);
+        }
+
+        lexeme.len++;
+        lex_consume_any(lexer, 1);
+        type = TOK_PIPE_PIPE;
         break;
     default:
         A3_UNREACHABLE();
@@ -330,6 +347,7 @@ Token lex_peek(Lexer* lexer) {
     case '!':
     case '&':
     case '~':
+    case '|':
         lexer->peek = lex_op(lexer);
         break;
     case '(':
