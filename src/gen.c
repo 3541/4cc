@@ -489,6 +489,11 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
 
     Generator gen = { .cfg = cfg, .src = src, .stack_depth = 0, .label = 0, .line = 0 };
 
+    gen_asm(&gen,
+            "\nsection .text\n"
+            "%%line 0+0 " A3_S_F,
+            A3_S_FORMAT(gen.cfg->src));
+
     gen_asm(&gen, "section .data");
     A3_SLL_FOR_EACH(Item, decl, &root->unit.items, link) {
         assert(VERTEX(decl, item)->type == V_DECL);
@@ -507,11 +512,6 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
             gen_asm(&gen, A3_S_F ": dq 0", A3_S_FORMAT(decl->obj->name));
         }
     }
-
-    gen_asm(&gen,
-            "\nsection .text\n"
-            "%%line 0+0 " A3_S_F,
-            A3_S_FORMAT(gen.cfg->src));
 
     bool ret = vertex_visit(
         &(AstVisitor) {
