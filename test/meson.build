@@ -135,6 +135,10 @@ tests = {
     'int',
     'ptr',
     'array'
+  ],
+  'comment': [
+    'line',
+    'block'
   ]
 }
 

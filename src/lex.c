@@ -138,10 +138,40 @@ static bool is_ident(uint8_t c) { return is_ident_first(c) || is_digit(c); }
 
 static bool is_not_ident(uint8_t c) { return !is_ident(c); }
 
+static bool is_newline(uint8_t c) { return c == '\n' || c == '\r'; };
+
+static bool is_star(uint8_t c) { return c == '*'; }
+
 static void lex_consume_space(Lexer* lexer) {
     assert(lexer);
 
-    lex_consume_until(lexer, is_not_space);
+    while (true && !lex_is_eof(lexer)) {
+        if (isspace(lex_peek_byte(lexer))) {
+            lex_consume_until(lexer, is_not_space);
+            continue;
+        }
+
+        A3CString first_two = lex_peek_str(lexer);
+        first_two.len       = MIN(first_two.len, 2);
+        if (a3_string_cmp(first_two, A3_CS("//")) == 0) {
+            lex_consume_until(lexer, is_newline);
+            continue;
+        }
+        if (a3_string_cmp(first_two, A3_CS("/*")) == 0) {
+            while (true && !lex_is_eof(lexer)) {
+                lex_consume_until(lexer, is_star);
+                lex_consume_any(lexer, 1);
+                if (lex_peek_byte(lexer) == '/') {
+                    lex_consume_any(lexer, 1);
+                    break;
+                }
+            }
+
+            continue;
+        }
+
+        break;
+    }
 }
 
 static Token tok_new(Lexer* lexer, Token tok) {
