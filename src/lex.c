@@ -210,7 +210,7 @@ static Token lex_lit_num(Lexer* lexer) {
 static Token lex_op(Lexer* lexer) {
     assert(lexer);
 
-    A3CString lexeme = lex_consume_one(lexer, A3_CS("binary operator"), A3_CS("+-*/=!<>&~|"));
+    A3CString lexeme = lex_consume_one(lexer, A3_CS("binary operator"), A3_CS("+-*/=!<>&~|."));
     if (!a3_string_cptr(lexeme))
         return lex_recover(lexer);
 
@@ -230,6 +230,9 @@ static Token lex_op(Lexer* lexer) {
         break;
     case '~':
         type = TOK_TILDE;
+        break;
+    case '.':
+        type = TOK_DOT;
         break;
     case '=':
         if (lexeme.ptr[1] != '=') {
@@ -344,7 +347,7 @@ static Token lex_ident_or_kw(Lexer* lexer) {
         { A3_CS("else"), TOK_ELSE },     { A3_CS("for"), TOK_FOR },
         { A3_CS("while"), TOK_WHILE },   { A3_CS("int"), TOK_INT },
         { A3_CS("void"), TOK_VOID },     { A3_CS("char"), TOK_CHAR },
-        { A3_CS("sizeof"), TOK_SIZEOF },
+        { A3_CS("sizeof"), TOK_SIZEOF }, { A3_CS("struct"), TOK_STRUCT },
     };
 
     A3CString lexeme = lex_consume_until(lexer, is_not_ident);
@@ -506,6 +509,7 @@ Token lex_peek(Lexer* lexer) {
     case '&':
     case '~':
     case '|':
+    case '.':
         lexer->peek = lex_op(lexer);
         break;
     case '(':

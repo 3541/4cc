@@ -17,21 +17,28 @@
 // ast.h
 typedef struct Vertex Vertex;
 typedef struct Item   Item;
+typedef struct Member Member;
 
 typedef struct Type     Type;
 typedef struct Registry Registry;
 typedef struct Scope    Scope;
 
-typedef enum TypeType { TY_INT, TY_CHAR, TY_USIZE, TY_ARRAY, TY_FN, TY_PTR } TypeType;
+typedef enum TypeType { TY_INT, TY_CHAR, TY_USIZE, TY_ARRAY, TY_FN, TY_PTR, TY_STRUCT } TypeType;
 
 typedef struct Type {
     TypeType type;
 
     union {
+        // TY_STRUCT
+        A3_SLL(, Member) members;
+
+        // TY_ARRAY and TY_PTR.
         struct {
             Type const* parent;
             size_t      len;
         };
+
+        // TY_FN
         struct {
             A3_SLL(, Item) params;
             Type const* ret;
@@ -51,8 +58,9 @@ typedef struct Obj {
 
 extern Type const* BUILTIN_TYPES[3];
 
-Registry* type_registry_new(void);
-A3String  type_name(Type const*);
-bool      type_is_scalar(Type const*);
-size_t    type_size(Type const*);
-bool      type(Registry*, A3CString src, Vertex*);
+Registry*     type_registry_new(void);
+A3String      type_name(Type const*);
+bool          type_is_scalar(Type const*);
+size_t        type_size(Type const*);
+Member const* type_struct_find_member(Type const*, A3CString name);
+bool          type(Registry*, A3CString src, Vertex*);

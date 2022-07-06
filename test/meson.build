@@ -139,6 +139,16 @@ tests = {
   'comment': [
     'line',
     'block'
+  ],
+  'struct': [
+    'simple',
+    'multiple_types',
+    'array',
+    'array_member',
+    'nested',
+    'comma',
+    'size_simple',
+    'size_multiple_types'
   ]
 }
 

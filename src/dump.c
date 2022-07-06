@@ -197,6 +197,14 @@ static bool dump_call(AstVisitor* visitor, Call* call) {
     return true;
 }
 
+static bool dump_member(AstVisitor* visitor, MemberAccess* member) {
+    assert(visitor);
+    assert(member);
+
+    dump_print(visitor->ctx, "ACCESS(" A3_S_F ")", A3_S_FORMAT(member->rhs->name));
+    return dump_child(visitor, VERTEX(member->lhs, expr));
+}
+
 static bool dump_expr_stmt(AstVisitor* visitor, Item* stmt) {
     assert(visitor);
     assert(stmt->type == STMT_EXPR_STMT);
@@ -309,6 +317,7 @@ bool dump(Vertex* root) {
             .visit_lit       = dump_lit,
             .visit_var       = dump_var,
             .visit_call      = dump_call,
+            .visit_member    = dump_member,
             .visit_expr_stmt = dump_expr_stmt,
             .visit_ret       = dump_ret,
             .visit_decl      = dump_decl,

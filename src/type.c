@@ -56,7 +56,7 @@ Type const* BUILTIN_TYPES[3] = {
     [TY_USIZE] = &(Type) { .type = TY_USIZE },
 };
 
-static Type const* type_from_ptype(Registry* reg, PType* ptype);
+static Type const* type_from_ptype(Registry*, PType*);
 
 static Scope* scope_new(Scope* parent) {
     A3_UNWRAPNI(Scope*, ret, calloc(1, sizeof(*ret)));
@@ -164,6 +164,8 @@ A3String type_name(Type const* type) {
         a3_buf_write_fmt(&buf, "[%zu]", type->len);
         return A3_CS_MUT(a3_buf_read_ptr(&buf));
     }
+    case TY_STRUCT:
+        return a3_string_clone(A3_CS("struct <anonymous>"));
     }
 
     A3_UNREACHABLE();
@@ -191,9 +193,26 @@ size_t type_size(Type const* type) {
         return sizeof(void (*)(void));
     case TY_ARRAY:
         return type_size(type->parent) * type->len;
+    case TY_STRUCT: {
+        size_t ret = 0;
+        A3_SLL_FOR_EACH(Member, member, &type->members, link) { ret += type_size(member->type); }
+        return ret;
+    }
     }
 
     A3_UNREACHABLE();
+}
+
+Member const* type_struct_find_member(Type const* s, A3CString name) {
+    assert(s);
+    assert(s->type == TY_STRUCT);
+
+    A3_SLL_FOR_EACH(Member, member, &s->members, link) {
+        if (a3_string_cmp(member->name, name) == 0)
+            return member;
+    }
+
+    return NULL;
 }
 
 A3_FORMAT_FN(3, 4)
@@ -278,6 +297,30 @@ static Type const* type_fn_from_ptype(Registry* reg, PType const* ptype) {
     return ret;
 }
 
+static Type const* type_struct_from_ptype(Registry* reg, PType* ptype) {
+    assert(reg);
+    assert(ptype);
+    assert(ptype->type == PTY_STRUCT);
+
+    A3_UNWRAPNI(Type*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Type) { .type = TY_STRUCT };
+    A3_SLL_INIT(&ret->members);
+
+    size_t offset = 0;
+    while (!A3_SLL_IS_EMPTY(&ptype->members)) {
+        Member* member = A3_SLL_HEAD(&ptype->members);
+        A3_SLL_DEQUEUE(&ptype->members, link);
+
+        member->type   = type_from_ptype(reg, member->ptype);
+        member->offset = offset;
+        offset += type_size(member->type);
+
+        A3_SLL_ENQUEUE(&ret->members, member, link);
+    }
+
+    return ret;
+}
+
 static Type const* type_from_ptype(Registry* reg, PType* ptype) {
     assert(reg);
     assert(ptype);
@@ -292,6 +335,8 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
         return type_array_of(type_from_ptype(reg, ptype->parent), ptype->len);
     case PTY_FN:
         return type_fn_from_ptype(reg, ptype);
+    case PTY_STRUCT:
+        return type_struct_from_ptype(reg, ptype);
     case PTY_BUILTIN:
         switch (ptype->builtin) {
         case TOK_INT:
@@ -548,6 +593,23 @@ static bool type_call(AstVisitor* visitor, Call* call) {
     return true;
 }
 
+static bool type_member(AstVisitor* visitor, MemberAccess* member) {
+    assert(visitor);
+    assert(member);
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(member->lhs, expr)));
+    Member const* mem = type_struct_find_member(member->lhs->res_type, member->name);
+    if (!mem) {
+        type_error(visitor->ctx, VERTEX(member, expr.member), "No member of this name exists.");
+        return false;
+    }
+
+    member->rhs                    = mem;
+    EXPR(member, member)->res_type = mem->type;
+
+    return true;
+}
+
 static bool type_block(AstVisitor* visitor, Block* block) {
     assert(visitor);
     assert(block);
@@ -612,6 +674,7 @@ bool type(Registry* reg, A3CString src, Vertex* root) {
             .visit_lit      = type_lit,
             .visit_var      = type_var,
             .visit_call     = type_call,
+            .visit_member   = type_member,
             .visit_block    = type_block,
             .visit_loop     = type_loop,
             .visit_decl     = type_decl,

@@ -27,6 +27,7 @@ typedef struct Scope  Scope;
 typedef struct Item   Item;
 typedef struct Vertex Vertex;
 typedef struct PType  PType;
+typedef struct Member Member;
 
 typedef enum VertexType {
     V_DECL,
@@ -70,7 +71,15 @@ typedef enum UnaryOpType {
     OP_UNARY_ADD,
 } UnaryOpType;
 
-typedef enum ExprType { EXPR_BIN_OP, EXPR_UNARY_OP, EXPR_LIT, EXPR_VAR, EXPR_CALL } ExprType;
+typedef enum ExprType {
+    EXPR_BIN_OP,
+    EXPR_CALL,
+    EXPR_LIT,
+    EXPR_MEMBER,
+    EXPR_UNARY_OP,
+    EXPR_VAR,
+} ExprType;
+
 typedef enum LiteralType { LIT_NUM } LiteralType;
 
 typedef struct Block {
@@ -99,7 +108,8 @@ typedef struct Literal {
 
 typedef struct Var {
     A3CString name;
-    Obj*      obj;
+
+    Obj* obj;
 } Var;
 
 typedef struct Arg Arg;
@@ -114,16 +124,25 @@ typedef struct Call {
     Obj* obj;
 } Call;
 
+typedef struct MemberAccess {
+    Expr* lhs;
+    union {
+        A3CString     name;
+        Member const* rhs;
+    };
+} MemberAccess;
+
 typedef struct Expr {
     ExprType    type;
     Type const* res_type;
 
     union {
-        BinOp   bin_op;
-        UnaryOp unary_op;
-        Literal lit;
-        Var     var;
-        Call    call;
+        BinOp        bin_op;
+        UnaryOp      unary_op;
+        Literal      lit;
+        Var          var;
+        Call         call;
+        MemberAccess member;
     };
 } Expr;
 
@@ -140,19 +159,33 @@ typedef struct Loop {
     Item* body;
 } Loop;
 
-typedef enum PTypeType { PTY_PTR, PTY_BASE, PTY_BUILTIN, PTY_FN, PTY_ARRAY } PTypeType;
+typedef struct Member {
+    A3CString name;
+    A3_SLL_LINK(Member) link;
+    size_t offset;
+
+    union {
+        PType*      ptype;
+        Type const* type;
+    };
+} Member;
+
+typedef enum PTypeType { PTY_PTR, PTY_BASE, PTY_BUILTIN, PTY_FN, PTY_ARRAY, PTY_STRUCT } PTypeType;
 
 typedef struct PType {
     PTypeType type;
 
     union {
-        TokenType builtin; // PTY_BUILTIN
-        A3CString name;    // PTY_BASE
+        TokenType builtin;        // PTY_BUILTIN
+        A3CString name;           // PTY_BASE
+        A3_SLL(, Member) members; // PTY_STRUCT
+
         // PTY_FN
         struct {
             A3_SLL(, Item) params;
             PType* ret;
         };
+
         // PTY_ARRAY and PTY_PTR.
         struct {
             PType* parent;
@@ -223,6 +256,7 @@ typedef struct AstVisitor {
     bool (*visit_lit)(AstVisitor*, Literal*);
     bool (*visit_var)(AstVisitor*, Var*);
     bool (*visit_call)(AstVisitor*, Call*);
+    bool (*visit_member)(AstVisitor*, MemberAccess*);
     bool (*visit_expr_stmt)(AstVisitor*, Item*);
     bool (*visit_ret)(AstVisitor*, Item*);
     bool (*visit_decl)(AstVisitor*, Item*);
@@ -236,6 +270,7 @@ Expr*  vertex_unary_op_new(Span, UnaryOpType, Expr* operand);
 Expr*  vertex_lit_num_new(Span, int64_t);
 Expr*  vertex_var_new(Span, A3CString name);
 Expr*  vertex_call_new(Span, A3CString name);
+Expr*  vertex_member_new(Span, Expr* lhs, A3CString rhs_name);
 Item*  vertex_expr_stmt_new(Span, Expr* expr);
 Item*  vertex_ret_new(Span, Expr* expr);
 Item*  vertex_empty_new(Span);
@@ -250,5 +285,7 @@ PType* ptype_builtin_new(TokenType);
 PType* ptype_ptr_to(PType*);
 PType* ptype_fn(PType* ret_type);
 PType* ptype_array(PType*, size_t);
+PType* ptype_struct_new(void);
 
-Arg* arg_new(Expr*);
+Arg*    arg_new(Expr*);
+Member* member_new(A3CString name, PType*);

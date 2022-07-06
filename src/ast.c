@@ -123,6 +123,19 @@ Expr* vertex_call_new(Span span, A3CString name) {
     return &ret->expr;
 }
 
+Expr* vertex_member_new(Span span, Expr* lhs, A3CString rhs_name) {
+    assert(span.text.ptr);
+    assert(lhs);
+    assert(rhs_name.ptr);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .span = span,
+                      .type = V_EXPR,
+                      .expr = { .type = EXPR_MEMBER, .member = { .lhs = lhs, .name = rhs_name } } };
+
+    return &ret->expr;
+}
+
 If* vertex_if_new(Span span, Expr* cond, Item* body_true, Item* body_false) {
     assert(span.text.ptr);
     assert(cond);
@@ -167,7 +180,9 @@ static bool visit_bin_op(AstVisitor* visitor, BinOp* op) {
     assert(op);
 
     A3_TRYB(vertex_visit(visitor, VERTEX(op->lhs, expr)));
-    return vertex_visit(visitor, VERTEX(op->rhs, expr));
+    A3_TRYB(vertex_visit(visitor, VERTEX(op->rhs, expr)));
+
+    return true;
 }
 
 static bool visit_unary_op(AstVisitor* visitor, UnaryOp* op) {
@@ -269,6 +284,14 @@ static bool visit_call(AstVisitor* visitor, Call* call) {
     return true;
 }
 
+static bool visit_member(AstVisitor* visitor, MemberAccess* member) {
+    assert(visitor);
+    assert(member);
+    (void)member;
+
+    return vertex_visit(visitor, VERTEX(member->lhs, expr));
+}
+
 #define VISIT(VISITOR, NAME, VERTEX) ((((VISITOR)->NAME) ?: NAME)((VISITOR), (VERTEX)))
 
 bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
@@ -296,6 +319,8 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
             return VISIT(visitor, visit_var, &vertex->expr.var);
         case EXPR_CALL:
             return VISIT(visitor, visit_call, &vertex->expr.call);
+        case EXPR_MEMBER:
+            return VISIT(visitor, visit_member, &vertex->expr.member);
         }
         break;
     case V_STMT:
@@ -358,11 +383,28 @@ PType* ptype_array(PType* base, size_t len) {
     return ret;
 }
 
+PType* ptype_struct_new(void) {
+    A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
+    *ret = (PType) { .type = PTY_STRUCT };
+    A3_SLL_INIT(&ret->members);
+
+    return ret;
+}
+
 Arg* arg_new(Expr* expr) {
     assert(expr);
 
     A3_UNWRAPNI(Arg*, ret, calloc(1, sizeof(*ret)));
     *ret = (Arg) { .expr = expr };
+
+    return ret;
+}
+
+Member* member_new(A3CString name, PType* type) {
+    assert(type);
+
+    A3_UNWRAPNI(Member*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Member) { .name = name, .ptype = type };
 
     return ret;
 }

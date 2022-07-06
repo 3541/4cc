@@ -36,6 +36,7 @@ static Item*  parse_stmt(Parser*);
 static Block* parse_block(Parser*);
 static Item*  parse_declarator(Parser*, PType*);
 static PType* parse_decl_suffix(Parser*, PType*);
+static PType* parse_declspec(Parser*);
 static bool   parse_decl(Parser*, Block*);
 
 Parser* parse_new(A3CString src, Lexer* lexer) {
@@ -98,7 +99,7 @@ static bool parse_has_decl(Parser* parser) {
     assert(parser);
 
     Token next = lex_peek(parser->lexer);
-    return next.type == TOK_INT || next.type == TOK_CHAR;
+    return next.type == TOK_INT || next.type == TOK_CHAR || next.type == TOK_STRUCT;
 }
 
 static BinOpType parse_bin_op(TokenType type) {
@@ -253,8 +254,8 @@ static Expr* parse_lit_str(Parser* parser) {
 }
 
 static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
-    [TOK_PLUS] = 15, [TOK_MINUS] = 15, [TOK_AMP] = 15,   [TOK_STAR] = 15,
-    [TOK_BANG] = 15, [TOK_TILDE] = 15, [TOK_SIZEOF] = 15
+    [TOK_PLUS] = 15, [TOK_MINUS] = 15, [TOK_AMP] = 15,    [TOK_STAR] = 15,
+    [TOK_BANG] = 15, [TOK_TILDE] = 15, [TOK_SIZEOF] = 15,
 };
 
 static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
@@ -271,10 +272,15 @@ static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
 
     [TOK_PLUS] = { 11, 12 },    [TOK_MINUS] = { 11, 12 },
 
-    [TOK_STAR] = { 13, 14 },    [TOK_SLASH] = { 13, 14 }
+    [TOK_STAR] = { 13, 14 },    [TOK_SLASH] = { 13, 14 },
+
+    [TOK_DOT] = { 17, 18 },
 };
 
-static uint8_t POSTFIX_PRECEDENCE[TOK_COUNT] = { [TOK_LPAREN] = 17, [TOK_LBRACKET] = 17 };
+static uint8_t POSTFIX_PRECEDENCE[TOK_COUNT] = {
+    [TOK_LPAREN]   = 17,
+    [TOK_LBRACKET] = 17,
+};
 
 static Expr* parse_expr(Parser* parser, uint8_t precedence) {
     assert(parser);
@@ -353,8 +359,18 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
         if (!rhs)
             return NULL;
 
-        lhs = vertex_bin_op_new(parse_span_merge(SPAN(lhs, expr), SPAN(rhs, expr)),
-                                parse_bin_op(tok_op.type), lhs, rhs);
+        Span op_span = parse_span_merge(SPAN(lhs, expr), SPAN(rhs, expr));
+        if (tok_op.type == TOK_DOT) {
+            if (rhs->type != EXPR_VAR) {
+                parse_error(parser, tok_op,
+                            "Right-hand side of member access must be an identifier.");
+                return NULL;
+            }
+
+            lhs = vertex_member_new(op_span, lhs, rhs->var.name);
+        } else {
+            lhs = vertex_bin_op_new(op_span, parse_bin_op(tok_op.type), lhs, rhs);
+        }
     }
 
     return lhs;
@@ -503,16 +519,61 @@ static Item* parse_stmt(Parser* parser) {
     }
 }
 
+static PType* parse_struct_decl(Parser* parser) {
+    assert(parser);
+
+    if (!parse_consume(parser, A3_CS("struct declaration"), TOK_STRUCT) ||
+        !parse_consume(parser, A3_CS("opening brace"), TOK_LBRACE))
+        return NULL;
+
+    PType* ret = ptype_struct_new();
+
+    while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_RBRACE) {
+        PType* base = parse_declspec(parser);
+        if (!base)
+            return NULL;
+
+        bool first = true;
+        while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_SEMI) {
+            if (!first && !parse_consume(parser, A3_CS("comma"), TOK_COMMA))
+                return NULL;
+            first = false;
+
+            Item* decl = parse_declarator(parser, base);
+            if (!decl)
+                return NULL;
+
+            Member* member = member_new(decl->name, decl->decl_ptype);
+            free(VERTEX(decl, item));
+
+            A3_SLL_ENQUEUE(&ret->members, member, link);
+        }
+
+        if (!parse_consume(parser, A3_CS("semicolon"), TOK_SEMI))
+            return NULL;
+    }
+
+    if (!parse_consume(parser, A3_CS("closing brace"), TOK_RBRACE))
+        return NULL;
+
+    return ret;
+}
+
 static PType* parse_declspec(Parser* parser) {
     assert(parser);
 
-    Token next = lex_next(parser->lexer);
-    if (next.type != TOK_INT && next.type != TOK_CHAR) {
+    Token next = lex_peek(parser->lexer);
+    switch (next.type) {
+    case TOK_INT:
+    case TOK_CHAR:
+        lex_next(parser->lexer);
+        return ptype_builtin_new(next.type);
+    case TOK_STRUCT:
+        return parse_struct_decl(parser);
+    default:
         parse_error(parser, next, "Expected a type name.");
         return NULL;
     }
-
-    return ptype_builtin_new(next.type);
 }
 
 static PType* parse_decl_suffix_fn(Parser* parser, PType* base) {
@@ -624,7 +685,7 @@ static bool parse_decl(Parser* parser, Block* block) {
     PType* base = parse_declspec(parser);
     if (!base)
         return false;
-    assert(base->type == PTY_BUILTIN);
+    assert(base->type == PTY_BUILTIN || base->type == PTY_STRUCT);
 
     bool first = true;
     while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_SEMI) {

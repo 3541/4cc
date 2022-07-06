@@ -139,9 +139,13 @@ static bool gen_addr(AstVisitor* visitor, Expr* lvalue) {
         else
             gen_asm(visitor->ctx, "lea rax, [rbp - %zu]", lvalue->var.obj->stack_offset);
         break;
+    case EXPR_MEMBER:
+        A3_TRYB(gen_addr(visitor, lvalue->member.lhs));
+        gen_asm(visitor->ctx, "add rax, %zu", lvalue->member.rhs->offset);
+        break;
     case EXPR_UNARY_OP:
         if (lvalue->unary_op.type == OP_DEREF) {
-            vertex_visit(visitor, VERTEX(lvalue->unary_op.operand, expr));
+            A3_TRYB(vertex_visit(visitor, VERTEX(lvalue->unary_op.operand, expr)));
             break;
         }
 
@@ -229,6 +233,16 @@ static bool gen_bool_op(AstVisitor* visitor, BinOp* op) {
             "movzx rax, al\n"
             ".end%zu:",
             label);
+
+    return true;
+}
+
+static bool gen_member(AstVisitor* visitor, MemberAccess* mem) {
+    assert(visitor);
+    assert(mem);
+
+    A3_TRYB(gen_addr(visitor, EXPR(mem, member)));
+    gen_load(visitor->ctx, EXPR(mem, member)->res_type);
 
     return true;
 }
@@ -523,6 +537,7 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
             .visit_lit      = gen_lit,
             .visit_var      = gen_var,
             .visit_call     = gen_call,
+            .visit_member   = gen_member,
             .visit_ret      = gen_ret,
             .visit_if       = gen_if,
             .visit_decl     = gen_decl,
