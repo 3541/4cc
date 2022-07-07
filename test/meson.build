@@ -33,14 +33,15 @@ tests = {
     'ge_gt',
     'multiple_stmts',
   ],
-  'assign': [
+  'var': [
     'simple',
     'simple_split',
     'arithmetic',
     'multiple',
     'long_ident',
     'mixed_ident',
-    'mutate'
+    'mutate',
+    'align'
   ],
   'return': [
     'early',
@@ -148,7 +149,8 @@ tests = {
     'nested',
     'comma',
     'size_simple',
-    'size_multiple_types'
+    'size_multiple_types',
+    'alignment'
   ]
 }
 

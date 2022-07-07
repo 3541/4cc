@@ -28,6 +28,7 @@ typedef enum TypeType { TY_INT, TY_CHAR, TY_USIZE, TY_ARRAY, TY_FN, TY_PTR, TY_S
 typedef struct Type {
     TypeType type;
     size_t   size;
+    size_t   align;
 
     union {
         // TY_STRUCT

@@ -10,6 +10,7 @@
 #include "type.h"
 
 #include <assert.h>
+#include <stdalign.h>
 #include <stdbool.h>
 
 #include <a3/buffer.h>
@@ -51,9 +52,9 @@ typedef struct Registry {
 } Registry;
 
 Type const* BUILTIN_TYPES[3] = {
-    [TY_INT]   = &(Type) { .type = TY_INT, .size = sizeof(int64_t) },
-    [TY_CHAR]  = &(Type) { .type = TY_CHAR, .size = sizeof(char) },
-    [TY_USIZE] = &(Type) { .type = TY_USIZE, .size = sizeof(size_t) },
+    [TY_INT]   = &(Type) { .type = TY_INT, .size = sizeof(int64_t), .align = alignof(int64_t) },
+    [TY_CHAR]  = &(Type) { .type = TY_CHAR, .size = sizeof(char), .align = alignof(char) },
+    [TY_USIZE] = &(Type) { .type = TY_USIZE, .size = sizeof(size_t), .align = alignof(size_t) },
 };
 
 static Type const* type_from_ptype(Registry*, PType*);
@@ -219,6 +220,8 @@ static void type_error_mismatch(Registry const* reg, Vertex const* v, Type const
     a3_string_free(&rhs_name);
 }
 
+static size_t align_up(size_t n, size_t align) { return (n + align - 1) & ~(align - 1); }
+
 static Type const* type_ptr_to(Registry* reg, Type const* type) {
     assert(reg);
     assert(type);
@@ -228,7 +231,8 @@ static Type const* type_ptr_to(Registry* reg, Type const* type) {
         return *entry;
 
     A3_UNWRAPNI(Type*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Type) { .type = TY_PTR, .size = sizeof(void*), .parent = type };
+    *ret =
+        (Type) { .type = TY_PTR, .size = sizeof(void*), .align = alignof(void*), .parent = type };
 
     A3_HT_INSERT(TypePtr, TypePtr)(&reg->ptrs_to, type, ret);
 
@@ -237,7 +241,9 @@ static Type const* type_ptr_to(Registry* reg, Type const* type) {
 
 static Type const* type_array_of(Type const* type, size_t len) {
     A3_UNWRAPNI(Type*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Type) { .type = TY_ARRAY, .size = len * type->size, .parent = type, .len = len };
+    *ret = (Type) {
+        .type = TY_ARRAY, .size = len * type->size, .align = type->align, .parent = type, .len = len
+    };
 
     return ret;
 }
@@ -248,9 +254,10 @@ static Type const* type_fn_from_ptype(Registry* reg, PType const* ptype) {
     assert(ptype->type == PTY_FN);
 
     A3_UNWRAPNI(Type*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Type) { .type = TY_FN,
-                    .size = sizeof(void (*)(void)),
-                    .ret  = type_from_ptype(reg, ptype->ret) };
+    *ret = (Type) { .type  = TY_FN,
+                    .size  = sizeof(void (*)(void)),
+                    .align = alignof(void (*)(void)),
+                    .ret   = type_from_ptype(reg, ptype->ret) };
     A3_SLL_INIT(&ret->params);
 
     A3_SLL_FOR_EACH(Item, decl, &ptype->params, link) {
@@ -288,8 +295,9 @@ static Type const* type_struct_from_ptype(Registry* reg, PType* ptype) {
         A3_SLL_DEQUEUE(&ptype->members, link);
 
         member->type   = type_from_ptype(reg, member->ptype);
-        member->offset = offset;
+        member->offset = offset = align_up(offset, member->type->align);
         offset += member->type->size;
+        ret->align = MAX(ret->align, member->type->align);
 
         A3_SLL_ENQUEUE(&ret->members, member, link);
     }
@@ -463,8 +471,6 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
     return true;
 }
 
-static size_t align_up(size_t n, size_t align) { return (n + align - 1) & ~(align - 1); }
-
 static bool type_fn(AstVisitor* visitor, Item* decl) {
     assert(visitor);
     assert(decl);
@@ -481,6 +487,8 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
     size_t stack_depth = 0;
     A3_SLL_FOR_EACH(Item, param, &decl->decl_ptype->params, link) {
         Type const* type = type_from_ptype(reg, param->decl_ptype);
+
+        stack_depth = align_up(stack_depth, type->align);
         stack_depth += type->size;
         param->obj = scope_add(reg->current_scope, (Obj) { .name         = param->name,
                                                            .type         = type,
@@ -520,8 +528,10 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
 
     Type const* type   = type_from_ptype(reg, decl->decl_ptype);
     bool        global = !reg->current_scope->fn;
-    if (!global)
-        reg->current_scope->fn->obj->stack_depth += type->size;
+    if (!global) {
+        reg->current_scope->fn->obj->stack_depth =
+            align_up(reg->current_scope->fn->obj->stack_depth, type->align) + type->size;
+    }
     decl->obj =
         scope_add(reg->current_scope,
                   (Obj) { .name         = decl->name,
