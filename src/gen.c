@@ -200,12 +200,12 @@ static bool gen_add_sub(Generator* gen, BinOp* op) {
     gen_asm(gen, "%s rax, rdi", insn);
 
     // Pointer difference is in units of elements.
-    if (op->type == OP_SUB && count_scalar == 0) {
+    if (op->type == OP_SUB && count_scalar == 0 && op->lhs->res_type->parent->size != 1) {
         gen_asm(gen,
                 "cqo\n"
                 "mov rsi, %zu\n"
                 "idiv rsi",
-                op->lhs->res_type->size);
+                op->lhs->res_type->parent->size);
     }
 
     return true;
