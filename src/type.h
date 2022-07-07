@@ -27,6 +27,7 @@ typedef enum TypeType { TY_INT, TY_CHAR, TY_USIZE, TY_ARRAY, TY_FN, TY_PTR, TY_S
 
 typedef struct Type {
     TypeType type;
+    size_t   size;
 
     union {
         // TY_STRUCT
@@ -61,6 +62,5 @@ extern Type const* BUILTIN_TYPES[3];
 Registry*     type_registry_new(void);
 A3String      type_name(Type const*);
 bool          type_is_scalar(Type const*);
-size_t        type_size(Type const*);
 Member const* type_struct_find_member(Type const*, A3CString name);
 bool          type(Registry*, A3CString src, Vertex*);

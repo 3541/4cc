@@ -100,7 +100,7 @@ static void gen_store(Generator* gen, Type const* type) {
 
     gen_stack_pop(gen, "rdi");
 
-    if (type_size(type) == 1)
+    if (type->size == 1)
         gen_asm(gen, "mov BYTE [rdi], al");
     else
         gen_asm(gen, "mov [rdi], rax");
@@ -193,8 +193,8 @@ static bool gen_add_sub(Generator* gen, BinOp* op) {
             ptr_type   = op->lhs->res_type;
         }
 
-        if (type_size(ptr_type->parent) != 1)
-            gen_asm(gen, "imul %s, %zu", scalar_reg, type_size(ptr_type->parent));
+        if (ptr_type->parent->size != 1)
+            gen_asm(gen, "imul %s, %zu", scalar_reg, ptr_type->parent->size);
     }
 
     gen_asm(gen, "%s rax, rdi", insn);
@@ -205,7 +205,7 @@ static bool gen_add_sub(Generator* gen, BinOp* op) {
                 "cqo\n"
                 "mov rsi, %zu\n"
                 "idiv rsi",
-                type_size(op->lhs->res_type));
+                op->lhs->res_type->size);
     }
 
     return true;
@@ -350,7 +350,7 @@ static bool gen_unary_op(AstVisitor* visitor, UnaryOp* op) {
         gen_asm(visitor->ctx, "not rax");
         break;
     case OP_SIZEOF:
-        gen_asm(visitor->ctx, "mov rax, %zu\n", type_size(op->operand->res_type));
+        gen_asm(visitor->ctx, "mov rax, %zu\n", op->operand->res_type->size);
         break;
     case OP_ADDR:
         // Handled earlier.
@@ -420,7 +420,7 @@ static bool gen_decl(AstVisitor* visitor, Item* decl) {
 
     size_t i = 0;
     A3_SLL_FOR_EACH(Item, param, &decl->obj->type->params, link) {
-        if (type_size(param->obj->type) == 1)
+        if (param->obj->type->size == 1)
             gen_asm(visitor->ctx, "movsx BYTE [rbp - %zu], %s", param->obj->stack_offset,
                     REGISTERS_8[i++]);
         else

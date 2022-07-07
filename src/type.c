@@ -51,9 +51,9 @@ typedef struct Registry {
 } Registry;
 
 Type const* BUILTIN_TYPES[3] = {
-    [TY_INT]   = &(Type) { .type = TY_INT },
-    [TY_CHAR]  = &(Type) { .type = TY_CHAR },
-    [TY_USIZE] = &(Type) { .type = TY_USIZE },
+    [TY_INT]   = &(Type) { .type = TY_INT, .size = sizeof(int64_t) },
+    [TY_CHAR]  = &(Type) { .type = TY_CHAR, .size = sizeof(char) },
+    [TY_USIZE] = &(Type) { .type = TY_USIZE, .size = sizeof(size_t) },
 };
 
 static Type const* type_from_ptype(Registry*, PType*);
@@ -177,32 +177,6 @@ bool type_is_scalar(Type const* type) {
     return type->type == TY_INT || type->type == TY_CHAR || type->type == TY_USIZE;
 }
 
-size_t type_size(Type const* type) {
-    assert(type);
-
-    switch (type->type) {
-    case TY_INT:
-        return sizeof(int64_t);
-    case TY_CHAR:
-        return sizeof(char);
-    case TY_USIZE:
-        return sizeof(size_t);
-    case TY_PTR:
-        return sizeof(void*);
-    case TY_FN:
-        return sizeof(void (*)(void));
-    case TY_ARRAY:
-        return type_size(type->parent) * type->len;
-    case TY_STRUCT: {
-        size_t ret = 0;
-        A3_SLL_FOR_EACH(Member, member, &type->members, link) { ret += type_size(member->type); }
-        return ret;
-    }
-    }
-
-    A3_UNREACHABLE();
-}
-
 Member const* type_struct_find_member(Type const* s, A3CString name) {
     assert(s);
     assert(s->type == TY_STRUCT);
@@ -254,7 +228,7 @@ static Type const* type_ptr_to(Registry* reg, Type const* type) {
         return *entry;
 
     A3_UNWRAPNI(Type*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Type) { .type = TY_PTR, .parent = type };
+    *ret = (Type) { .type = TY_PTR, .size = sizeof(void*), .parent = type };
 
     A3_HT_INSERT(TypePtr, TypePtr)(&reg->ptrs_to, type, ret);
 
@@ -263,7 +237,7 @@ static Type const* type_ptr_to(Registry* reg, Type const* type) {
 
 static Type const* type_array_of(Type const* type, size_t len) {
     A3_UNWRAPNI(Type*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Type) { .type = TY_ARRAY, .parent = type, .len = len };
+    *ret = (Type) { .type = TY_ARRAY, .size = len * type->size, .parent = type, .len = len };
 
     return ret;
 }
@@ -274,7 +248,9 @@ static Type const* type_fn_from_ptype(Registry* reg, PType const* ptype) {
     assert(ptype->type == PTY_FN);
 
     A3_UNWRAPNI(Type*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Type) { .type = TY_FN, .ret = type_from_ptype(reg, ptype->ret) };
+    *ret = (Type) { .type = TY_FN,
+                    .size = sizeof(void (*)(void)),
+                    .ret  = type_from_ptype(reg, ptype->ret) };
     A3_SLL_INIT(&ret->params);
 
     A3_SLL_FOR_EACH(Item, decl, &ptype->params, link) {
@@ -313,10 +289,11 @@ static Type const* type_struct_from_ptype(Registry* reg, PType* ptype) {
 
         member->type   = type_from_ptype(reg, member->ptype);
         member->offset = offset;
-        offset += type_size(member->type);
+        offset += member->type->size;
 
         A3_SLL_ENQUEUE(&ret->members, member, link);
     }
+    ret->size = offset;
 
     return ret;
 }
@@ -504,7 +481,7 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
     size_t stack_depth = 0;
     A3_SLL_FOR_EACH(Item, param, &decl->decl_ptype->params, link) {
         Type const* type = type_from_ptype(reg, param->decl_ptype);
-        stack_depth += type_size(type);
+        stack_depth += type->size;
         param->obj = scope_add(reg->current_scope, (Obj) { .name         = param->name,
                                                            .type         = type,
                                                            .stack_offset = stack_depth,
@@ -544,7 +521,7 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
     Type const* type   = type_from_ptype(reg, decl->decl_ptype);
     bool        global = !reg->current_scope->fn;
     if (!global)
-        reg->current_scope->fn->obj->stack_depth += type_size(type);
+        reg->current_scope->fn->obj->stack_depth += type->size;
     decl->obj =
         scope_add(reg->current_scope,
                   (Obj) { .name         = decl->name,
