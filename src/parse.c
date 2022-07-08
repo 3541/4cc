@@ -50,8 +50,6 @@ Parser* parse_new(A3CString src, Lexer* lexer) {
     return ret;
 }
 
-static Span parse_tok_span(Token tok) { return (Span) { .text = tok.lexeme, .line = tok.line }; }
-
 A3_FORMAT_FN(3, 4)
 static void parse_error(Parser* parser, Token tok, char* fmt, ...) {
     assert(parser);
@@ -61,7 +59,7 @@ static void parse_error(Parser* parser, Token tok, char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
 
-    verror_at(parser->src, parse_tok_span(tok), fmt, args);
+    verror_at(parser->src, tok.lexeme, fmt, args);
 
     va_end(args);
 }
@@ -164,7 +162,7 @@ static Expr* parse_var(Parser* parser) {
     Token tok = lex_next(parser->lexer);
     assert(tok.type == TOK_IDENT);
 
-    return vertex_var_new(parse_tok_span(tok), tok.lexeme);
+    return vertex_var_new(tok.lexeme, tok.lexeme.text);
 }
 
 static Expr* parse_call(Parser* parser, Expr* callee) {
@@ -179,8 +177,8 @@ static Expr* parse_call(Parser* parser, Expr* callee) {
     Token tok_left = lex_next(parser->lexer);
     assert(tok_left.type == TOK_LPAREN);
 
-    Expr* ret = vertex_call_new(parse_span_merge(SPAN(callee, expr), parse_tok_span(tok_left)),
-                                callee->var.name);
+    Expr* ret =
+        vertex_call_new(parse_span_merge(SPAN(callee, expr), tok_left.lexeme), callee->var.name);
 
     bool first = true;
     while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_RPAREN) {
@@ -202,7 +200,7 @@ static Expr* parse_call(Parser* parser, Expr* callee) {
         return NULL;
     }
 
-    SPAN(ret, expr) = parse_span_merge(SPAN(ret, expr), parse_tok_span(tok_right));
+    SPAN(ret, expr) = parse_span_merge(SPAN(ret, expr), tok_right.lexeme);
     return ret;
 }
 
@@ -221,11 +219,9 @@ static Expr* parse_index(Parser* parser, Expr* base) {
         return NULL;
     }
 
-    Span next_span = parse_tok_span(next);
     return vertex_unary_op_new(
-        parse_span_merge(SPAN(base, expr), next_span), OP_DEREF,
-        vertex_bin_op_new(parse_span_merge(parse_tok_span(tok_left), next_span), OP_ADD, base,
-                          index));
+        parse_span_merge(SPAN(base, expr), next.lexeme), OP_DEREF,
+        vertex_bin_op_new(parse_span_merge(tok_left.lexeme, next.lexeme), OP_ADD, base, index));
 }
 
 static A3CString parse_lit_name(Parser* parser) {
@@ -243,14 +239,13 @@ static Expr* parse_lit_str(Parser* parser) {
     Token tok = lex_next(parser->lexer);
     assert(tok.type == TOK_LIT_STR);
 
-    A3CString name = parse_lit_name(parser);
-    Span      span = parse_tok_span(tok);
-    Item*     global_decl =
-        vertex_decl_new(span, name, ptype_array(ptype_builtin_new(TOK_CHAR), tok.lit_str.len + 1));
+    A3CString name        = parse_lit_name(parser);
+    Item*     global_decl = vertex_decl_new(
+            tok.lexeme, name, ptype_array(ptype_builtin_new(TOK_CHAR), tok.lit_str.len + 1));
     global_decl->lit_str = tok.lit_str;
     A3_SLL_ENQUEUE(&parser->current_unit->items, global_decl, link);
 
-    return vertex_var_new(span, name);
+    return vertex_var_new(tok.lexeme, name);
 }
 
 static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
@@ -285,9 +280,8 @@ static uint8_t POSTFIX_PRECEDENCE[TOK_COUNT] = {
 static Expr* parse_expr(Parser* parser, uint8_t precedence) {
     assert(parser);
 
-    Expr* lhs  = NULL;
-    Token tok  = lex_peek(parser->lexer);
-    Span  span = parse_tok_span(tok);
+    Expr* lhs = NULL;
+    Token tok = lex_peek(parser->lexer);
     switch (tok.type) {
     case TOK_LPAREN:
         lex_next(parser->lexer);
@@ -297,7 +291,7 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
         break;
     case TOK_LIT_NUM: {
         lex_next(parser->lexer);
-        lhs = vertex_lit_num_new(span, tok.lit_num);
+        lhs = vertex_lit_num_new(tok.lexeme, tok.lit_num);
         break;
     }
     case TOK_LIT_STR:
@@ -319,8 +313,8 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
         if (!rhs)
             return NULL;
 
-        lhs = vertex_unary_op_new(parse_span_merge(span, SPAN(rhs, expr)), parse_unary_op(tok.type),
-                                  rhs);
+        lhs = vertex_unary_op_new(parse_span_merge(tok.lexeme, SPAN(rhs, expr)),
+                                  parse_unary_op(tok.type), rhs);
         break;
 
         return NULL;
@@ -386,7 +380,7 @@ static Item* parse_expr_stmt(Parser* parser) {
         return NULL;
     }
 
-    return vertex_expr_stmt_new(parse_span_merge(SPAN(expr, expr), parse_tok_span(next)), expr);
+    return vertex_expr_stmt_new(parse_span_merge(SPAN(expr, expr), next.lexeme), expr);
 }
 
 static Item* parse_ret(Parser* parser) {
@@ -407,7 +401,7 @@ static Item* parse_ret(Parser* parser) {
         return NULL;
     }
 
-    return vertex_ret_new(parse_span_merge(parse_tok_span(tok), SPAN(expr, expr)), expr);
+    return vertex_ret_new(parse_span_merge(tok.lexeme, SPAN(expr, expr)), expr);
 }
 
 static Item* parse_if(Parser* parser) {
@@ -434,11 +428,10 @@ static Item* parse_if(Parser* parser) {
         body_false = parse_stmt(parser);
     }
 
-    return ITEM(
-        vertex_if_new(parse_span_merge(parse_tok_span(if_tok),
-                                       body_false ? SPAN(body_false, item) : SPAN(body_true, item)),
-                      cond, body_true, body_false),
-        if_stmt);
+    return ITEM(vertex_if_new(parse_span_merge(if_tok.lexeme, body_false ? SPAN(body_false, item)
+                                                                         : SPAN(body_true, item)),
+                              cond, body_true, body_false),
+                if_stmt);
 }
 
 static Item* parse_loop(Parser* parser) {
@@ -492,8 +485,8 @@ static Item* parse_loop(Parser* parser) {
     if (!body)
         return NULL;
 
-    return ITEM(vertex_loop_new(parse_span_merge(parse_tok_span(loop_tok), SPAN(body, item)), init,
-                                cond, post, body),
+    return ITEM(vertex_loop_new(parse_span_merge(loop_tok.lexeme, SPAN(body, item)), init, cond,
+                                post, body),
                 loop);
 }
 
@@ -507,7 +500,7 @@ static Item* parse_stmt(Parser* parser) {
         return ITEM(parse_block(parser), block);
     case TOK_SEMI: {
         Token tok = lex_next(parser->lexer);
-        return vertex_empty_new(parse_tok_span(tok));
+        return vertex_empty_new(tok.lexeme);
     }
     case TOK_IF:
         return parse_if(parser);
@@ -671,11 +664,10 @@ static Item* parse_declarator(Parser* parser, PType* type) {
     if (!type)
         return NULL;
 
-    Span ident_span = parse_tok_span(ident);
-    return vertex_decl_new(first.lexeme.ptr != ident.lexeme.ptr
-                               ? parse_span_merge(parse_tok_span(first), ident_span)
-                               : ident_span,
-                           ident.lexeme, type);
+    return vertex_decl_new(first.lexeme.text.ptr != ident.lexeme.text.ptr
+                               ? parse_span_merge(first.lexeme, ident.lexeme)
+                               : ident.lexeme,
+                           ident.lexeme.text, type);
 }
 
 static bool parse_decl(Parser* parser, Block* block) {
@@ -763,7 +755,7 @@ static Block* parse_block(Parser* parser) {
         return NULL;
     }
 
-    SPAN(block, item.block) = parse_span_merge(parse_tok_span(left_tok), parse_tok_span(right_tok));
+    SPAN(block, item.block) = parse_span_merge(left_tok.lexeme, right_tok.lexeme);
     return block;
 }
 

@@ -13,6 +13,8 @@
 
 #include <a3/str.h>
 
+#include "error.h"
+
 #define LEX_ERRORS_MAX 512
 
 typedef enum TokenType {
@@ -63,8 +65,7 @@ typedef enum TokenType {
 
 typedef struct Token {
     TokenType type;
-    A3CString lexeme;
-    size_t    line;
+    Span      lexeme;
 
     union {
         int64_t   lit_num;

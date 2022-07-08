@@ -174,9 +174,8 @@ static void lex_consume_space(Lexer* lexer) {
     }
 }
 
-static Token tok_new(Lexer* lexer, Token tok) {
-    tok.line = lexer->current_line;
-    return tok;
+static Token tok_new(Lexer const* lexer, TokenType type, A3CString lexeme) {
+    return (Token) { .type = type, .lexeme = { .line = lexer->current_line, .text = lexeme } };
 }
 
 static Token lex_recover(Lexer* lexer) {
@@ -202,9 +201,10 @@ static Token lex_lit_num(Lexer* lexer) {
     assert(offset > 0);
 
     lex_consume_any(lexer, (size_t)offset);
-    return tok_new(lexer, (Token) { .type    = TOK_LIT_NUM,
-                                    .lexeme  = a3_cstring_new(s.ptr, (size_t)offset),
-                                    .lit_num = num });
+
+    Token ret   = tok_new(lexer, TOK_LIT_NUM, a3_cstring_new(s.ptr, (size_t)offset));
+    ret.lit_num = num;
+    return ret;
 }
 
 static Token lex_op(Lexer* lexer) {
@@ -298,7 +298,7 @@ static Token lex_op(Lexer* lexer) {
         A3_UNREACHABLE();
     }
 
-    return tok_new(lexer, (Token) { .type = type, .lexeme = lexeme });
+    return tok_new(lexer, type, lexeme);
 }
 
 static Token lex_paren(Lexer* lexer) {
@@ -310,17 +310,17 @@ static Token lex_paren(Lexer* lexer) {
 
     switch (a3_string_cptr(lexeme)[0]) {
     case '(':
-        return tok_new(lexer, (Token) { .type = TOK_LPAREN, .lexeme = lexeme });
+        return tok_new(lexer, TOK_LPAREN, lexeme);
     case ')':
-        return tok_new(lexer, (Token) { .type = TOK_RPAREN, .lexeme = lexeme });
+        return tok_new(lexer, TOK_RPAREN, lexeme);
     case '{':
-        return tok_new(lexer, (Token) { .type = TOK_LBRACE, .lexeme = lexeme });
+        return tok_new(lexer, TOK_LBRACE, lexeme);
     case '}':
-        return tok_new(lexer, (Token) { .type = TOK_RBRACE, .lexeme = lexeme });
+        return tok_new(lexer, TOK_RBRACE, lexeme);
     case '[':
-        return tok_new(lexer, (Token) { .type = TOK_LBRACKET, .lexeme = lexeme });
+        return tok_new(lexer, TOK_LBRACKET, lexeme);
     case ']':
-        return tok_new(lexer, (Token) { .type = TOK_RBRACKET, .lexeme = lexeme });
+        return tok_new(lexer, TOK_RBRACKET, lexeme);
     default:
         A3_UNREACHABLE();
     }
@@ -333,7 +333,7 @@ static Token lex_semi(Lexer* lexer) {
     if (!a3_string_cptr(lexeme))
         return lex_recover(lexer);
 
-    return tok_new(lexer, (Token) { .type = TOK_SEMI, .lexeme = lexeme });
+    return tok_new(lexer, TOK_SEMI, lexeme);
 }
 
 static Token lex_ident_or_kw(Lexer* lexer) {
@@ -356,10 +356,10 @@ static Token lex_ident_or_kw(Lexer* lexer) {
 
     for (size_t i = 0; i < sizeof(KEYWORDS) / sizeof(KEYWORDS[0]); i++) {
         if (a3_string_cmp(lexeme, KEYWORDS[i].name) == 0)
-            return tok_new(lexer, (Token) { .type = KEYWORDS[i].type, .lexeme = lexeme });
+            return tok_new(lexer, KEYWORDS[i].type, lexeme);
     }
 
-    return tok_new(lexer, (Token) { .type = TOK_IDENT, .lexeme = lexeme });
+    return tok_new(lexer, TOK_IDENT, lexeme);
 }
 
 static size_t lex_escape(A3CString e, uint8_t* o) {
@@ -474,8 +474,10 @@ static Token lex_lit_str(Lexer* lexer) {
     }
 
     lex_consume_any(lexer, s.len);
-    return tok_new(lexer,
-                   (Token) { .type = TOK_LIT_STR, .lexeme = s, .lit_str = a3_buf_read_ptr(buf) });
+
+    Token ret   = tok_new(lexer, TOK_LIT_STR, s);
+    ret.lit_str = a3_buf_read_ptr(buf);
+    return ret;
 }
 
 Token lex_peek(Lexer* lexer) {
@@ -485,14 +487,14 @@ Token lex_peek(Lexer* lexer) {
         return lexer->peek;
 
     if (lexer->error_depth++ >= LEX_ERRORS_MAX)
-        return (Token) { .type = TOK_EOF, .lexeme = A3_CS_NULL };
+        return tok_new(lexer, TOK_EOF, A3_CS_NULL);
 
     lexer->peeking = true;
 
     lex_consume_space(lexer);
 
     if (lex_is_eof(lexer)) {
-        lexer->peek = (Token) { .type = TOK_EOF, .lexeme = A3_CS_NULL };
+        lexer->peek = tok_new(lexer, TOK_EOF, A3_CS_NULL);
         return lexer->peek;
     }
 
@@ -524,9 +526,7 @@ Token lex_peek(Lexer* lexer) {
         lexer->peek = lex_semi(lexer);
         break;
     case ',':
-        lexer->peek = tok_new(
-            lexer, (Token) { .type   = TOK_COMMA,
-                             .lexeme = lex_consume_one(lexer, A3_CS("comma"), A3_CS(",")) });
+        lexer->peek = tok_new(lexer, TOK_COMMA, lex_consume_one(lexer, A3_CS("comma"), A3_CS(",")));
         break;
     case '"':
         lexer->peek = lex_lit_str(lexer);
