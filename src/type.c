@@ -41,7 +41,7 @@ A3_HT_DEFINE_METHODS(A3CString, TypePtr, a3_string_cptr, a3_string_len, a3_strin
 typedef struct Scope {
     Scope* parent;
     Item*  fn;
-    A3_HT(A3CString, Obj) scope;
+    A3_HT(A3CString, Obj) idents;
 } Scope;
 
 typedef struct Registry {
@@ -62,13 +62,13 @@ static Type const* type_from_ptype(Registry*, PType*);
 static Scope* scope_new(Scope* parent) {
     A3_UNWRAPNI(Scope*, ret, calloc(1, sizeof(*ret)));
     *ret = (Scope) { .parent = parent, .fn = parent ? parent->fn : NULL };
-    A3_HT_INIT(A3CString, Obj)(&ret->scope, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
+    A3_HT_INIT(A3CString, Obj)(&ret->idents, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
 
     return ret;
 }
 
 static Obj* scope_find_in(Scope* scope, A3CString name) {
-    return A3_HT_FIND(A3CString, Obj)(&scope->scope, name);
+    return A3_HT_FIND(A3CString, Obj)(&scope->idents, name);
 }
 
 static Obj* scope_find(Scope* scope, A3CString name) {
@@ -86,11 +86,11 @@ static Obj* scope_add(Scope* scope, Obj obj) {
     assert(scope);
     assert(obj.name.ptr);
 
-    bool res = A3_HT_INSERT(A3CString, Obj)(&scope->scope, obj.name, obj);
+    bool res = A3_HT_INSERT(A3CString, Obj)(&scope->idents, obj.name, obj);
     assert(res);
     (void)res;
 
-    return A3_HT_FIND(A3CString, Obj)(&scope->scope, obj.name);
+    return A3_HT_FIND(A3CString, Obj)(&scope->idents, obj.name);
 }
 
 static void reg_scope_push(Registry* reg) {
