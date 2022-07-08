@@ -97,7 +97,8 @@ static bool parse_has_decl(Parser* parser) {
     assert(parser);
 
     Token next = lex_peek(parser->lexer);
-    return next.type == TOK_INT || next.type == TOK_CHAR || next.type == TOK_STRUCT;
+    return next.type == TOK_INT || next.type == TOK_CHAR || next.type == TOK_STRUCT ||
+           next.type == TOK_UNION;
 }
 
 static BinOpType parse_bin_op(TokenType type) {
@@ -518,12 +519,12 @@ static Item* parse_stmt(Parser* parser) {
     }
 }
 
-static PType* parse_struct_decl(Parser* parser) {
+static PType* parse_aggregate_decl(Parser* parser) {
     assert(parser);
 
     Token s = lex_next(parser->lexer);
-    if (s.type != TOK_STRUCT) {
-        parse_error(parser, s, "Expected a struct declaration.");
+    if (s.type != TOK_STRUCT && s.type != TOK_UNION) {
+        parse_error(parser, s, "Expected an aggregate declaration.");
         return NULL;
     }
 
@@ -534,8 +535,8 @@ static PType* parse_struct_decl(Parser* parser) {
         name = tok_name.lexeme;
     }
 
-    PType* ret =
-        ptype_struct_new(name.text.ptr ? parse_span_merge(s.lexeme, name) : s.lexeme, name);
+    PType* ret = ptype_aggregate_new(name.text.ptr ? parse_span_merge(s.lexeme, name) : s.lexeme,
+                                     s.type == TOK_STRUCT ? PTY_STRUCT : PTY_UNION, name);
 
     if (lex_peek(parser->lexer).type != TOK_LBRACE)
         return ret;
@@ -582,7 +583,8 @@ static PType* parse_declspec(Parser* parser) {
         lex_next(parser->lexer);
         return ptype_builtin_new(next.lexeme, next.type);
     case TOK_STRUCT:
-        return parse_struct_decl(parser);
+    case TOK_UNION:
+        return parse_aggregate_decl(parser);
     default:
         parse_error(parser, next, "Expected a type name.");
         return NULL;
@@ -708,7 +710,7 @@ static bool parse_decl(Parser* parser, Block* block) {
     PType* base = parse_declspec(parser);
     if (!base)
         return false;
-    assert(base->type == PTY_BUILTIN || base->type == PTY_STRUCT);
+    assert(base->type == PTY_BUILTIN || base->type == PTY_STRUCT || base->type == PTY_UNION);
 
     bool first = true;
     while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_SEMI) {
@@ -843,7 +845,7 @@ static bool parse_global_decl(Parser* parser) {
         if (!decl)
             return false;
     } else {
-        if (base->type != PTY_STRUCT) {
+        if (base->type != PTY_STRUCT && base->type != PTY_UNION) {
             error_at(parser->src, base->name, "Declaration without name.");
             return false;
         }

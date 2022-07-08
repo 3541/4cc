@@ -159,6 +159,14 @@ tests = {
     'global',
     'assign',
     'ptr_access'
+  ],
+  'union': [
+    'simple',
+    'size',
+    'nested',
+    'name',
+    'ptr',
+    'assign'
   ]
 }
 

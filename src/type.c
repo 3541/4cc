@@ -43,7 +43,7 @@ typedef struct Scope {
     Scope* parent;
     Item*  fn;
     A3_HT(A3CString, Obj) idents;
-    A3_HT(A3CString, TypePtr) structs;
+    A3_HT(A3CString, TypePtr) tags;
 } Scope;
 
 typedef struct Registry {
@@ -65,7 +65,7 @@ static Scope* scope_new(Scope* parent) {
     A3_UNWRAPNI(Scope*, ret, calloc(1, sizeof(*ret)));
     *ret = (Scope) { .parent = parent, .fn = parent ? parent->fn : NULL };
     A3_HT_INIT(A3CString, Obj)(&ret->idents, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
-    A3_HT_INIT(A3CString, TypePtr)(&ret->structs, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
+    A3_HT_INIT(A3CString, TypePtr)(&ret->tags, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
 
     return ret;
 }
@@ -100,7 +100,7 @@ static Type const* scope_find_struct_in(Scope* scope, A3CString name) {
     assert(scope);
     assert(name.ptr);
 
-    Type const** entry = A3_HT_FIND(A3CString, TypePtr)(&scope->structs, name);
+    Type const** entry = A3_HT_FIND(A3CString, TypePtr)(&scope->tags, name);
     return entry ? *entry : NULL;
 }
 
@@ -187,13 +187,22 @@ A3String type_name(Type const* type) {
         a3_buf_write_fmt(&buf, "[%zu]", type->len);
         return A3_CS_MUT(a3_buf_read_ptr(&buf));
     }
-    case TY_STRUCT:
+    case TY_STRUCT: {
         if (!type->name.ptr)
             return a3_string_clone(A3_CS("struct <anonymous>"));
         A3Buffer* buf = a3_buf_new(24, 512);
         a3_buf_write_fmt(buf, "struct " A3_S_F, A3_S_FORMAT(type->name));
 
         return A3_CS_MUT(a3_buf_read_ptr(buf));
+    }
+    case TY_UNION: {
+        if (!type->name.ptr)
+            return a3_string_clone(A3_CS("union <anonymous>"));
+        A3Buffer* buf = a3_buf_new(24, 512);
+        a3_buf_write_fmt(buf, "union " A3_S_F, A3_S_FORMAT(type->name));
+
+        return A3_CS_MUT(a3_buf_read_ptr(buf));
+    }
     }
 
     A3_UNREACHABLE();
@@ -207,7 +216,7 @@ bool type_is_scalar(Type const* type) {
 
 Member const* type_struct_find_member(Type const* s, A3CString name) {
     assert(s);
-    assert(s->type == TY_STRUCT);
+    assert(s->type == TY_STRUCT || s->type == TY_UNION);
 
     A3_SLL_FOR_EACH(Member, member, &s->members, link) {
         if (a3_string_cmp(member->name, name) == 0)
@@ -307,29 +316,34 @@ static Type const* type_fn_from_ptype(Registry* reg, PType const* ptype) {
     return ret;
 }
 
-static Type const* type_struct_from_ptype(Registry* reg, PType* ptype) {
+static Type const* type_aggregate_from_ptype(Registry* reg, PType* ptype) {
     assert(reg);
     assert(ptype);
-    assert(ptype->type == PTY_STRUCT);
+    assert(ptype->type == PTY_STRUCT || ptype->type == PTY_UNION);
 
+    TypeType type = ptype->type == PTY_STRUCT ? TY_STRUCT : TY_UNION;
     if (ptype->name.text.ptr && !A3_SLL_HEAD(&ptype->members)) {
-        // Naming an existing struct.
-        Type const* type = scope_find_struct(reg->current_scope, ptype->name.text);
-        if (!type) {
-            error_at(reg->src, ptype->name, "No struct with the given name in scope.");
+        // Naming an existing aggregate.
+        Type const* prev = scope_find_struct(reg->current_scope, ptype->name.text);
+        if (!prev) {
+            error_at(reg->src, ptype->span, "No tag with the given name in scope.");
+            return NULL;
+        }
+        if (prev->type != type) {
+            error_at(reg->src, ptype->span, "Mismatched tag types.");
             return NULL;
         }
 
-        return type;
+        return prev;
     }
 
     if (ptype->name.text.ptr && scope_find_struct_in(reg->current_scope, ptype->name.text)) {
-        error_at(reg->src, ptype->name, "Redeclaration of existing struct.");
+        error_at(reg->src, ptype->name, "Redeclaration of existing aggregate in the same scope.");
         return NULL;
     }
 
     A3_UNWRAPNI(Type*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Type) { .type = TY_STRUCT, .name = ptype->name.text };
+    *ret = (Type) { .type = type, .name = ptype->name.text };
     A3_SLL_INIT(&ret->members);
 
     size_t offset = 0;
@@ -337,17 +351,25 @@ static Type const* type_struct_from_ptype(Registry* reg, PType* ptype) {
         Member* member = A3_SLL_HEAD(&ptype->members);
         A3_SLL_DEQUEUE(&ptype->members, link);
 
-        member->type   = type_from_ptype(reg, member->ptype);
-        member->offset = offset = align_up(offset, member->type->align);
-        offset += member->type->size;
+        member->type = type_from_ptype(reg, member->ptype);
+
+        member->offset = 0;
+        if (type == TY_STRUCT) {
+            member->offset = offset = align_up(offset, member->type->align);
+            offset += member->type->size;
+        } else {
+            ret->size = MAX(ret->size, member->type->size);
+        }
+
         ret->align = MAX(ret->align, member->type->align);
 
         A3_SLL_ENQUEUE(&ret->members, member, link);
     }
-    ret->size = offset;
+    if (type == TY_STRUCT)
+        ret->size = offset;
 
     if (ret->name.ptr)
-        A3_HT_INSERT(A3CString, TypePtr)(&reg->current_scope->structs, ret->name, ret);
+        A3_HT_INSERT(A3CString, TypePtr)(&reg->current_scope->tags, ret->name, ret);
 
     return ret;
 }
@@ -365,7 +387,8 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
     case PTY_FN:
         return type_fn_from_ptype(reg, ptype);
     case PTY_STRUCT:
-        return type_struct_from_ptype(reg, ptype);
+    case PTY_UNION:
+        return type_aggregate_from_ptype(reg, ptype);
     case PTY_BUILTIN:
         switch (ptype->builtin) {
         case TOK_INT:
@@ -574,7 +597,7 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
     if (!type)
         return false;
 
-    if (!decl->name.ptr && type->type == TY_STRUCT && type->name.ptr)
+    if (!decl->name.ptr && (type->type == TY_STRUCT || type->type == TY_UNION) && type->name.ptr)
         return true;
 
     bool global = !reg->current_scope->fn;

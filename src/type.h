@@ -23,7 +23,17 @@ typedef struct Type     Type;
 typedef struct Registry Registry;
 typedef struct Scope    Scope;
 
-typedef enum TypeType { TY_INT, TY_CHAR, TY_USIZE, TY_ARRAY, TY_FN, TY_PTR, TY_STRUCT } TypeType;
+typedef enum TypeType {
+    TY_INT,
+    TY_CHAR,
+    TY_USIZE,
+
+    TY_ARRAY,
+    TY_FN,
+    TY_PTR,
+    TY_STRUCT,
+    TY_UNION,
+} TypeType;
 
 typedef struct Type {
     TypeType type;

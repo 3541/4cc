@@ -386,11 +386,12 @@ PType* ptype_array_new(Span span, PType* base, size_t len) {
     return ret;
 }
 
-PType* ptype_struct_new(Span span, Span name) {
+PType* ptype_aggregate_new(Span span, PTypeType type, Span name) {
     assert(span.text.ptr);
+    assert(type == PTY_STRUCT || type == PTY_UNION);
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
-    *ret = (PType) { .type = PTY_STRUCT, .span = span, .name = name };
+    *ret = (PType) { .type = type, .span = span, .name = name };
     A3_SLL_INIT(&ret->members);
 
     return ret;
