@@ -20,7 +20,7 @@ asm.write(asm_result)
 asm.flush()
 
 subprocess.run(["nasm", "-felf64", "-o", object.name, asm.name], check = True)
-subprocess.run(["gcc", "-o", binary_path, object.name, test_lib], check = True)
+subprocess.run(["gcc", "-static", "-o", binary_path, object.name, test_lib], check = True)
 
 asm.close()
 object.close()

@@ -76,6 +76,8 @@
 
         devShell = pkgs.mkShell {
           packages = with pkgs; [
+            glibc
+            glibc.static
             gdb
             rr
             clang-tools
