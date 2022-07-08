@@ -174,6 +174,7 @@ typedef enum PTypeType { PTY_PTR, PTY_BUILTIN, PTY_FN, PTY_ARRAY, PTY_STRUCT } P
 
 typedef struct PType {
     PTypeType type;
+    Span      span;
 
     union {
         TokenType builtin; // PTY_BUILTIN
@@ -285,11 +286,11 @@ Loop*  vertex_loop_new(Span, Item* init, Expr* cond, Expr* post, Item* body);
 Unit*  vertex_unit_new(void);
 bool   vertex_visit(AstVisitor*, Vertex*);
 
-PType* ptype_builtin_new(TokenType);
-PType* ptype_ptr_to(PType*);
-PType* ptype_fn(PType* ret_type);
-PType* ptype_array(PType*, size_t);
-PType* ptype_struct_new(Span name);
+PType* ptype_builtin_new(Span, TokenType);
+PType* ptype_ptr_new(Span, PType*);
+PType* ptype_fn_new(Span, PType* ret_type);
+PType* ptype_array_new(Span, PType*, size_t);
+PType* ptype_struct_new(Span, Span name);
 
 Arg*    arg_new(Expr*);
 Member* member_new(A3CString name, PType*);

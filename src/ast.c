@@ -345,46 +345,52 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
     A3_UNREACHABLE();
 }
 
-PType* ptype_builtin_new(TokenType type) {
+PType* ptype_builtin_new(Span span, TokenType type) {
+    assert(span.text.ptr);
     assert(type == TOK_INT || type == TOK_CHAR);
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
-    *ret = (PType) { .type = PTY_BUILTIN, .builtin = type };
+    *ret = (PType) { .type = PTY_BUILTIN, .span = span, .builtin = type };
 
     return ret;
 }
 
-PType* ptype_ptr_to(PType* type) {
+PType* ptype_ptr_new(Span span, PType* type) {
+    assert(span.text.ptr);
     assert(type);
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
-    *ret = (PType) { .type = PTY_PTR, .parent = type };
+    *ret = (PType) { .type = PTY_PTR, .span = span, .parent = type };
 
     return ret;
 }
 
-PType* ptype_fn(PType* ret_type) {
+PType* ptype_fn_new(Span span, PType* ret_type) {
+    assert(span.text.ptr);
     assert(ret_type);
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
-    *ret = (PType) { .type = PTY_FN, .ret = ret_type };
+    *ret = (PType) { .type = PTY_FN, .span = span, .ret = ret_type };
     A3_SLL_INIT(&ret->params);
 
     return ret;
 }
 
-PType* ptype_array(PType* base, size_t len) {
+PType* ptype_array_new(Span span, PType* base, size_t len) {
+    assert(span.text.ptr);
     assert(base);
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
-    *ret = (PType) { .type = PTY_ARRAY, .parent = base, .len = len };
+    *ret = (PType) { .type = PTY_ARRAY, .span = span, .parent = base, .len = len };
 
     return ret;
 }
 
-PType* ptype_struct_new(Span name) {
+PType* ptype_struct_new(Span span, Span name) {
+    assert(span.text.ptr);
+
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
-    *ret = (PType) { .type = PTY_STRUCT, .name = name };
+    *ret = (PType) { .type = PTY_STRUCT, .span = span, .name = name };
     A3_SLL_INIT(&ret->members);
 
     return ret;

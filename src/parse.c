@@ -241,7 +241,8 @@ static Expr* parse_lit_str(Parser* parser) {
 
     A3CString name        = parse_lit_name(parser);
     Item*     global_decl = vertex_decl_new(
-            tok.lexeme, name, ptype_array(ptype_builtin_new(TOK_CHAR), tok.lit_str.len + 1));
+            tok.lexeme, name,
+            ptype_array_new(tok.lexeme, ptype_builtin_new(tok.lexeme, TOK_CHAR), tok.lit_str.len + 1));
     global_decl->lit_str = tok.lit_str;
     A3_SLL_ENQUEUE(&parser->current_unit->items, global_decl, link);
 
@@ -520,8 +521,11 @@ static Item* parse_stmt(Parser* parser) {
 static PType* parse_struct_decl(Parser* parser) {
     assert(parser);
 
-    if (!parse_consume(parser, A3_CS("struct declaration"), TOK_STRUCT))
+    Token s = lex_next(parser->lexer);
+    if (s.type != TOK_STRUCT) {
+        parse_error(parser, s, "Expected a struct declaration.");
         return NULL;
+    }
 
     Span  name     = { .text = A3_CS_NULL, .line = 0 };
     Token tok_name = lex_peek(parser->lexer);
@@ -530,7 +534,8 @@ static PType* parse_struct_decl(Parser* parser) {
         name = tok_name.lexeme;
     }
 
-    PType* ret = ptype_struct_new(name);
+    PType* ret =
+        ptype_struct_new(name.text.ptr ? parse_span_merge(s.lexeme, name) : s.lexeme, name);
 
     if (lex_peek(parser->lexer).type != TOK_LBRACE)
         return ret;
@@ -575,7 +580,7 @@ static PType* parse_declspec(Parser* parser) {
     case TOK_INT:
     case TOK_CHAR:
         lex_next(parser->lexer);
-        return ptype_builtin_new(next.type);
+        return ptype_builtin_new(next.lexeme, next.type);
     case TOK_STRUCT:
         return parse_struct_decl(parser);
     default:
@@ -588,7 +593,7 @@ static PType* parse_decl_suffix_fn(Parser* parser, PType* base) {
     assert(parser);
     assert(base);
 
-    PType* ret = ptype_fn(base);
+    PType* ret = ptype_fn_new(base->span, base);
 
     if (lex_peek(parser->lexer).type == TOK_VOID) {
         lex_next(parser->lexer);
@@ -612,8 +617,13 @@ static PType* parse_decl_suffix_fn(Parser* parser, PType* base) {
         }
     }
 
-    if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
+    Token tok_closing = lex_next(parser->lexer);
+    if (tok_closing.type != TOK_RPAREN) {
+        parse_error(parser, tok_closing, "Expected a closing parenthesis.");
         return NULL;
+    }
+
+    ret->span = parse_span_merge(ret->span, tok_closing.lexeme);
 
     return ret;
 }
@@ -628,14 +638,20 @@ static PType* parse_decl_suffix_array(Parser* parser, PType* base) {
         return NULL;
     }
 
-    if (!parse_consume(parser, A3_CS("closing bracket"), TOK_RBRACKET))
+    Token tok_closing = lex_next(parser->lexer);
+    if (tok_closing.type != TOK_RBRACKET) {
+        parse_error(parser, tok_closing, "Expected a closing bracket.");
         return NULL;
+    }
 
     Token following = lex_peek(parser->lexer);
     if (following.type == TOK_LPAREN || following.type == TOK_LBRACKET)
         base = parse_decl_suffix(parser, base);
 
-    return ptype_array(base, (size_t)next.lit_num);
+    return ptype_array_new(base->span.text.ptr <= tok_closing.lexeme.text.ptr
+                               ? parse_span_merge(base->span, tok_closing.lexeme)
+                               : base->span,
+                           base, (size_t)next.lit_num);
 }
 
 static PType* parse_decl_suffix(Parser* parser, PType* base) {
@@ -662,8 +678,8 @@ static Item* parse_declarator(Parser* parser, PType* type) {
     }
 
     while (lex_peek(parser->lexer).type == TOK_STAR) {
-        lex_next(parser->lexer);
-        type = ptype_ptr_to(type);
+        Token next = lex_next(parser->lexer);
+        type       = ptype_ptr_new(parse_span_merge(type->span, next.lexeme), type);
     }
 
     Token ident = lex_next(parser->lexer);
