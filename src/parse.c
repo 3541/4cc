@@ -430,9 +430,14 @@ static Item* parse_if(Parser* parser) {
     Item* body_true  = parse_stmt(parser);
     Item* body_false = NULL;
 
+    if (!body_true)
+        return NULL;
+
     if (lex_peek(parser->lexer).type == TOK_ELSE) {
         lex_next(parser->lexer);
         body_false = parse_stmt(parser);
+        if (!body_false)
+            return NULL;
     }
 
     return ITEM(vertex_if_new(parse_span_merge(if_tok.lexeme, body_false ? SPAN(body_false, item)
