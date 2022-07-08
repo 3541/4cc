@@ -24,7 +24,10 @@ jobs:
         python-version: '3.x'
 
     - name: Install dependencies.
-      run: pip install meson ninja
+      run: |
+        pip install meson ninja
+        sudo apt-get update
+        sudo apt-get install -y nasm
 
     - name: Configure.
       run: ci/configure.sh build
