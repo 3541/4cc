@@ -50,7 +50,7 @@ Lexer* lex_new(A3CString src) {
 
     *ret = (Lexer) { .peeking      = false,
                      .src          = { .data = A3_CS_MUT(src), .tail = a3_string_len(src) },
-                     .current_line = 0,
+                     .current_line = 1,
                      .error_depth  = 0 };
     a3_buf_init(&ret->src, a3_string_len(src), a3_string_len(src));
     return ret;
