@@ -67,7 +67,9 @@ tests = {
     'simple_for',
     'return_from_for',
     'simple_while',
-    'nested'
+    'nested',
+    'break',
+    'break_nested',
   ],
   'pointer': [
     'simple',

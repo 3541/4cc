@@ -402,6 +402,9 @@ static Item* parse_expr_stmt(Parser* parser) {
     assert(parser);
 
     Expr* expr = parse_expr(parser, 0);
+    if (!expr)
+        return NULL;
+
     Token next = lex_next(parser->lexer);
     if (next.type != TOK_SEMI) {
         parse_error(parser, next, "Expected a semicolon.");
@@ -510,8 +513,11 @@ static Item* parse_loop(Parser* parser) {
         if (!parse_consume(parser, A3_CS("semicolon"), TOK_SEMI))
             return NULL;
 
-        if (lex_peek(parser->lexer).type != TOK_RPAREN)
+        if (lex_peek(parser->lexer).type != TOK_RPAREN) {
             post = parse_expr(parser, 0);
+            if (!post)
+                return NULL;
+        }
     } else {
         cond = parse_expr(parser, 0);
         if (!cond)
@@ -547,6 +553,8 @@ static Item* parse_stmt(Parser* parser) {
     case TOK_FOR:
     case TOK_WHILE:
         return parse_loop(parser);
+    case TOK_BREAK:
+        return vertex_break_new(lex_next(parser->lexer).lexeme);
     default:
         return parse_expr_stmt(parser);
     }

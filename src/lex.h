@@ -22,6 +22,7 @@ typedef enum TokenType {
     TOK_AMP_AMP,
     TOK_BANG,
     TOK_BANG_EQ,
+    TOK_BREAK,
     TOK_CHAR,
     TOK_COLON,
     TOK_COMMA,

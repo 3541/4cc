@@ -29,9 +29,15 @@
 static char* REGISTERS_8[]  = { "dil", "sil", "dl", "cl", "r8b", "r9b" };
 static char* REGISTERS_64[] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
 
+typedef struct LoopCtx {
+    size_t label;
+    bool   in_loop;
+} LoopCtx;
+
 typedef struct Generator {
     Config const* cfg;
     A3CString     src;
+    LoopCtx       in_loop;
     size_t        stack_depth;
     size_t        label;
     size_t        line;
@@ -83,6 +89,22 @@ static void gen_stack_pop(Generator* gen, char* reg) {
 
     gen_asm(gen, "pop %s", reg);
     gen->stack_depth--;
+}
+
+static LoopCtx gen_loop_push(Generator* gen, size_t label) {
+    assert(gen);
+
+    LoopCtx ret          = gen->in_loop;
+    gen->in_loop.in_loop = true;
+    gen->in_loop.label   = label;
+    return ret;
+}
+
+static void gen_loop_pop(Generator* gen, LoopCtx old) {
+    assert(gen);
+    assert(gen->in_loop.in_loop);
+
+    gen->in_loop = old;
 }
 
 static void gen_load(Generator* gen, Type const* type) {
@@ -404,6 +426,22 @@ static bool gen_ret(AstVisitor* visitor, Item* ret) {
     return true;
 }
 
+static bool gen_break(AstVisitor* visitor, Item* item) {
+    assert(visitor);
+    assert(item);
+
+    Generator* gen = visitor->ctx;
+
+    if (!gen->in_loop.in_loop) {
+        gen_error(visitor->ctx, VERTEX(item, item), "break statement used outside of loop body.");
+        return false;
+    }
+
+    gen_asm(gen, "jmp .end_loop%zu", gen->in_loop.label);
+
+    return true;
+}
+
 static bool gen_var(AstVisitor* visitor, Var* var) {
     assert(visitor);
     assert(var);
@@ -487,14 +525,14 @@ static bool gen_if(AstVisitor* visitor, If* if_stmt) {
             label);
     A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->body_true, item)));
     gen_asm(visitor->ctx,
-            "jmp .end%zu\n"
+            "jmp .end_if%zu\n"
             ".else%zu:",
             label, label);
 
     if (if_stmt->body_false)
         A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->body_false, item)));
 
-    gen_asm(visitor->ctx, ".end%zu:", label);
+    gen_asm(visitor->ctx, ".end_if%zu:", label);
     return true;
 }
 
@@ -502,27 +540,31 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
     assert(visitor);
     assert(loop);
 
-    size_t label = gen_label(visitor->ctx);
+    Generator* gen   = visitor->ctx;
+    size_t     label = gen_label(gen);
 
     if (loop->init)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->init, item)));
 
-    gen_asm(visitor->ctx, ".begin%zu:", label);
+    gen_asm(gen, ".begin%zu:", label);
     if (loop->cond) {
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->cond, expr)));
-        gen_asm(visitor->ctx,
+        gen_asm(gen,
                 "test rax, rax\n"
-                "jz .end%zu",
+                "jz .end_loop%zu",
                 label);
     }
 
+    LoopCtx old = gen_loop_push(gen, label);
     A3_TRYB(vertex_visit(visitor, VERTEX(loop->body, item)));
+    gen_loop_pop(gen, old);
+
     if (loop->post)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->post, expr)));
 
-    gen_asm(visitor->ctx,
+    gen_asm(gen,
             "jmp .begin%zu\n"
-            ".end%zu:",
+            ".end_loop%zu:",
             label, label);
 
     return true;
@@ -534,7 +576,12 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
     assert(root);
     assert(root->type == V_UNIT);
 
-    Generator gen = { .cfg = cfg, .src = src, .stack_depth = 0, .label = 0, .line = 0 };
+    Generator gen = { .cfg         = cfg,
+                      .src         = src,
+                      .stack_depth = 0,
+                      .label       = 0,
+                      .line        = 0,
+                      .in_loop     = { .in_loop = false } };
 
     gen_asm(&gen, "section .data");
     A3_SLL_FOR_EACH(Item, decl, &root->unit.items, link) {
@@ -577,6 +624,7 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
             .visit_call      = gen_call,
             .visit_member    = gen_member,
             .visit_expr_cond = gen_expr_cond,
+            .visit_break     = gen_break,
             .visit_ret       = gen_ret,
             .visit_if        = gen_if,
             .visit_decl      = gen_decl,
