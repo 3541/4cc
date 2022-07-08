@@ -156,7 +156,8 @@ tests = {
     'named_scoped',
     'named_ptr',
     'named_global_decl',
-    'global'
+    'global',
+    'assign'
   ]
 }
 

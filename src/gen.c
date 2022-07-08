@@ -89,7 +89,7 @@ static void gen_load(Generator* gen, Type const* type) {
     assert(gen);
     assert(type);
 
-    if (type->type == TY_ARRAY)
+    if (type->type == TY_ARRAY || type->type == TY_STRUCT)
         return;
 
     gen_asm(gen, "mov rax, [rax]");
@@ -100,10 +100,17 @@ static void gen_store(Generator* gen, Type const* type) {
 
     gen_stack_pop(gen, "rdi");
 
-    if (type->size == 1)
+    if (type->size == 1) {
         gen_asm(gen, "mov BYTE [rdi], al");
-    else
+    } else if (type->type == TY_STRUCT) {
+        gen_asm(gen,
+                "mov rcx, %zu\n"
+                "mov rsi, rax\n"
+                "rep movsb",
+                type->size);
+    } else {
         gen_asm(gen, "mov [rdi], rax");
+    }
 }
 
 static bool gen_line(AstVisitor* visitor, Vertex* vertex) {
