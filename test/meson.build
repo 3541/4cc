@@ -157,7 +157,8 @@ tests = {
     'named_ptr',
     'named_global_decl',
     'global',
-    'assign'
+    'assign',
+    'ptr_access'
   ]
 }
 

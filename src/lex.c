@@ -219,9 +219,6 @@ static Token lex_op(Lexer* lexer) {
     case '+':
         type = TOK_PLUS;
         break;
-    case '-':
-        type = TOK_MINUS;
-        break;
     case '*':
         type = TOK_STAR;
         break;
@@ -293,6 +290,16 @@ static Token lex_op(Lexer* lexer) {
         lexeme.len++;
         lex_consume_any(lexer, 1);
         type = TOK_PIPE_PIPE;
+        break;
+    case '-':
+        if (lexeme.ptr[1] != '>') {
+            type = TOK_MINUS;
+            break;
+        }
+
+        lexeme.len++;
+        lex_consume_any(lexer, 1);
+        type = TOK_MINUS_GT;
         break;
     default:
         A3_UNREACHABLE();

@@ -269,7 +269,7 @@ static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
 
     [TOK_STAR] = { 13, 14 },    [TOK_SLASH] = { 13, 14 },
 
-    [TOK_DOT] = { 17, 18 },
+    [TOK_DOT] = { 17, 18 },     [TOK_MINUS_GT] = { 17, 18 }
 };
 
 static uint8_t POSTFIX_PRECEDENCE[TOK_COUNT] = {
@@ -354,11 +354,16 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
             return NULL;
 
         Span op_span = parse_span_merge(SPAN(lhs, expr), SPAN(rhs, expr));
-        if (tok_op.type == TOK_DOT) {
+        if (tok_op.type == TOK_DOT || tok_op.type == TOK_MINUS_GT) {
             if (rhs->type != EXPR_VAR) {
                 parse_error(parser, tok_op,
                             "Right-hand side of member access must be an identifier.");
                 return NULL;
+            }
+
+            if (tok_op.type == TOK_MINUS_GT) {
+                lhs = vertex_unary_op_new(parse_span_merge(SPAN(lhs, expr), tok_op.lexeme),
+                                          OP_DEREF, lhs);
             }
 
             lhs = vertex_member_new(op_span, lhs, rhs->var.name);
