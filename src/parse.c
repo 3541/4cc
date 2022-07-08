@@ -487,9 +487,16 @@ static Item* parse_loop(Parser* parser) {
                 return NULL;
             init = ITEM(init_block, block);
         } else {
-            init = parse_expr_stmt(parser);
-            if (init->type != STMT_EXPR_STMT || init->expr->type != EXPR_BIN_OP ||
-                init->expr->bin_op.type != OP_ASSIGN) {
+            if (lex_peek(parser->lexer).type == TOK_SEMI) {
+                Token next = lex_next(parser->lexer);
+                init       = vertex_empty_new(next.lexeme);
+            } else {
+                init = parse_expr_stmt(parser);
+            }
+
+            if (init->type != STMT_EMPTY &&
+                (init->type != STMT_EXPR_STMT || init->expr->type != EXPR_BIN_OP ||
+                 init->expr->bin_op.type != OP_ASSIGN)) {
                 error_at(parser->src, SPAN(init, item), "Expected an assignment expression.");
                 return NULL;
             }
