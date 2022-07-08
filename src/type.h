@@ -32,7 +32,10 @@ typedef struct Type {
 
     union {
         // TY_STRUCT
-        A3_SLL(, Member) members;
+        struct {
+            A3CString name;
+            A3_SLL(, Member) members;
+        };
 
         // TY_ARRAY and TY_PTR.
         struct {

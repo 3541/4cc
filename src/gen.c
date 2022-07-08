@@ -407,7 +407,7 @@ static bool gen_decl(AstVisitor* visitor, Item* decl) {
     assert(visitor);
     assert(decl);
 
-    if (!decl->obj || decl->obj->type->type != TY_FN)
+    if (!decl->name.ptr || !decl->obj || decl->obj->type->type != TY_FN)
         return true;
 
     gen_asm(visitor->ctx,
@@ -507,7 +507,7 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
     A3_SLL_FOR_EACH(Item, decl, &root->unit.items, link) {
         assert(VERTEX(decl, item)->type == V_DECL);
 
-        if (decl->obj->type->type == TY_FN)
+        if (!decl->name.ptr || decl->obj->type->type == TY_FN)
             continue;
 
         gen_asm(&gen, "global " A3_S_F, A3_S_FORMAT(decl->obj->name));

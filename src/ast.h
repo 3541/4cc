@@ -170,15 +170,19 @@ typedef struct Member {
     };
 } Member;
 
-typedef enum PTypeType { PTY_PTR, PTY_BASE, PTY_BUILTIN, PTY_FN, PTY_ARRAY, PTY_STRUCT } PTypeType;
+typedef enum PTypeType { PTY_PTR, PTY_BUILTIN, PTY_FN, PTY_ARRAY, PTY_STRUCT } PTypeType;
 
 typedef struct PType {
     PTypeType type;
 
     union {
-        TokenType builtin;        // PTY_BUILTIN
-        A3CString name;           // PTY_BASE
-        A3_SLL(, Member) members; // PTY_STRUCT
+        TokenType builtin; // PTY_BUILTIN
+
+        // PTY_STRUCT
+        struct {
+            Span name;
+            A3_SLL(, Member) members;
+        };
 
         // PTY_FN
         struct {
@@ -285,7 +289,7 @@ PType* ptype_builtin_new(TokenType);
 PType* ptype_ptr_to(PType*);
 PType* ptype_fn(PType* ret_type);
 PType* ptype_array(PType*, size_t);
-PType* ptype_struct_new(void);
+PType* ptype_struct_new(Span name);
 
 Arg*    arg_new(Expr*);
 Member* member_new(A3CString name, PType*);

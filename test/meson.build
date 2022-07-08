@@ -150,7 +150,12 @@ tests = {
     'comma',
     'size_simple',
     'size_multiple_types',
-    'alignment'
+    'alignment',
+    'named',
+    'named_decl',
+    'named_scoped',
+    'named_ptr',
+    'named_global_decl'
   ]
 }
 

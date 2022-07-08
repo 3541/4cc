@@ -515,11 +515,21 @@ static Item* parse_stmt(Parser* parser) {
 static PType* parse_struct_decl(Parser* parser) {
     assert(parser);
 
-    if (!parse_consume(parser, A3_CS("struct declaration"), TOK_STRUCT) ||
-        !parse_consume(parser, A3_CS("opening brace"), TOK_LBRACE))
+    if (!parse_consume(parser, A3_CS("struct declaration"), TOK_STRUCT))
         return NULL;
 
-    PType* ret = ptype_struct_new();
+    Span  name     = { .text = A3_CS_NULL, .line = 0 };
+    Token tok_name = lex_peek(parser->lexer);
+    if (tok_name.type == TOK_IDENT) {
+        lex_next(parser->lexer);
+        name = tok_name.lexeme;
+    }
+
+    PType* ret = ptype_struct_new(name);
+
+    if (lex_peek(parser->lexer).type != TOK_LBRACE)
+        return ret;
+    lex_next(parser->lexer);
 
     while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_RBRACE) {
         PType* base = parse_declspec(parser);
@@ -641,7 +651,7 @@ static Item* parse_declarator(Parser* parser, PType* type) {
     assert(type);
 
     Token first = lex_peek(parser->lexer);
-    if ((first.type != TOK_STAR) && first.type != TOK_IDENT) {
+    if (first.type != TOK_STAR && first.type != TOK_IDENT) {
         parse_error(parser, first, "Expected a pointer specifier or identifier.");
         return NULL;
     }
@@ -703,6 +713,11 @@ static bool parse_decl(Parser* parser, Block* block) {
             Item* init_stmt = vertex_expr_stmt_new(SPAN(init, expr), init);
             A3_SLL_ENQUEUE(&block->body, init_stmt, link);
         }
+    }
+
+    if (first && base->type == PTY_STRUCT && base->name.text.ptr) {
+        Item* decl = vertex_decl_new(base->name, A3_CS_NULL, base);
+        A3_SLL_ENQUEUE(&block->body, decl, link);
     }
 
     return parse_consume(parser, A3_CS("semicolon"), TOK_SEMI);
@@ -800,9 +815,25 @@ static bool parse_global_decl(Parser* parser) {
     if (!base)
         return false;
 
-    Item* decl = parse_declarator(parser, base);
-    if (!decl)
-        return false;
+    Token next = lex_peek(parser->lexer);
+    Item* decl = NULL;
+    if (next.type == TOK_STAR || next.type == TOK_IDENT) {
+        decl = parse_declarator(parser, base);
+        if (!decl)
+            return false;
+    } else {
+        if (base->type != PTY_STRUCT) {
+            error_at(parser->src, base->name, "Declaration without name.");
+            return false;
+        }
+
+        if (!parse_consume(parser, A3_CS("semicolon"), TOK_SEMI))
+            return false;
+
+        decl = vertex_decl_new(base->name, A3_CS_NULL, base);
+        A3_SLL_ENQUEUE(&parser->current_unit->items, decl, link);
+        return true;
+    }
 
     if (decl->decl_ptype->type == PTY_FN)
         return parse_fn(parser, decl);

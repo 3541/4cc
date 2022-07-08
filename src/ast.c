@@ -83,7 +83,6 @@ Item* vertex_empty_new(Span span) {
 
 Item* vertex_decl_new(Span span, A3CString name, PType* type) {
     assert(span.text.ptr);
-    assert(name.ptr);
     assert(type);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
@@ -383,9 +382,9 @@ PType* ptype_array(PType* base, size_t len) {
     return ret;
 }
 
-PType* ptype_struct_new(void) {
+PType* ptype_struct_new(Span name) {
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
-    *ret = (PType) { .type = PTY_STRUCT };
+    *ret = (PType) { .type = PTY_STRUCT, .name = name };
     A3_SLL_INIT(&ret->members);
 
     return ret;

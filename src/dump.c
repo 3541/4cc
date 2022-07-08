@@ -290,6 +290,9 @@ static bool dump_decl(AstVisitor* visitor, Item* decl) {
     assert(visitor);
     assert(VERTEX(decl, item)->type == V_DECL);
 
+    if (!decl->name.ptr)
+        return true;
+
     if (decl->obj->type->type == TY_FN)
         return dump_fn(visitor, decl);
 

@@ -20,6 +20,7 @@
 
 #include "ast.h"
 #include "error.h"
+#include "stdlib.h"
 
 static int8_t key_eq(Type const* lhs, Type const* rhs) { return lhs == rhs ? 0 : 1; }
 #define KEY_BYTES(K) ((uint8_t const*)(K))
@@ -42,6 +43,7 @@ typedef struct Scope {
     Scope* parent;
     Item*  fn;
     A3_HT(A3CString, Obj) idents;
+    A3_HT(A3CString, TypePtr) structs;
 } Scope;
 
 typedef struct Registry {
@@ -63,6 +65,7 @@ static Scope* scope_new(Scope* parent) {
     A3_UNWRAPNI(Scope*, ret, calloc(1, sizeof(*ret)));
     *ret = (Scope) { .parent = parent, .fn = parent ? parent->fn : NULL };
     A3_HT_INIT(A3CString, Obj)(&ret->idents, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
+    A3_HT_INIT(A3CString, TypePtr)(&ret->structs, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
 
     return ret;
 }
@@ -91,6 +94,25 @@ static Obj* scope_add(Scope* scope, Obj obj) {
     (void)res;
 
     return A3_HT_FIND(A3CString, Obj)(&scope->idents, obj.name);
+}
+
+static Type const* scope_find_struct_in(Scope* scope, A3CString name) {
+    assert(scope);
+    assert(name.ptr);
+
+    Type const** entry = A3_HT_FIND(A3CString, TypePtr)(&scope->structs, name);
+    return entry ? *entry : NULL;
+}
+
+static Type const* scope_find_struct(Scope* scope, A3CString name) {
+    assert(scope);
+    assert(name.ptr);
+
+    Type const* ret = scope_find_struct_in(scope, name);
+    if (!ret && scope->parent)
+        return scope_find_struct(scope->parent, name);
+
+    return ret;
 }
 
 static void reg_scope_push(Registry* reg) {
@@ -166,7 +188,12 @@ A3String type_name(Type const* type) {
         return A3_CS_MUT(a3_buf_read_ptr(&buf));
     }
     case TY_STRUCT:
-        return a3_string_clone(A3_CS("struct <anonymous>"));
+        if (!type->name.ptr)
+            return a3_string_clone(A3_CS("struct <anonymous>"));
+        A3Buffer* buf = a3_buf_new(24, 512);
+        a3_buf_write_fmt(buf, "struct " A3_S_F, A3_S_FORMAT(type->name));
+
+        return A3_CS_MUT(a3_buf_read_ptr(buf));
     }
 
     A3_UNREACHABLE();
@@ -285,8 +312,24 @@ static Type const* type_struct_from_ptype(Registry* reg, PType* ptype) {
     assert(ptype);
     assert(ptype->type == PTY_STRUCT);
 
+    if (ptype->name.text.ptr && !A3_SLL_HEAD(&ptype->members)) {
+        // Naming an existing struct.
+        Type const* type = scope_find_struct(reg->current_scope, ptype->name.text);
+        if (!type) {
+            error_at(reg->src, ptype->name, "No struct with the given name in scope.");
+            return NULL;
+        }
+
+        return type;
+    }
+
+    if (ptype->name.text.ptr && scope_find_struct_in(reg->current_scope, ptype->name.text)) {
+        error_at(reg->src, ptype->name, "Redeclaration of existing struct.");
+        return NULL;
+    }
+
     A3_UNWRAPNI(Type*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Type) { .type = TY_STRUCT };
+    *ret = (Type) { .type = TY_STRUCT, .name = ptype->name.text };
     A3_SLL_INIT(&ret->members);
 
     size_t offset = 0;
@@ -303,6 +346,9 @@ static Type const* type_struct_from_ptype(Registry* reg, PType* ptype) {
     }
     ret->size = offset;
 
+    if (ret->name.ptr)
+        A3_HT_INSERT(A3CString, TypePtr)(&reg->current_scope->structs, ret->name, ret);
+
     return ret;
 }
 
@@ -312,8 +358,6 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
 
     Type const* ret = NULL;
     switch (ptype->type) {
-    case PTY_BASE:
-        A3_PANIC("Todo: custom types.");
     case PTY_PTR:
         return type_ptr_to(reg, type_from_ptype(reg, ptype->parent));
     case PTY_ARRAY:
@@ -526,8 +570,14 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
     if (decl->decl_ptype->type == PTY_FN)
         return type_fn(visitor, decl);
 
-    Type const* type   = type_from_ptype(reg, decl->decl_ptype);
-    bool        global = !reg->current_scope->fn;
+    Type const* type = type_from_ptype(reg, decl->decl_ptype);
+    if (!type)
+        return false;
+
+    if (!decl->name.ptr && type->type == TY_STRUCT && type->name.ptr)
+        return true;
+
+    bool global = !reg->current_scope->fn;
     if (!global) {
         reg->current_scope->fn->obj->stack_depth =
             align_up(reg->current_scope->fn->obj->stack_depth, type->align) + type->size;
