@@ -1,0 +1,44 @@
+name: Build and test
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '**/*.c'
+      - '**/*.h'
+      - '**/meson.build'
+      - '.github/workflows/build.yml'
+      - 'boilerplate'
+      - 'ci/*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
+
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies.
+      run: pip install meson ninja
+
+    - name: Configure.
+      run: ci/configure.sh build
+
+    - name: Build.
+      run: ci/build.sh build
+
+    - name: Test.
+      id: test
+      run: ci/test.sh build
+
+    - name: Upload failed logs.
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: Test logs
+        path: build/meson-logs/
