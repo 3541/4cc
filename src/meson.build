@@ -21,7 +21,7 @@ warnings_wanted = {
     '-Wformat-nonliteral', '-Wformat-security', '-Wlogical-op', '-Wmissing-declarations',
     '-Wmissing-include-dirs', '-Wnull-dereference', '-Wpacked', '-Wshadow', '-Wstack-protector',
     '-Wundef', '-Wcast-align', '-Wbad-function-cast', '-Wimplicit', '-Wmissing-prototypes',
-    '-Wnested-externs', '-Wstrict-prototypes', '-Wconversion', '-Wpointer-arith', '-Wno-pedantic',
+    '-Wnested-externs', '-Wstrict-prototypes', '-Wpointer-arith', '-Wno-pedantic',
     '-Wno-missing-field-initializers'
   ],
 
@@ -30,6 +30,22 @@ warnings_wanted = {
   ]
 }
 cflags += c.get_supported_arguments(warnings_wanted[c_arg])
+
+wconversion_test = '''
+#include <stdint.h>
+
+int main(void) {
+    uint8_t x = 1;
+    x *= 16;
+    return (int)x;
+}
+'''
+if c.compiles(wconversion_test, args: ['-Werror=conversion', '-Wconversion'])
+  message('-Wconversion works correctly.')
+  cflags += '-Wconversion'
+else
+  message('-Wconversion missing or broken.')
+endif
 
 a3 = dependency('a3', fallback: ['a3', 'a3_dep'])
 
