@@ -518,7 +518,12 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
                 fprintf(gen.cfg->out, "%d,", decl->lit_str.ptr[i]);
             gen_asm(&gen, "0");
         } else {
-            gen_asm(&gen, A3_S_F ": dq 0", A3_S_FORMAT(decl->obj->name));
+            Type const* type = decl->obj->type;
+
+            if (type->align != 1)
+                gen_asm(&gen, "align %zu, db 0", type->align);
+
+            gen_asm(&gen, A3_S_F ": times %zu db 0", A3_S_FORMAT(decl->obj->name), type->size);
         }
     }
 
