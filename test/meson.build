@@ -167,6 +167,11 @@ tests = {
     'name',
     'ptr',
     'assign'
+  ],
+  'ternary': [
+    'simple',
+    'nested',
+    'omit_true'
   ]
 }
 
@@ -177,9 +182,10 @@ foreach suite, ts : tests
     path = meson.current_source_dir() / suite
 
     test(
-      suite / t,
+      t,
       python,
       depends: libtest,
+      suite: suite,
       args: [
         meson.current_source_dir() / 'test.py',
         fcc,
@@ -192,7 +198,7 @@ foreach suite, ts : tests
 endforeach
 
 test_bin_cflags = c.get_supported_arguments('-w')
-foreach stage : ['1', '2', '3', '4', '5']
+foreach stage : ['1', '2', '3', '4', '5', '6']
   extra_tests = run_command(
     [
       python,
@@ -214,9 +220,10 @@ foreach stage : ['1', '2', '3', '4', '5']
     )
 
     test(
-      'extra' / stage / name,
+      stage / name,
       python,
       depends: correct,
+      suite: 'extra',
       args: [
         meson.current_source_dir() / 'test.py',
         fcc,
@@ -242,8 +249,9 @@ foreach stage : ['1', '2', '3', '4', '5']
     name = fs.stem(t)
 
     test(
-      'extra' / stage / 'invalid' / name,
+      name,
       python,
+      suite: 'extra/invalid',
       args: [
         meson.current_source_dir() / 'test_invalid.py',
         fcc,

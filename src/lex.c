@@ -210,7 +210,8 @@ static Token lex_lit_num(Lexer* lexer) {
 static Token lex_op(Lexer* lexer) {
     assert(lexer);
 
-    A3CString lexeme = lex_consume_one(lexer, A3_CS("binary operator"), A3_CS("+-*/=!<>&~|."));
+    A3CString lexeme =
+        lex_consume_one(lexer, A3_CS("unary or binary operator"), A3_CS("+-*/=!<>&~|.?:"));
     if (!a3_string_cptr(lexeme))
         return lex_recover(lexer);
 
@@ -230,6 +231,12 @@ static Token lex_op(Lexer* lexer) {
         break;
     case '.':
         type = TOK_DOT;
+        break;
+    case '?':
+        type = TOK_QUERY;
+        break;
+    case ':':
+        type = TOK_COLON;
         break;
     case '=':
         if (lexeme.ptr[1] != '=') {
@@ -520,6 +527,8 @@ Token lex_peek(Lexer* lexer) {
     case '~':
     case '|':
     case '.':
+    case '?':
+    case ':':
         lexer->peek = lex_op(lexer);
         break;
     case '(':

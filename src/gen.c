@@ -254,6 +254,32 @@ static bool gen_member(AstVisitor* visitor, MemberAccess* mem) {
     return true;
 }
 
+static bool gen_expr_cond(AstVisitor* visitor, CondExpr* expr) {
+    assert(visitor);
+    assert(expr);
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(expr->cond, expr)));
+
+    size_t label = gen_label(visitor->ctx);
+    gen_asm(visitor->ctx,
+            "test rax, rax\n"
+            "jz .false%zu",
+            label);
+
+    if (expr->res_true)
+        A3_TRYB(vertex_visit(visitor, VERTEX(expr->res_true, expr)));
+
+    gen_asm(visitor->ctx,
+            "jmp .end%zu\n"
+            ".false%zu:",
+            label, label);
+    A3_TRYB(vertex_visit(visitor, VERTEX(expr->res_false, expr)));
+
+    gen_asm(visitor->ctx, ".end%zu:", label);
+
+    return true;
+}
+
 static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
     assert(visitor);
     assert(op);
@@ -542,18 +568,19 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
 
     bool ret = vertex_visit(
         &(AstVisitor) {
-            .ctx            = &gen,
-            .pre            = gen_line,
-            .visit_bin_op   = gen_bin_op,
-            .visit_unary_op = gen_unary_op,
-            .visit_lit      = gen_lit,
-            .visit_var      = gen_var,
-            .visit_call     = gen_call,
-            .visit_member   = gen_member,
-            .visit_ret      = gen_ret,
-            .visit_if       = gen_if,
-            .visit_decl     = gen_decl,
-            .visit_loop     = gen_loop,
+            .ctx             = &gen,
+            .pre             = gen_line,
+            .visit_bin_op    = gen_bin_op,
+            .visit_unary_op  = gen_unary_op,
+            .visit_lit       = gen_lit,
+            .visit_var       = gen_var,
+            .visit_call      = gen_call,
+            .visit_member    = gen_member,
+            .visit_expr_cond = gen_expr_cond,
+            .visit_ret       = gen_ret,
+            .visit_if        = gen_if,
+            .visit_decl      = gen_decl,
+            .visit_loop      = gen_loop,
         },
         root);
     assert(!gen.stack_depth);

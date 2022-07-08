@@ -670,6 +670,32 @@ static bool type_member(AstVisitor* visitor, MemberAccess* member) {
     return true;
 }
 
+static bool type_expr_cond(AstVisitor* visitor, CondExpr* expr) {
+    assert(visitor);
+    assert(expr);
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(expr->cond, expr)));
+    if (!type_is_scalar(expr->cond->res_type)) {
+        type_error(visitor->ctx, VERTEX(expr->cond, expr),
+                   "Non-scalar type cannot be a condition.");
+        return false;
+    }
+
+    if (expr->res_true)
+        A3_TRYB(vertex_visit(visitor, VERTEX(expr->res_true, expr)));
+    A3_TRYB(vertex_visit(visitor, VERTEX(expr->res_false, expr)));
+
+    Type const* res_true  = (expr->res_true ?: expr->cond)->res_type;
+    Type const* res_false = expr->res_false->res_type;
+    if (res_true != res_false) {
+        type_error_mismatch(visitor->ctx, VERTEX(expr, expr.cond), res_true, res_false);
+        return false;
+    }
+
+    EXPR(expr, cond)->res_type = res_true;
+    return true;
+}
+
 static bool type_block(AstVisitor* visitor, Block* block) {
     assert(visitor);
     assert(block);
@@ -728,16 +754,17 @@ bool type(Registry* reg, A3CString src, Vertex* root) {
 
     return vertex_visit(
         &(AstVisitor) {
-            .ctx            = reg,
-            .visit_bin_op   = type_bin_op,
-            .visit_unary_op = type_unary_op,
-            .visit_lit      = type_lit,
-            .visit_var      = type_var,
-            .visit_call     = type_call,
-            .visit_member   = type_member,
-            .visit_block    = type_block,
-            .visit_loop     = type_loop,
-            .visit_decl     = type_decl,
+            .ctx             = reg,
+            .visit_bin_op    = type_bin_op,
+            .visit_unary_op  = type_unary_op,
+            .visit_lit       = type_lit,
+            .visit_var       = type_var,
+            .visit_call      = type_call,
+            .visit_member    = type_member,
+            .visit_expr_cond = type_expr_cond,
+            .visit_block     = type_block,
+            .visit_loop      = type_loop,
+            .visit_decl      = type_decl,
         },
         root);
 }

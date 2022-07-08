@@ -135,6 +135,22 @@ Expr* vertex_member_new(Span span, Expr* lhs, A3CString rhs_name) {
     return &ret->expr;
 }
 
+Expr* vertex_expr_cond_new(Span span, Expr* cond, Expr* res_true, Expr* res_false) {
+    assert(span.text.ptr);
+    assert(cond);
+    assert(res_false);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .span = span,
+                      .type = V_EXPR,
+                      .expr = {
+                          .type = EXPR_COND,
+                          .cond = { .cond = cond, .res_true = res_true, .res_false = res_false },
+                      } };
+
+    return &ret->expr;
+}
+
 If* vertex_if_new(Span span, Expr* cond, Item* body_true, Item* body_false) {
     assert(span.text.ptr);
     assert(cond);
@@ -291,6 +307,16 @@ static bool visit_member(AstVisitor* visitor, MemberAccess* member) {
     return vertex_visit(visitor, VERTEX(member->lhs, expr));
 }
 
+static bool visit_expr_cond(AstVisitor* visitor, CondExpr* expr) {
+    assert(visitor);
+    assert(expr);
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(expr->cond, expr)));
+    if (expr->res_true)
+        A3_TRYB(vertex_visit(visitor, VERTEX(expr->res_true, expr)));
+    return vertex_visit(visitor, VERTEX(expr->res_false, expr));
+}
+
 #define VISIT(VISITOR, NAME, VERTEX) ((((VISITOR)->NAME) ?: NAME)((VISITOR), (VERTEX)))
 
 bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
@@ -320,6 +346,8 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
             return VISIT(visitor, visit_call, &vertex->expr.call);
         case EXPR_MEMBER:
             return VISIT(visitor, visit_member, &vertex->expr.member);
+        case EXPR_COND:
+            return VISIT(visitor, visit_expr_cond, &vertex->expr.cond);
         }
         break;
     case V_STMT:

@@ -251,32 +251,34 @@ static Expr* parse_lit_str(Parser* parser) {
 }
 
 static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
-    [TOK_PLUS] = 15, [TOK_MINUS] = 15, [TOK_AMP] = 15,    [TOK_STAR] = 15,
-    [TOK_BANG] = 15, [TOK_TILDE] = 15, [TOK_SIZEOF] = 15,
+    [TOK_PLUS] = 17, [TOK_MINUS] = 17, [TOK_AMP] = 17,    [TOK_STAR] = 17,
+    [TOK_BANG] = 17, [TOK_TILDE] = 17, [TOK_SIZEOF] = 17,
 };
 
 static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
     [TOK_EQ] = { 2, 1 },
 
-    [TOK_PIPE_PIPE] = { 3, 4 },
+    [TOK_QUERY] = { 4, 3 },
 
-    [TOK_AMP_AMP] = { 5, 6 },
+    [TOK_PIPE_PIPE] = { 5, 6 },
 
-    [TOK_EQ_EQ] = { 7, 8 },     [TOK_BANG_EQ] = { 7, 8 },
+    [TOK_AMP_AMP] = { 7, 8 },
 
-    [TOK_GT] = { 9, 10 },       [TOK_GT_EQ] = { 9, 10 },
-    [TOK_LT] = { 9, 10 },       [TOK_LT_EQ] = { 9, 10 },
+    [TOK_EQ_EQ] = { 9, 10 },    [TOK_BANG_EQ] = { 9, 10 },
 
-    [TOK_PLUS] = { 11, 12 },    [TOK_MINUS] = { 11, 12 },
+    [TOK_GT] = { 11, 12 },      [TOK_GT_EQ] = { 11, 12 },
+    [TOK_LT] = { 11, 12 },      [TOK_LT_EQ] = { 11, 12 },
 
-    [TOK_STAR] = { 13, 14 },    [TOK_SLASH] = { 13, 14 },
+    [TOK_PLUS] = { 13, 14 },    [TOK_MINUS] = { 13, 14 },
 
-    [TOK_DOT] = { 17, 18 },     [TOK_MINUS_GT] = { 17, 18 }
+    [TOK_STAR] = { 15, 16 },    [TOK_SLASH] = { 15, 16 },
+
+    [TOK_DOT] = { 19, 20 },     [TOK_MINUS_GT] = { 19, 20 }
 };
 
 static uint8_t POSTFIX_PRECEDENCE[TOK_COUNT] = {
-    [TOK_LPAREN]   = 17,
-    [TOK_LBRACKET] = 17,
+    [TOK_LPAREN]   = 19,
+    [TOK_LBRACKET] = 19,
 };
 
 static Expr* parse_expr(Parser* parser, uint8_t precedence) {
@@ -350,6 +352,25 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
             break;
 
         lex_next(parser->lexer);
+
+        if (tok_op.type == TOK_QUERY) {
+            Expr* res_true = NULL;
+            if (lex_peek(parser->lexer).type != TOK_COLON) {
+                res_true = parse_expr(parser, 0);
+                if (!res_true)
+                    return NULL;
+            }
+            if (!parse_consume(parser, A3_CS("colon"), TOK_COLON))
+                return NULL;
+
+            Expr* res_false = parse_expr(parser, INFIX_PRECEDENCE[TOK_QUERY][1]);
+            if (!res_false)
+                return NULL;
+
+            lhs = vertex_expr_cond_new(parse_span_merge(SPAN(lhs, expr), SPAN(res_false, expr)),
+                                       lhs, res_true, res_false);
+            continue;
+        }
 
         Expr* rhs = parse_expr(parser, INFIX_PRECEDENCE[tok_op.type][1]);
         if (!rhs)

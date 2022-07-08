@@ -74,6 +74,7 @@ typedef enum UnaryOpType {
 typedef enum ExprType {
     EXPR_BIN_OP,
     EXPR_CALL,
+    EXPR_COND,
     EXPR_LIT,
     EXPR_MEMBER,
     EXPR_UNARY_OP,
@@ -132,6 +133,12 @@ typedef struct MemberAccess {
     };
 } MemberAccess;
 
+typedef struct CondExpr {
+    Expr* cond;
+    Expr* res_true;
+    Expr* res_false;
+} CondExpr;
+
 typedef struct Expr {
     ExprType    type;
     Type const* res_type;
@@ -143,6 +150,7 @@ typedef struct Expr {
         Var          var;
         Call         call;
         MemberAccess member;
+        CondExpr     cond;
     };
 } Expr;
 
@@ -262,6 +270,7 @@ typedef struct AstVisitor {
     bool (*visit_var)(AstVisitor*, Var*);
     bool (*visit_call)(AstVisitor*, Call*);
     bool (*visit_member)(AstVisitor*, MemberAccess*);
+    bool (*visit_expr_cond)(AstVisitor*, CondExpr*);
     bool (*visit_expr_stmt)(AstVisitor*, Item*);
     bool (*visit_ret)(AstVisitor*, Item*);
     bool (*visit_decl)(AstVisitor*, Item*);
@@ -276,6 +285,7 @@ Expr*  vertex_lit_num_new(Span, int64_t);
 Expr*  vertex_var_new(Span, A3CString name);
 Expr*  vertex_call_new(Span, A3CString name);
 Expr*  vertex_member_new(Span, Expr* lhs, A3CString rhs_name);
+Expr*  vertex_expr_cond_new(Span, Expr* cond, Expr* res_true, Expr* res_false);
 Item*  vertex_expr_stmt_new(Span, Expr* expr);
 Item*  vertex_ret_new(Span, Expr* expr);
 Item*  vertex_empty_new(Span);

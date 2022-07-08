@@ -205,6 +205,28 @@ static bool dump_member(AstVisitor* visitor, MemberAccess* member) {
     return dump_child(visitor, VERTEX(member->lhs, expr));
 }
 
+static bool dump_expr_cond(AstVisitor* visitor, CondExpr* expr) {
+    assert(visitor);
+    assert(expr);
+
+    A3String type = dump_get_type(EXPR(expr, cond)->res_type);
+    dump_print(visitor->ctx, "COND<" A3_S_F ">", A3_S_FORMAT(type));
+    a3_string_free(&type);
+
+    dump_print(visitor->ctx, "IF");
+    A3_TRYB(dump_child(visitor, VERTEX(expr->cond, expr)));
+
+    if (expr->res_true) {
+        dump_print(visitor->ctx, "THEN");
+        A3_TRYB(dump_child(visitor, VERTEX(expr->res_true, expr)));
+    } else {
+        dump_print(visitor->ctx, "THEN SELF");
+    }
+
+    dump_print(visitor->ctx, "ELSE");
+    return dump_child(visitor, VERTEX(expr->res_false, expr));
+}
+
 static bool dump_expr_stmt(AstVisitor* visitor, Item* stmt) {
     assert(visitor);
     assert(stmt->type == STMT_EXPR_STMT);
@@ -321,6 +343,7 @@ bool dump(Vertex* root) {
             .visit_var       = dump_var,
             .visit_call      = dump_call,
             .visit_member    = dump_member,
+            .visit_expr_cond = dump_expr_cond,
             .visit_expr_stmt = dump_expr_stmt,
             .visit_ret       = dump_ret,
             .visit_decl      = dump_decl,

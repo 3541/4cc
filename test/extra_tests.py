@@ -8,5 +8,6 @@ dir = sys.argv[2]
 stage = sys.argv[3]
 
 dir = os.path.join(dir, 'stage_' + stage, valid)
-for file in os.listdir(dir):
-    print(os.path.join(dir, file))
+for root, _, files in os.walk(dir):
+    for file in files:
+        print(os.path.join(root, file))
