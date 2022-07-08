@@ -270,12 +270,12 @@ static bool gen_expr_cond(AstVisitor* visitor, CondExpr* expr) {
         A3_TRYB(vertex_visit(visitor, VERTEX(expr->res_true, expr)));
 
     gen_asm(visitor->ctx,
-            "jmp .end%zu\n"
+            "jmp .end_cond%zu\n"
             ".false%zu:",
             label, label);
     A3_TRYB(vertex_visit(visitor, VERTEX(expr->res_false, expr)));
 
-    gen_asm(visitor->ctx, ".end%zu:", label);
+    gen_asm(visitor->ctx, ".end_cond%zu:", label);
 
     return true;
 }
