@@ -198,7 +198,7 @@ foreach suite, ts : tests
 endforeach
 
 test_bin_cflags = c.get_supported_arguments('-w')
-foreach stage : ['1', '2', '3', '4', '5', '6']
+foreach stage : ['1', '2', '3', '4', '5', '6', '7']
   extra_tests = run_command(
     [
       python,
