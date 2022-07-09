@@ -95,7 +95,9 @@ Item* vertex_decl_new(Span span, A3CString name, PType* type) {
     assert(type);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .span = span, .type = V_DECL, .item = { .name = name, .decl_ptype = type } };
+    *ret = (Vertex) { .span = span,
+                      .type = V_DECL,
+                      .item = { .name = name, .obj = NULL, .decl_ptype = type } };
 
     return &ret->item;
 }

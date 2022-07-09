@@ -715,15 +715,15 @@ static Item* parse_declarator(Parser* parser, PType* type) {
     assert(type);
 
     Token first = lex_peek(parser->lexer);
-    if (first.type != TOK_STAR && first.type != TOK_IDENT) {
-        parse_error(parser, first, "Expected a pointer specifier or identifier.");
-        return NULL;
-    }
 
     while (lex_peek(parser->lexer).type == TOK_STAR) {
         Token next = lex_next(parser->lexer);
         type       = ptype_ptr_new(parse_span_merge(type->span, next.lexeme), type);
     }
+
+    Token next = lex_peek(parser->lexer);
+    if (next.type == TOK_RPAREN || next.type == TOK_COMMA)
+        return vertex_decl_new(type->span, A3_CS_NULL, type);
 
     Token ident = lex_next(parser->lexer);
     if (ident.type != TOK_IDENT) {
@@ -731,7 +731,7 @@ static Item* parse_declarator(Parser* parser, PType* type) {
         return NULL;
     }
 
-    Token next = lex_peek(parser->lexer);
+    next = lex_peek(parser->lexer);
     if (next.type == TOK_LPAREN || next.type == TOK_LBRACKET)
         type = parse_decl_suffix(parser, type);
 
@@ -844,12 +844,18 @@ static bool parse_fn(Parser* parser, Item* decl) {
     assert(decl);
     assert(decl->decl_ptype->type == PTY_FN);
 
-    Block* body = parse_block(parser);
-    if (!body)
-        return false;
+    Block* body = NULL;
 
-    decl->body       = body;
-    SPAN(decl, item) = parse_span_merge(SPAN(decl, item), SPAN(body, item.block));
+    if (lex_peek(parser->lexer).type == TOK_LBRACE) {
+        body = parse_block(parser);
+        if (!body)
+            return false;
+
+        decl->body       = body;
+        SPAN(decl, item) = parse_span_merge(SPAN(decl, item), SPAN(body, item.block));
+    } else if (!parse_consume(parser, A3_CS("semicolon"), TOK_SEMI)) {
+        return false;
+    }
 
     A3_SLL_ENQUEUE(&parser->current_unit->items, decl, link);
     return true;

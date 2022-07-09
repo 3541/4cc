@@ -65,6 +65,8 @@ typedef struct Obj {
     A3CString   name;
     Type const* type;
     bool        global;
+    bool        defined;
+
     union {
         size_t stack_offset;
         size_t stack_depth; // TY_FN.

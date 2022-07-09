@@ -171,7 +171,7 @@ A3String type_name(Type const* type) {
                 a3_buf_write_str(&buf, A3_CS(", "));
             first = false;
 
-            A3String param_name = type_name(param->obj->type);
+            A3String param_name = type_name(param->obj ? param->obj->type : param->decl_type);
             a3_buf_write_str(&buf, A3_S_CONST(param_name));
             a3_string_free(&param_name);
         }
@@ -212,6 +212,14 @@ bool type_is_scalar(Type const* type) {
     assert(type);
 
     return type->type == TY_INT || type->type == TY_CHAR || type->type == TY_USIZE;
+}
+
+static bool type_is_assignable(Type const* lhs, Type const* rhs) {
+    assert(lhs);
+    assert(rhs);
+
+    return lhs == rhs ||
+           (lhs->type == TY_PTR && rhs->type == TY_ARRAY && lhs->parent == rhs->parent);
 }
 
 Member const* type_struct_find_member(Type const* s, A3CString name) {
@@ -545,35 +553,58 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
 
     Registry* reg = visitor->ctx;
 
+    A3_SLL_FOR_EACH(Item, param, &decl->decl_ptype->params, link) {
+        param->decl_type = type_from_ptype(reg, param->decl_ptype);
+    }
+
+    Obj* prev = scope_find(reg->current_scope, decl->name);
+    if (prev && prev->defined) {
+        if (decl->body) {
+            type_error(reg, VERTEX(decl, item), "Redefinition of already-defined function.");
+            return false;
+        }
+
+        Item* param_existing = A3_SLL_HEAD(&prev->type->params);
+        A3_SLL_FOR_EACH(Item, param, &decl->decl_ptype->params, link) {
+            if (param->decl_type != param_existing->obj->type) {
+                type_error_mismatch(reg, VERTEX(param, item), param->decl_type,
+                                    param_existing->obj->type);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    size_t stack_depth = 0;
+
     if (decl->body) {
         reg_scope_push(reg);
         reg->current_scope->fn = decl;
         decl->body->scope      = reg->current_scope;
+
+        A3_SLL_FOR_EACH(Item, param, &decl->decl_ptype->params, link) {
+            stack_depth = align_up(stack_depth, param->decl_type->align);
+            stack_depth += param->decl_type->size;
+            param->obj = scope_add(reg->current_scope, (Obj) { .name         = param->name,
+                                                               .type         = param->decl_type,
+                                                               .stack_offset = stack_depth,
+                                                               .global       = false });
+        }
     }
 
-    size_t stack_depth = 0;
-    A3_SLL_FOR_EACH(Item, param, &decl->decl_ptype->params, link) {
-        Type const* type = type_from_ptype(reg, param->decl_ptype);
-
-        stack_depth = align_up(stack_depth, type->align);
-        stack_depth += type->size;
-        param->obj = scope_add(reg->current_scope, (Obj) { .name         = param->name,
-                                                           .type         = type,
-                                                           .stack_offset = stack_depth,
-                                                           .global       = false });
-    }
-
-    decl->obj = scope_add(reg->current_scope->parent,
+    decl->obj = scope_add(decl->body ? reg->current_scope->parent : reg->current_scope,
                           (Obj) { .name        = decl->name,
                                   .type        = type_from_ptype(reg, decl->decl_ptype),
                                   .stack_depth = stack_depth,
-                                  .global      = true });
+                                  .global      = true,
+                                  .defined     = decl->body });
 
     if (decl->body) {
         A3_TRYB(vertex_visit(visitor, VERTEX(decl->body, item.block)));
-        decl->obj->stack_depth = align_up(decl->obj->stack_depth, 16);
         reg_scope_pop(reg);
     }
+    decl->obj->stack_depth = align_up(decl->obj->stack_depth, 16);
 
     return true;
 }
@@ -643,11 +674,30 @@ static bool type_call(AstVisitor* visitor, Call* call) {
     Registry* reg = visitor->ctx;
 
     call->obj = scope_find(reg->current_scope, call->name);
+    if (!call->obj) {
+        type_error(reg, VERTEX(call, expr.call), "Call of undeclared function.");
+        return false;
+    }
 
-    EXPR(call, call)->res_type = call->obj ? call->obj->type->ret : BUILTIN_TYPES[TY_INT];
+    EXPR(call, call)->res_type = call->obj->type->ret;
 
+    Item* param = A3_SLL_HEAD(&call->obj->type->params);
     A3_SLL_FOR_EACH(Arg, arg, &call->args, link) {
         A3_TRYB(vertex_visit(visitor, VERTEX(arg->expr, expr)));
+
+        if (!param) {
+            type_error(reg, VERTEX(arg->expr, expr),
+                       "More arguments in call than function has parameters.");
+            return false;
+        }
+
+        Type const* param_type = param->obj ? param->obj->type : param->decl_type;
+        if (!type_is_assignable(param_type, arg->expr->res_type)) {
+            type_error_mismatch(reg, VERTEX(arg->expr, expr), param_type, arg->expr->res_type);
+            return false;
+        }
+
+        param = A3_SLL_NEXT(param, link);
     }
 
     return true;

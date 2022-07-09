@@ -226,9 +226,11 @@ typedef struct Item {
         // V_DECL
         struct {
             A3CString name;
+            Obj*      obj;
+
             union {
-                PType* decl_ptype;
-                Obj*   obj;
+                PType*      decl_ptype;
+                Type const* decl_type;
             };
             union {
                 Block*    body; // TY_FN.

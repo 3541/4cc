@@ -1,3 +1,5 @@
+#include "test.h"
+
 int return_42(void) { return 42; }
 int return_1(void) { return 1; }
 int sum2(int a, int b) { return a + b; }

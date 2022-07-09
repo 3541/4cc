@@ -467,7 +467,7 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
     for (size_t i = 0; i < args; i++)
         gen_stack_pop(visitor->ctx, REGISTERS_64[args - i - 1]);
 
-    if (!call->obj)
+    if (!call->obj->defined)
         gen_asm(visitor->ctx, "extern " A3_S_F, A3_S_FORMAT(call->name));
     gen_asm(visitor->ctx, "call " A3_S_F, A3_S_FORMAT(call->name));
 
@@ -478,7 +478,7 @@ static bool gen_decl(AstVisitor* visitor, Item* decl) {
     assert(visitor);
     assert(decl);
 
-    if (!decl->name.ptr || !decl->obj || decl->obj->type->type != TY_FN)
+    if (!decl->name.ptr || !decl->obj || decl->obj->type->type != TY_FN || !decl->body)
         return true;
 
     gen_asm(visitor->ctx,
@@ -559,6 +559,7 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
     A3_TRYB(vertex_visit(visitor, VERTEX(loop->body, item)));
     gen_loop_pop(gen, old);
 
+    gen_asm(gen, ".post%zu:", label);
     if (loop->post)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->post, expr)));
 

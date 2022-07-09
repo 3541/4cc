@@ -10,11 +10,16 @@ test_lib = sys.argv[2]
 input_path = sys.argv[3]
 output_path = sys.argv[4]
 
+preproc = tempfile.NamedTemporaryFile(suffix = ".c")
 asm = tempfile.NamedTemporaryFile(suffix = ".asm")
 object = tempfile.NamedTemporaryFile(suffix = ".o")
 binary_path = os.path.splitext(object.name)[0]
 
-asm_result = subprocess.check_output([cc, input_path])
+subprocess.run(
+    ["gcc", "-E", "-C", "-P", "-I", os.path.dirname(sys.argv[0]), "-o", preproc.name, input_path],
+    check = True)
+
+asm_result = subprocess.check_output([cc, preproc.name])
 print(f"Output:\n{asm_result.decode('utf-8')}", file = sys.stderr)
 asm.write(asm_result)
 asm.flush()
