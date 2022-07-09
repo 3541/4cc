@@ -179,17 +179,20 @@ If* vertex_if_new(Span span, Expr* cond, Item* body_true, Item* body_false) {
     return &ret->item.if_stmt;
 }
 
-Loop* vertex_loop_new(Span span, Item* init, Expr* cond, Expr* post, Item* body) {
+Loop* vertex_loop_new(Span span, bool cond_pos, Item* init, Expr* cond, Expr* post, Item* body) {
     assert(span.text.ptr);
     assert(cond);
     assert(body);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret =
-        (Vertex) { .span = span,
-                   .type = V_STMT,
-                   .item = { .type = STMT_LOOP,
-                             .loop = { .init = init, .cond = cond, .post = post, .body = body } } };
+    *ret = (Vertex) { .span = span,
+                      .type = V_STMT,
+                      .item = { .type = STMT_LOOP,
+                                .loop = { .init       = init,
+                                          .cond       = cond,
+                                          .post       = post,
+                                          .body       = body,
+                                          .cond_first = cond_pos } } };
 
     return &ret->item.loop;
 }

@@ -72,6 +72,8 @@ tests = {
     'break_nested',
     'continue',
     'continue_nested',
+    'do_while',
+    'do_while_once'
   ],
   'pointer': [
     'simple',

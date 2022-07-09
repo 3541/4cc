@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include <a3/sll.h>
@@ -167,6 +168,7 @@ typedef struct Loop {
     Expr* cond;
     Expr* post;
     Item* body;
+    bool  cond_first;
 } Loop;
 
 typedef struct Member {
@@ -284,6 +286,9 @@ typedef struct AstVisitor {
     bool (*visit_loop)(AstVisitor*, Loop*);
 } AstVisitor;
 
+#define LOOP_COND_PRE  true
+#define LOOP_COND_POST false
+
 Expr*  vertex_bin_op_new(Span, BinOpType, Expr* lhs, Expr* rhs);
 Expr*  vertex_unary_op_new(Span, UnaryOpType, Expr* operand);
 Expr*  vertex_lit_num_new(Span, int64_t);
@@ -298,7 +303,7 @@ Item*  vertex_break_continue_new(Span, StmtType);
 Item*  vertex_decl_new(Span, A3CString name, PType*);
 If*    vertex_if_new(Span, Expr* cond, Item* body_true, Item* body_false);
 Block* vertex_block_new(void);
-Loop*  vertex_loop_new(Span, Item* init, Expr* cond, Expr* post, Item* body);
+Loop*  vertex_loop_new(Span, bool cond_pos, Item* init, Expr* cond, Expr* post, Item* body);
 Unit*  vertex_unit_new(void);
 bool   vertex_visit(AstVisitor*, Vertex*);
 

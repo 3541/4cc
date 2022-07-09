@@ -552,7 +552,7 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->init, item)));
 
     gen_asm(gen, ".begin%zu:", label);
-    if (loop->cond) {
+    if (loop->cond && loop->cond_first) {
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->cond, expr)));
         gen_asm(gen,
                 "test rax, rax\n"
@@ -567,6 +567,13 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
     gen_asm(gen, ".post%zu:", label);
     if (loop->post)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->post, expr)));
+    if (loop->cond && !loop->cond_first) {
+        A3_TRYB(vertex_visit(visitor, VERTEX(loop->cond, expr)));
+        gen_asm(gen,
+                "test rax, rax\n"
+                "jz .end_loop%zu",
+                label);
+    }
 
     gen_asm(gen,
             "jmp .begin%zu\n"

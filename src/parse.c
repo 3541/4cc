@@ -474,9 +474,9 @@ static Item* parse_loop(Parser* parser) {
     assert(parser);
 
     Token loop_tok = lex_next(parser->lexer);
-    assert(loop_tok.type == TOK_FOR || loop_tok.type == TOK_WHILE);
+    assert(loop_tok.type == TOK_FOR || loop_tok.type == TOK_WHILE || loop_tok.type == TOK_DO);
 
-    if (!parse_consume(parser, A3_CS("opening parenthesis"), TOK_LPAREN))
+    if (loop_tok.type != TOK_DO && !parse_consume(parser, A3_CS("opening parenthesis"), TOK_LPAREN))
         return NULL;
 
     Item* init = NULL;
@@ -518,21 +518,37 @@ static Item* parse_loop(Parser* parser) {
             if (!post)
                 return NULL;
         }
-    } else {
+    }
+    if (loop_tok.type == TOK_WHILE) {
         cond = parse_expr(parser, 0);
         if (!cond)
             return NULL;
     }
 
-    if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
+    if (loop_tok.type != TOK_DO && !parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
         return NULL;
 
     Item* body = parse_stmt(parser);
     if (!body)
         return NULL;
 
-    return ITEM(vertex_loop_new(parse_span_merge(loop_tok.lexeme, SPAN(body, item)), init, cond,
-                                post, body),
+    if (loop_tok.type == TOK_DO) {
+        assert(!cond);
+
+        if (!parse_consume(parser, A3_CS("while"), TOK_WHILE))
+            return NULL;
+
+        cond = parse_expr(parser, 0);
+        if (!cond)
+            return NULL;
+
+        if (!parse_consume(parser, A3_CS("semicolon"), TOK_SEMI))
+            return NULL;
+    }
+
+    return ITEM(vertex_loop_new(parse_span_merge(loop_tok.lexeme, SPAN(body, item)),
+                                loop_tok.type == TOK_DO ? LOOP_COND_POST : LOOP_COND_PRE, init,
+                                cond, post, body),
                 loop);
 }
 
@@ -552,6 +568,7 @@ static Item* parse_stmt(Parser* parser) {
         return parse_if(parser);
     case TOK_FOR:
     case TOK_WHILE:
+    case TOK_DO:
         return parse_loop(parser);
     case TOK_BREAK:
         return vertex_break_continue_new(lex_next(parser->lexer).lexeme, STMT_BREAK);
