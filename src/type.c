@@ -785,9 +785,11 @@ static bool type_loop(AstVisitor* visitor, Loop* loop) {
     if (loop->cond)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->cond, expr)));
 
+    reg_scope_push(reg);
     if (loop->body->type == STMT_BLOCK)
         loop->body->block.scope = reg->current_scope;
     A3_TRYB(vertex_visit(visitor, VERTEX(loop->body, item)));
+    reg_scope_pop(reg);
 
     if (loop->post)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->post, expr)));
