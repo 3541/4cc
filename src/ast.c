@@ -181,7 +181,6 @@ If* vertex_if_new(Span span, Expr* cond, Item* body_true, Item* body_false) {
 
 Loop* vertex_loop_new(Span span, bool cond_pos, Item* init, Expr* cond, Expr* post, Item* body) {
     assert(span.text.ptr);
-    assert(cond);
     assert(body);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));

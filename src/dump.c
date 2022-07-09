@@ -282,8 +282,14 @@ static bool dump_loop(AstVisitor* visitor, Loop* loop) {
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->init, item)));
 
     dump_print(visitor->ctx, "LOOP");
-    dump_print(visitor->ctx, "WHILE");
-    A3_TRYB(dump_child(visitor, VERTEX(loop->cond, expr)));
+
+    if (loop->cond) {
+        dump_print(visitor->ctx, "WHILE");
+        A3_TRYB(dump_child(visitor, VERTEX(loop->cond, expr)));
+    } else {
+        dump_print(visitor->ctx, "FOREVER");
+    }
+
     dump_print(visitor->ctx, "DO");
     A3_TRYB(dump_child(visitor, VERTEX(loop->body, item)));
     if (loop->post)
