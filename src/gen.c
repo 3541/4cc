@@ -328,8 +328,12 @@ static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
         gen_asm(visitor->ctx, "imul rax, rdi");
         break;
     case OP_DIV:
+    case OP_MOD:
         gen_asm(visitor->ctx, "cqo\n"
                               "idiv rdi");
+
+        if (op->type == OP_MOD)
+            gen_asm(visitor->ctx, "mov rax, rdx");
         break;
     case OP_EQ:
     case OP_NE:

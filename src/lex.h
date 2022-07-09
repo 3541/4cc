@@ -47,6 +47,7 @@ typedef enum TokenType {
     TOK_LT_EQ,
     TOK_MINUS,
     TOK_MINUS_GT,
+    TOK_PERCENT,
     TOK_PIPE_PIPE,
     TOK_PLUS,
     TOK_QUERY,

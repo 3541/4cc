@@ -129,6 +129,8 @@ static BinOpType parse_bin_op(TokenType type) {
         return OP_AND;
     case TOK_PIPE_PIPE:
         return OP_OR;
+    case TOK_PERCENT:
+        return OP_MOD;
     case TOK_AMP:
         A3_PANIC("TODO");
     default:
@@ -271,7 +273,7 @@ static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
 
     [TOK_PLUS] = { 13, 14 },    [TOK_MINUS] = { 13, 14 },
 
-    [TOK_STAR] = { 15, 16 },    [TOK_SLASH] = { 15, 16 },
+    [TOK_STAR] = { 15, 16 },    [TOK_SLASH] = { 15, 16 }, [TOK_PERCENT] = { 15, 16, },
 
     [TOK_DOT] = { 19, 20 },     [TOK_MINUS_GT] = { 19, 20 }
 };

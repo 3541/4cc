@@ -47,6 +47,7 @@ typedef enum BinOpType {
     OP_GT,
     OP_LE,
     OP_LT,
+    OP_MOD,
     OP_MUL,
     OP_NE,
     OP_OR,

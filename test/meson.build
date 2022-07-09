@@ -32,6 +32,7 @@ tests = {
     'ge_eq',
     'ge_gt',
     'multiple_stmts',
+    'mod',
   ],
   'var': [
     'simple',
