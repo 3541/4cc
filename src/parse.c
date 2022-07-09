@@ -557,7 +557,8 @@ static Item* parse_loop(Parser* parser) {
 static Item* parse_stmt(Parser* parser) {
     assert(parser);
 
-    switch (lex_peek(parser->lexer).type) {
+    Token next = lex_peek(parser->lexer);
+    switch (next.type) {
     case TOK_RET:
         return parse_ret(parser);
     case TOK_LBRACE:
@@ -573,9 +574,15 @@ static Item* parse_stmt(Parser* parser) {
     case TOK_DO:
         return parse_loop(parser);
     case TOK_BREAK:
-        return vertex_break_continue_new(lex_next(parser->lexer).lexeme, STMT_BREAK);
-    case TOK_CONTINUE:
-        return vertex_break_continue_new(lex_next(parser->lexer).lexeme, STMT_CONTINUE);
+    case TOK_CONTINUE: {
+        Item* ret = vertex_break_continue_new(lex_next(parser->lexer).lexeme,
+                                              next.type == TOK_BREAK ? STMT_BREAK : STMT_CONTINUE);
+
+        if (!parse_consume(parser, A3_CS("semicolon"), TOK_SEMI))
+            return NULL;
+
+        return ret;
+    }
     default:
         return parse_expr_stmt(parser);
     }
