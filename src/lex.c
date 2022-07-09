@@ -357,12 +357,13 @@ static Token lex_ident_or_kw(Lexer* lexer) {
         A3CString name;
         TokenType type;
     } const KEYWORDS[] = {
-        { A3_CS("return"), TOK_RET },    { A3_CS("if"), TOK_IF },
-        { A3_CS("else"), TOK_ELSE },     { A3_CS("for"), TOK_FOR },
-        { A3_CS("while"), TOK_WHILE },   { A3_CS("int"), TOK_INT },
-        { A3_CS("void"), TOK_VOID },     { A3_CS("char"), TOK_CHAR },
-        { A3_CS("sizeof"), TOK_SIZEOF }, { A3_CS("struct"), TOK_STRUCT },
-        { A3_CS("union"), TOK_UNION },   { A3_CS("break"), TOK_BREAK },
+        { A3_CS("return"), TOK_RET },        { A3_CS("if"), TOK_IF },
+        { A3_CS("else"), TOK_ELSE },         { A3_CS("for"), TOK_FOR },
+        { A3_CS("while"), TOK_WHILE },       { A3_CS("int"), TOK_INT },
+        { A3_CS("void"), TOK_VOID },         { A3_CS("char"), TOK_CHAR },
+        { A3_CS("sizeof"), TOK_SIZEOF },     { A3_CS("struct"), TOK_STRUCT },
+        { A3_CS("union"), TOK_UNION },       { A3_CS("break"), TOK_BREAK },
+        { A3_CS("continue"), TOK_CONTINUE },
     };
 
     A3CString lexeme = lex_consume_until(lexer, is_not_ident);

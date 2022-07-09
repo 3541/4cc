@@ -554,7 +554,9 @@ static Item* parse_stmt(Parser* parser) {
     case TOK_WHILE:
         return parse_loop(parser);
     case TOK_BREAK:
-        return vertex_break_new(lex_next(parser->lexer).lexeme);
+        return vertex_break_continue_new(lex_next(parser->lexer).lexeme, STMT_BREAK);
+    case TOK_CONTINUE:
+        return vertex_break_continue_new(lex_next(parser->lexer).lexeme, STMT_CONTINUE);
     default:
         return parse_expr_stmt(parser);
     }

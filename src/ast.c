@@ -81,11 +81,12 @@ Item* vertex_empty_new(Span span) {
     return &ret->item;
 }
 
-Item* vertex_break_new(Span span) {
+Item* vertex_break_continue_new(Span span, StmtType type) {
     assert(span.text.ptr);
+    assert(type == STMT_BREAK || type == STMT_CONTINUE);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .span = span, .type = V_STMT, .item.type = STMT_BREAK };
+    *ret = (Vertex) { .span = span, .type = V_STMT, .item.type = type };
 
     return &ret->item;
 }
@@ -328,7 +329,7 @@ static bool visit_expr_cond(AstVisitor* visitor, CondExpr* expr) {
     return vertex_visit(visitor, VERTEX(expr->res_false, expr));
 }
 
-static bool visit_break(AstVisitor* visitor, Item* item) {
+static bool visit_break_continue(AstVisitor* visitor, Item* item) {
     assert(visitor);
     assert(item);
     (void)visitor;
@@ -383,7 +384,8 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
         case STMT_EMPTY:
             return true;
         case STMT_BREAK:
-            return VISIT(visitor, visit_break, &vertex->item);
+        case STMT_CONTINUE:
+            return VISIT(visitor, visit_break_continue, &vertex->item);
         case STMT_LOOP:
             return VISIT(visitor, visit_loop, &vertex->item.loop);
         }

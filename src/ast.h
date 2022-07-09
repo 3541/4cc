@@ -55,6 +55,7 @@ typedef enum BinOpType {
 typedef enum StmtType {
     STMT_BLOCK,
     STMT_BREAK,
+    STMT_CONTINUE,
     STMT_EMPTY,
     STMT_EXPR_STMT,
     STMT_IF,
@@ -276,7 +277,7 @@ typedef struct AstVisitor {
     bool (*visit_expr_cond)(AstVisitor*, CondExpr*);
     bool (*visit_expr_stmt)(AstVisitor*, Item*);
     bool (*visit_ret)(AstVisitor*, Item*);
-    bool (*visit_break)(AstVisitor*, Item*);
+    bool (*visit_break_continue)(AstVisitor*, Item*);
     bool (*visit_decl)(AstVisitor*, Item*);
     bool (*visit_if)(AstVisitor*, If*);
     bool (*visit_block)(AstVisitor*, Block*);
@@ -293,7 +294,7 @@ Expr*  vertex_expr_cond_new(Span, Expr* cond, Expr* res_true, Expr* res_false);
 Item*  vertex_expr_stmt_new(Span, Expr* expr);
 Item*  vertex_ret_new(Span, Expr* expr);
 Item*  vertex_empty_new(Span);
-Item*  vertex_break_new(Span);
+Item*  vertex_break_continue_new(Span, StmtType);
 Item*  vertex_decl_new(Span, A3CString name, PType*);
 If*    vertex_if_new(Span, Expr* cond, Item* body_true, Item* body_false);
 Block* vertex_block_new(void);

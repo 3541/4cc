@@ -26,6 +26,7 @@ typedef enum TokenType {
     TOK_CHAR,
     TOK_COLON,
     TOK_COMMA,
+    TOK_CONTINUE,
     TOK_DOT,
     TOK_ELSE,
     TOK_EQ,

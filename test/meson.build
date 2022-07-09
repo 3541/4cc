@@ -70,6 +70,8 @@ tests = {
     'nested',
     'break',
     'break_nested',
+    'continue',
+    'continue_nested',
   ],
   'pointer': [
     'simple',

@@ -426,18 +426,23 @@ static bool gen_ret(AstVisitor* visitor, Item* ret) {
     return true;
 }
 
-static bool gen_break(AstVisitor* visitor, Item* item) {
+static bool gen_break_continue(AstVisitor* visitor, Item* item) {
     assert(visitor);
     assert(item);
+    assert(item->type == STMT_BREAK || item->type == STMT_CONTINUE);
 
     Generator* gen = visitor->ctx;
 
     if (!gen->in_loop.in_loop) {
-        gen_error(visitor->ctx, VERTEX(item, item), "break statement used outside of loop body.");
+        gen_error(visitor->ctx, VERTEX(item, item), "%s statement used outside of loop body.",
+                  item->type == STMT_BREAK ? "break" : "continue");
         return false;
     }
 
-    gen_asm(gen, "jmp .end_loop%zu", gen->in_loop.label);
+    if (item->type == STMT_BREAK)
+        gen_asm(gen, "jmp .end_loop%zu", gen->in_loop.label);
+    else
+        gen_asm(gen, "jmp .post%zu", gen->in_loop.label);
 
     return true;
 }
@@ -616,20 +621,20 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
 
     bool ret = vertex_visit(
         &(AstVisitor) {
-            .ctx             = &gen,
-            .pre             = gen_line,
-            .visit_bin_op    = gen_bin_op,
-            .visit_unary_op  = gen_unary_op,
-            .visit_lit       = gen_lit,
-            .visit_var       = gen_var,
-            .visit_call      = gen_call,
-            .visit_member    = gen_member,
-            .visit_expr_cond = gen_expr_cond,
-            .visit_break     = gen_break,
-            .visit_ret       = gen_ret,
-            .visit_if        = gen_if,
-            .visit_decl      = gen_decl,
-            .visit_loop      = gen_loop,
+            .ctx                  = &gen,
+            .pre                  = gen_line,
+            .visit_bin_op         = gen_bin_op,
+            .visit_unary_op       = gen_unary_op,
+            .visit_lit            = gen_lit,
+            .visit_var            = gen_var,
+            .visit_call           = gen_call,
+            .visit_member         = gen_member,
+            .visit_expr_cond      = gen_expr_cond,
+            .visit_break_continue = gen_break_continue,
+            .visit_ret            = gen_ret,
+            .visit_if             = gen_if,
+            .visit_decl           = gen_decl,
+            .visit_loop           = gen_loop,
         },
         root);
     assert(!gen.stack_depth);
