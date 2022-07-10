@@ -499,8 +499,8 @@ static bool gen_decl(AstVisitor* visitor, Item* decl) {
             A3_S_FORMAT(decl->name), A3_S_FORMAT(decl->name), decl->obj->stack_depth);
 
     size_t i = 0;
-    A3_SLL_FOR_EACH(Item, param, &decl->obj->type->params, link) {
-        if (param->obj->type->size == 1)
+    A3_SLL_FOR_EACH(Item, param, &decl->obj->params, link) {
+        if (param->decl_type->size == 1)
             gen_asm(visitor->ctx, "movsx BYTE [rbp - %zu], %s", param->obj->stack_offset,
                     REGISTERS_8[i++]);
         else
@@ -604,7 +604,7 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
     A3_SLL_FOR_EACH(Item, decl, &root->unit.items, link) {
         assert(VERTEX(decl, item)->type == V_DECL);
 
-        if (!decl->name.ptr || decl->obj->type->type == TY_FN)
+        if (!decl->name.ptr || decl->decl_type->type == TY_FN)
             continue;
 
         gen_asm(&gen, "global " A3_S_F, A3_S_FORMAT(decl->obj->name));

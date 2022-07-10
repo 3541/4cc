@@ -35,6 +35,12 @@ typedef enum TypeType {
     TY_UNION,
 } TypeType;
 
+typedef struct Param Param;
+typedef struct Param {
+    A3_SLL_LINK(Param) link;
+    Type const* type;
+} Param;
+
 typedef struct Type {
     TypeType type;
     size_t   size;
@@ -55,7 +61,7 @@ typedef struct Type {
 
         // TY_FN
         struct {
-            A3_SLL(, Item) params;
+            A3_SLL(, Param) params;
             Type const* ret;
         };
     };
@@ -69,7 +75,13 @@ typedef struct Obj {
 
     union {
         size_t stack_offset;
-        size_t stack_depth; // TY_FN.
+
+        // TY_FN.
+        struct {
+            size_t stack_depth;
+            Scope* scope;
+            A3_SLL(, Item) params;
+        };
     };
 } Obj;
 

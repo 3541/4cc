@@ -304,7 +304,7 @@ static bool dump_loop(AstVisitor* visitor, Loop* loop) {
 static bool dump_fn(AstVisitor* visitor, Item* fn) {
     assert(visitor);
     assert(fn);
-    assert(fn->obj->type->type == TY_FN);
+    assert(fn->decl_type->type == TY_FN);
 
     A3String type = dump_obj_type(fn->obj);
     dump_print(visitor->ctx, "FN<" A3_S_F ">(" A3_S_F ")", A3_S_FORMAT(type),
@@ -324,10 +324,10 @@ static bool dump_decl(AstVisitor* visitor, Item* decl) {
     if (!decl->name.ptr)
         return true;
 
-    if (decl->obj->type->type == TY_FN)
+    if (decl->decl_type->type == TY_FN)
         return dump_fn(visitor, decl);
 
-    A3String  type = type_name(decl->obj->type);
+    A3String  type = type_name(decl->decl_type);
     A3CString name = type.ptr ? A3_S_CONST(type) : A3_CS("(untyped)");
 
     dump_print(visitor->ctx, "DECL<" A3_S_F ">(" A3_S_F ")", A3_S_FORMAT(name),
