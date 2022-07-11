@@ -212,65 +212,66 @@ foreach suite, ts : tests
 endforeach
 
 test_bin_cflags = c.get_supported_arguments('-w')
-foreach stage : ['1', '2', '3', '4', '5', '6', '7', '8', '9']
-  extra_tests = run_command(
-    [
-      python,
-      meson.current_source_dir() / 'extra_tests.py',
-      'valid',
-      meson.current_source_dir() / 'extra',
-      stage
-    ],
-    check: true
-  ).stdout().strip().split('\n')
+extra_tests = run_command(
+  [
+    python,
+    meson.current_source_dir() / 'extra_tests.py',
+    'valid',
+    meson.current_source_dir() / 'extra'
+  ],
+  check: true
+).stdout().strip().split('\n')
 
-  foreach t : extra_tests
-    name = fs.stem(t)
-    correct = executable(
-      stage + '_' + name,
-      t,
-      override_options: 'warning_level=0',
-      c_args: test_bin_cflags
-    )
+foreach t : extra_tests
+  s = t.split(':')
+  name = s[0]
+  file = s[1]
 
-    test(
-      stage / name,
-      python,
-      depends: correct,
-      suite: 'extra',
-      args: [
-        meson.current_source_dir() / 'test.py',
-        fcc,
-        libtest,
-        t,
-        correct
-      ]
-    )
-  endforeach
+  correct = executable(
+    name,
+    file,
+    override_options: 'warning_level=0',
+    c_args: test_bin_cflags
+  )
 
-  extra_invalid = run_command(
-    [
-      python,
-      meson.current_source_dir() / 'extra_tests.py',
-      'invalid',
-      meson.current_source_dir() / 'extra',
-      stage
-    ],
-    check: true
-  ).stdout().strip().split('\n')
+  test(
+    name,
+    python,
+    depends: correct,
+    suite: 'extra',
+    args: [
+      meson.current_source_dir() / 'test.py',
+      fcc,
+      libtest,
+      file,
+      correct
+    ]
+  )
+endforeach
 
-  foreach t : extra_invalid
-    name = fs.stem(t)
+extra_invalid = run_command(
+  [
+    python,
+    meson.current_source_dir() / 'extra_tests.py',
+    'invalid',
+    meson.current_source_dir() / 'extra',
+  ],
+  check: true
+).stdout().strip().split('\n')
 
-    test(
-      name,
-      python,
-      suite: 'extra/invalid',
-      args: [
-        meson.current_source_dir() / 'test_invalid.py',
-        fcc,
-        t
-      ]
-    )
-  endforeach
+foreach t : extra_invalid
+  s = t.split(':')
+  name = s[0]
+  file = s[1]
+
+  test(
+    name,
+    python,
+    suite: 'extra/invalid',
+    args: [
+      meson.current_source_dir() / 'test_invalid.py',
+      fcc,
+      file
+    ]
+  )
 endforeach
