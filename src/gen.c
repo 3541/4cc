@@ -167,16 +167,23 @@ static bool gen_lit(AstVisitor* visitor, Literal* lit) {
     return true;
 }
 
+static void gen_addr_obj(AstVisitor* visitor, Obj* obj) {
+    assert(visitor);
+    assert(obj);
+
+    if (obj->global)
+        gen_asm(visitor->ctx, "lea rax, [rel " A3_S_F "]", A3_S_FORMAT(obj->name));
+    else
+        gen_asm(visitor->ctx, "lea rax, [rbp - %zu]", obj->stack_offset);
+}
+
 static bool gen_addr(AstVisitor* visitor, Expr* lvalue) {
     assert(visitor);
     assert(lvalue);
 
     switch (lvalue->type) {
     case EXPR_VAR:
-        if (lvalue->var.obj->global)
-            gen_asm(visitor->ctx, "lea rax, [rel " A3_S_F "]", A3_S_FORMAT(lvalue->var.obj->name));
-        else
-            gen_asm(visitor->ctx, "lea rax, [rbp - %zu]", lvalue->var.obj->stack_offset);
+        gen_addr_obj(visitor, lvalue->var.obj);
         break;
     case EXPR_MEMBER:
         A3_TRYB(gen_addr(visitor, lvalue->member.lhs));
@@ -204,7 +211,7 @@ static bool gen_assign(AstVisitor* visitor, BinOp* op) {
 
     A3_TRYB(gen_addr(visitor, op->lhs));
     gen_stack_push(visitor->ctx);
-    vertex_visit(visitor, VERTEX(op->rhs, expr));
+    A3_TRYB(vertex_visit(visitor, VERTEX(op->rhs, expr)));
     gen_store(visitor->ctx, EXPR(op, bin_op)->res_type);
 
     return true;
@@ -493,11 +500,13 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
     return true;
 }
 
-static bool gen_decl(AstVisitor* visitor, Item* decl) {
+static bool gen_fn(AstVisitor* visitor, Item* decl) {
     assert(visitor);
     assert(decl);
+    assert(decl->obj && decl->obj->type->type == TY_FN);
+    assert(decl->name.ptr);
 
-    if (!decl->name.ptr || !decl->obj || decl->obj->type->type != TY_FN || !decl->body)
+    if (!decl->body)
         return true;
 
     gen_asm(visitor->ctx,
@@ -527,6 +536,27 @@ static bool gen_decl(AstVisitor* visitor, Item* decl) {
                           "mov rsp, rbp\n"
                           "pop rbp\n"
                           "ret");
+
+    return true;
+}
+
+static bool gen_decl(AstVisitor* visitor, Item* decl) {
+    assert(visitor);
+    assert(decl);
+
+    if (!decl->name.ptr || !decl->obj)
+        return true;
+
+    if (decl->obj->type->type == TY_FN)
+        return gen_fn(visitor, decl);
+
+    if (decl->obj->global || !decl->init)
+        return true;
+
+    gen_addr_obj(visitor, decl->obj);
+    gen_stack_push(visitor->ctx);
+    A3_TRYB(vertex_visit(visitor, VERTEX(decl->init, expr)));
+    gen_store(visitor->ctx, decl->obj->type);
 
     return true;
 }

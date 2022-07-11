@@ -775,15 +775,11 @@ static bool parse_decl(Parser* parser, Block* block) {
         if (lex_peek(parser->lexer).type == TOK_EQ) {
             lex_next(parser->lexer);
 
-            Expr* init_rhs = parse_expr(parser, INFIX_PRECEDENCE[TOK_EQ][1]);
-            if (!init_rhs)
+            Expr* init = parse_expr(parser, INFIX_PRECEDENCE[TOK_EQ][1]);
+            if (!init)
                 return false;
 
-            Expr* init = vertex_bin_op_new(
-                parse_span_merge(VERTEX(decl, item)->span, VERTEX(init_rhs, expr)->span), OP_ASSIGN,
-                vertex_var_new(SPAN(decl, item), decl->name), init_rhs);
-            Item* init_stmt = vertex_expr_stmt_new(SPAN(init, expr), init);
-            A3_SLL_ENQUEUE(&block->body, init_stmt, link);
+            decl->init = init;
         }
     }
 

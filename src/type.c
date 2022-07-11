@@ -714,9 +714,15 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
     if (decl->decl_ptype->type == PTY_FN)
         return type_fn(visitor, decl);
 
+    if (decl->init)
+        A3_TRYB(vertex_visit(visitor, VERTEX(decl->init, expr)));
+
     Type const* type = type_from_ptype(reg, decl->decl_ptype);
     if (!type)
         return false;
+
+    if (decl->init && !type_is_assignable(type, decl->init->res_type))
+        type_error_mismatch(reg, VERTEX(decl->init, expr), type, decl->init->res_type);
 
     decl->decl_type = type;
 
