@@ -1,7 +1,7 @@
 c = meson.get_compiler('c')
 c_arg = c.get_argument_syntax()
 
-cflags = []
+cflags = ['-D_XOPEN_SOURCE=700']
 ldflags = []
 
 if get_option('profile')
@@ -57,6 +57,7 @@ src = files([
   'lex.c',
   'main.c',
   'parse.c',
+  'subprocess.c',
   'type.c'
 ])
 

@@ -9,6 +9,7 @@
 
 #include <assert.h>
 #include <inttypes.h>
+#include <libgen.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +25,7 @@
 #include "gen.h"
 #include "lex.h"
 #include "parse.h"
+#include "subprocess.h"
 #include "type.h"
 
 static A3CString file_read(A3CString path) {
@@ -55,7 +57,7 @@ static A3CString file_read(A3CString path) {
 static void usage(char const* name, int status) {
     assert(name);
 
-    fprintf(stderr, "Usage: %s [-o <FILE>] <FILE>\n", name);
+    fprintf(stderr, "Usage: %s [-cS] [-o <FILE>] <FILE>\n", name);
     exit(status);
 }
 
@@ -67,12 +69,12 @@ static Config arg_parse(size_t argc, char const* argv[]) {
 
     for (size_t i = 1; i < argc; i++) {
         if (*argv[i] != '-') {
-            if (ret.src.ptr) {
+            if (ret.src_path.ptr) {
                 fprintf(stderr, "Multiple source files specified.\n");
                 exit(-1);
             }
 
-            ret.src = a3_cstring_from(argv[i]);
+            ret.src_path = a3_cstring_from(argv[i]);
             continue;
         }
 
@@ -98,7 +100,22 @@ static Config arg_parse(size_t argc, char const* argv[]) {
         case 'h':
             usage(argv[0], 0);
             break;
+        case 'c':
+            ret.output_obj = true;
+            break;
+        case 'S':
+            ret.output_asm = true;
+            break;
         default:
+            if (strcmp(argv[i], "--dump-ast") == 0) {
+                ret.dump_ast = true;
+                break;
+            }
+            if (strcmp(argv[i], "--preserve-tmpfiles") == 0) {
+                ret.keep_tmp = true;
+                break;
+            }
+
             fprintf(stderr, "Unrecognized option \"%s\".\n", argv[i]);
             usage(argv[0], -1);
         }
@@ -107,38 +124,100 @@ static Config arg_parse(size_t argc, char const* argv[]) {
     return ret;
 }
 
+static A3CString make_file(A3CString path, A3CString name, A3CString ext) {
+    assert(path.ptr);
+    assert(name.ptr);
+    assert(ext.ptr);
+
+    A3String ret = a3_string_alloc(path.len + path.len + ext.len + 3);
+    a3_string_concat(ret, 5, path, A3_CS("/"), name, A3_CS("."), ext);
+
+    return A3_S_CONST(ret);
+}
+
+static void config_init(Config* cfg) {
+    assert(cfg);
+
+    A3String path_copy = a3_string_clone(cfg->src_path);
+    cfg->src_name      = a3_cstring_from(basename((char*)path_copy.ptr));
+
+    cfg->src = file_read(cfg->src_path);
+    if (!cfg->src.ptr)
+        exit(-1);
+
+    A3String tmp_dir = a3_string_clone(A3_CS("/tmp/4ccXXXXXX"));
+    if (!mkdtemp((char*)tmp_dir.ptr)) {
+        perror("mkdtemp");
+        exit(-1);
+    }
+    cfg->tmp_dir = A3_S_CONST(tmp_dir);
+
+    if (cfg->output_asm && cfg->out_path.ptr)
+        cfg->asm_out_path = cfg->out_path;
+    else
+        cfg->asm_out_path = make_file(cfg->tmp_dir, cfg->src_name, A3_CS("asm"));
+
+    if (a3_string_cmp(cfg->asm_out_path, A3_CS("-")) == 0)
+        cfg->asm_out = stdout;
+    else
+        cfg->asm_out = fopen(a3_string_cstr(cfg->asm_out_path), "w");
+    if (!cfg->asm_out) {
+        fprintf(stderr, "Failed to open output \"" A3_S_F "\".\n", A3_S_FORMAT(cfg->asm_out_path));
+        exit(-1);
+    }
+
+    if (cfg->output_obj && cfg->out_path.ptr)
+        cfg->obj_out_path = cfg->out_path;
+    else
+        cfg->obj_out_path = make_file(cfg->tmp_dir, cfg->src_name, A3_CS("o"));
+}
+
+static void compile(Config const* cfg) {
+    assert(cfg);
+
+    Lexer*  lexer  = lex_new(cfg->src);
+    Parser* parser = parse_new(cfg->src, lexer);
+
+    Vertex* root = parse(parser);
+    if (!root)
+        exit(-1);
+
+    Registry* reg = type_registry_new();
+    if (!type(reg, cfg->src, root))
+        exit(-1);
+
+    if (cfg->dump_ast)
+        dump(root);
+
+    if (!gen(cfg, cfg->src, root))
+        exit(-1);
+}
+
+static void cleanup(Config const* cfg) {
+    assert(cfg);
+
+    if (cfg->keep_tmp)
+        return;
+
+    if (!cfg->output_asm)
+        remove(a3_string_cstr(cfg->asm_out_path));
+    if (!cfg->output_obj)
+        remove(a3_string_cstr(cfg->obj_out_path));
+    remove(a3_string_cstr(cfg->tmp_dir));
+}
+
 int main(int argc, char const* argv[]) {
     a3_log_init(stderr, A3_LOG_INFO);
 
     Config cfg = arg_parse((size_t)argc, argv);
+    config_init(&cfg);
 
-    A3CString src = file_read(cfg.src);
-    if (!src.ptr)
-        return -1;
+    compile(&cfg);
 
-    cfg.out = stdout;
-    if (cfg.out_path.ptr)
-        cfg.out = fopen(a3_string_cstr(cfg.out_path), "w");
-    if (!cfg.out) {
-        fprintf(stderr, "Failed to open output file.\n");
-        return -1;
-    }
+    if (!cfg.output_asm)
+        assemble(cfg.asm_out_path, cfg.obj_out_path);
 
-    Lexer*  lexer  = lex_new(src);
-    Parser* parser = parse_new(src, lexer);
-
-    Vertex* root = parse(parser);
-    if (!root)
-        return -1;
-
-    Registry* reg = type_registry_new();
-    if (!type(reg, src, root))
-        return -1;
-
-    dump(root);
-
-    if (!gen(&cfg, src, root))
-        return -1;
+    cleanup(&cfg);
 
     return 0;
 }

@@ -69,8 +69,8 @@ static void gen_asm(Generator* gen, char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
 
-    vfprintf(gen->cfg->out, fmt, args);
-    fputc('\n', gen->cfg->out);
+    vfprintf(gen->cfg->asm_out, fmt, args);
+    fputc('\n', gen->cfg->asm_out);
 
     va_end(args);
 }
@@ -143,7 +143,7 @@ static bool gen_line(AstVisitor* visitor, Vertex* vertex) {
     if (gen->line >= vertex->span.line)
         return true;
 
-    gen_asm(gen, "%%line %zu+0 " A3_S_F, vertex->span.line, A3_S_FORMAT(gen->cfg->src));
+    gen_asm(gen, "%%line %zu+0 " A3_S_F, vertex->span.line, A3_S_FORMAT(gen->cfg->src_path));
     gen->line = vertex->span.line;
 
     return true;
@@ -655,9 +655,9 @@ static bool gen_data(Generator* gen, Vertex* root) {
             case TY_ARRAY:
                 assert(type->parent->type == TY_CHAR && init->type == EXPR_LIT);
 
-                fprintf(gen->cfg->out, A3_S_F ": db ", A3_S_FORMAT(decl->name));
+                fprintf(gen->cfg->asm_out, A3_S_F ": db ", A3_S_FORMAT(decl->name));
                 for (size_t i = 0; i < init->lit.str.len; i++)
-                    fprintf(gen->cfg->out, "%d,", init->lit.str.ptr[i]);
+                    fprintf(gen->cfg->asm_out, "%d,", init->lit.str.ptr[i]);
                 gen_asm(gen, "0");
                 break;
             case TY_PTR:
@@ -703,7 +703,7 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
     gen_asm(&gen,
             "\nsection .text\n"
             "%%line 0+0 " A3_S_F,
-            A3_S_FORMAT(gen.cfg->src));
+            A3_S_FORMAT(gen.cfg->src_path));
 
     bool ret = vertex_visit(
         &(AstVisitor) {
@@ -724,6 +724,8 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
         },
         root);
     assert(!gen.stack_depth);
+
+    fclose(cfg->asm_out);
 
     return ret;
 }
