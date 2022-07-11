@@ -26,7 +26,6 @@ typedef struct Parser {
     A3CString src;
     Lexer*    lexer;
     Unit*     current_unit;
-    size_t    lit_count;
     size_t    error_depth;
     bool      status;
 } Parser;
@@ -41,12 +40,9 @@ static bool   parse_decl(Parser*, Block*);
 
 Parser* parse_new(A3CString src, Lexer* lexer) {
     A3_UNWRAPNI(Parser*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Parser) { .src          = src,
-                      .lexer        = lexer,
-                      .current_unit = NULL,
-                      .lit_count    = 0,
-                      .error_depth  = 0,
-                      .status       = true };
+    *ret = (Parser) {
+        .src = src, .lexer = lexer, .current_unit = NULL, .error_depth = 0, .status = true
+    };
     return ret;
 }
 
@@ -227,29 +223,13 @@ static Expr* parse_index(Parser* parser, Expr* base) {
         vertex_bin_op_new(parse_span_merge(tok_left.lexeme, next.lexeme), OP_ADD, base, index));
 }
 
-static A3CString parse_lit_name(Parser* parser) {
-    A3Buffer* buf = a3_buf_new(32, 128);
-
-    if (!a3_buf_write_fmt(buf, "__4cc_lit%zu", parser->lit_count++))
-        return A3_CS_NULL;
-
-    return a3_buf_read_ptr(buf);
-}
-
 static Expr* parse_lit_str(Parser* parser) {
     assert(parser);
 
     Token tok = lex_next(parser->lexer);
     assert(tok.type == TOK_LIT_STR);
 
-    A3CString name        = parse_lit_name(parser);
-    Item*     global_decl = vertex_decl_new(
-            tok.lexeme, name,
-            ptype_array_new(tok.lexeme, ptype_builtin_new(tok.lexeme, TOK_CHAR), tok.lit_str.len + 1));
-    global_decl->lit_str = tok.lit_str;
-    A3_SLL_ENQUEUE(&parser->current_unit->items, global_decl, link);
-
-    return vertex_var_new(tok.lexeme, name);
+    return vertex_lit_str_new(tok.lexeme, tok.lit_str);
 }
 
 static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {

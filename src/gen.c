@@ -151,9 +151,19 @@ static bool gen_line(AstVisitor* visitor, Vertex* vertex) {
 
 static bool gen_lit(AstVisitor* visitor, Literal* lit) {
     assert(visitor);
-    assert(lit->type == LIT_NUM);
 
-    gen_asm(visitor->ctx, "mov rax, %" PRId64, lit->num);
+    switch (lit->type) {
+    case LIT_NUM:
+        gen_asm(visitor->ctx, "mov rax, %" PRId64, lit->num);
+        break;
+    case LIT_STR:
+        assert(lit->storage);
+        assert(lit->storage->global);
+
+        gen_asm(visitor->ctx, "lea rax, [rel " A3_S_F "]", A3_S_FORMAT(lit->storage->name));
+        break;
+    }
+
     return true;
 }
 
@@ -608,11 +618,13 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
             continue;
 
         gen_asm(&gen, "global " A3_S_F, A3_S_FORMAT(decl->obj->name));
-        if (decl->lit_str.ptr) {
+        if (decl->obj->type->type == TY_ARRAY && decl->obj->type->parent->type == TY_CHAR) {
+            assert(decl->init->type == EXPR_LIT && decl->init->res_type->type == TY_ARRAY &&
+                   decl->init->res_type->parent->type == TY_CHAR);
             fprintf(gen.cfg->out, A3_S_F ": db ", A3_S_FORMAT(decl->obj->name));
 
-            for (size_t i = 0; i < decl->lit_str.len; i++)
-                fprintf(gen.cfg->out, "%d,", decl->lit_str.ptr[i]);
+            for (size_t i = 0; i < decl->init->lit.str.len; i++)
+                fprintf(gen.cfg->out, "%d,", decl->init->lit.str.ptr[i]);
             gen_asm(&gen, "0");
         } else {
             Type const* type = decl->obj->type;

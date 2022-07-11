@@ -85,7 +85,7 @@ typedef enum ExprType {
     EXPR_VAR,
 } ExprType;
 
-typedef enum LiteralType { LIT_NUM } LiteralType;
+typedef enum LiteralType { LIT_NUM, LIT_STR } LiteralType;
 
 typedef struct Block {
     A3_SLL(body, Item) body;
@@ -105,9 +105,11 @@ typedef struct UnaryOp {
 
 typedef struct Literal {
     LiteralType type;
+    Obj*        storage; // LIT_STR
 
     union {
-        int64_t num; // LIT_NUM
+        int64_t   num; // LIT_NUM
+        A3CString str; // LIT_STR - pre-type.
     };
 } Literal;
 
@@ -236,9 +238,10 @@ typedef struct Item {
                 PType*      decl_ptype;
                 Type const* decl_type;
             };
+
             union {
-                Block*    body; // TY_FN.
-                A3CString lit_str;
+                Block* body; // TY_FN.
+                Expr*  init;
             };
         };
     };
@@ -293,6 +296,7 @@ typedef struct AstVisitor {
 Expr*  vertex_bin_op_new(Span, BinOpType, Expr* lhs, Expr* rhs);
 Expr*  vertex_unary_op_new(Span, UnaryOpType, Expr* operand);
 Expr*  vertex_lit_num_new(Span, int64_t);
+Expr*  vertex_lit_str_new(Span, A3CString);
 Expr*  vertex_var_new(Span, A3CString name);
 Expr*  vertex_call_new(Span, A3CString name);
 Expr*  vertex_member_new(Span, Expr* lhs, A3CString rhs_name);

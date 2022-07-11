@@ -170,6 +170,9 @@ static bool dump_lit(AstVisitor* visitor, Literal* lit) {
     case LIT_NUM:
         dump_print(visitor->ctx, "LITERAL(%" PRId64 ")", lit->num);
         break;
+    case LIT_STR:
+        dump_print(visitor->ctx, "LITERAL(\"" A3_S_F "\")", A3_S_FORMAT(lit->str));
+        break;
     }
 
     return true;

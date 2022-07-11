@@ -50,7 +50,9 @@ typedef struct Registry {
     A3_HT(TypePtr, TypePtr) ptrs_to;
     A3_HT(A3CString, TypePtr) fns;
     Scope*    current_scope;
+    Unit*     current_unit;
     A3CString src;
+    size_t    lit_count;
 } Registry;
 
 Type const* BUILTIN_TYPES[3] = {
@@ -68,6 +70,15 @@ static Scope* scope_new(Scope* parent) {
     A3_HT_INIT(A3CString, TypePtr)(&ret->tags, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
 
     return ret;
+}
+
+static Scope* scope_first_ancestor(Scope* scope) {
+    assert(scope);
+
+    while (scope->parent)
+        scope = scope->parent;
+
+    return scope;
 }
 
 static Obj* scope_find_in(Scope* scope, A3CString name) {
@@ -130,6 +141,14 @@ static void reg_scope_pop(Registry* reg) {
 
 Registry* type_registry_new(void) {
     A3_UNWRAPNI(Registry*, ret, calloc(1, sizeof(*ret)));
+
+    *ret = (Registry) {
+        .src           = A3_CS_NULL,
+        .current_unit  = NULL,
+        .current_scope = NULL,
+        .lit_count     = 0,
+    };
+
     A3_HT_INIT(TypePtr, TypePtr)(&ret->ptrs_to, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
     A3_HT_INIT(A3CString, TypePtr)(&ret->fns, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
     reg_scope_push(ret);
@@ -283,6 +302,7 @@ static Type const* type_ptr_to(Registry* reg, Type const* type) {
     return ret;
 }
 
+// TODO: Deduplicate.
 static Type const* type_array_of(Type const* type, size_t len) {
     A3_UNWRAPNI(Type*, ret, calloc(1, sizeof(*ret)));
     *ret = (Type) {
@@ -548,13 +568,55 @@ static bool type_unary_op(AstVisitor* visitor, UnaryOp* op) {
     return true;
 }
 
+static A3CString type_lit_name(Registry* reg) {
+    assert(reg);
+
+    A3Buffer* buf = a3_buf_new(32, 128);
+
+    if (!a3_buf_write_fmt(buf, "__4cc_lit%zu", reg->lit_count++))
+        return A3_CS_NULL;
+
+    return a3_buf_read_ptr(buf);
+}
+
 static bool type_lit(AstVisitor* visitor, Literal* lit) {
     assert(visitor);
     assert(lit);
-    assert(lit->type == LIT_NUM);
-    (void)visitor;
 
-    EXPR(lit, lit)->res_type = BUILTIN_TYPES[TY_INT];
+    Registry* reg = visitor->ctx;
+
+    switch (lit->type) {
+    case LIT_NUM:
+        EXPR(lit, lit)->res_type = BUILTIN_TYPES[TY_INT];
+        break;
+    case LIT_STR: {
+        // TODO: There really should be a separate resolution pass for this and other things like
+        // it...
+
+        EXPR(lit, lit)->res_type = type_array_of(BUILTIN_TYPES[TY_CHAR], lit->str.len + 1);
+
+        // Synthesize global declaration for storage.
+        A3CString global_name = type_lit_name(reg);
+        Span      span        = SPAN(lit, expr.lit);
+        Item*     global_decl = vertex_decl_new(
+                span, global_name,
+                ptype_array_new(span, ptype_builtin_new(span, TOK_CHAR), lit->str.len + 1));
+        A3_SLL_PUSH(&reg->current_unit->items, global_decl, link);
+
+        Scope* current = reg->current_scope;
+
+        reg->current_scope = scope_first_ancestor(current);
+        A3_TRYB(vertex_visit(visitor, VERTEX(global_decl, item)));
+        reg->current_scope = current;
+
+        lit->storage = global_decl->obj = scope_find(reg->current_scope, global_name);
+        assert(lit->storage);
+        global_decl->init = EXPR(lit, lit);
+
+        break;
+    }
+    }
+
     return true;
 }
 
@@ -835,7 +897,8 @@ bool type(Registry* reg, A3CString src, Vertex* root) {
     assert(src.ptr);
     assert(root->type == V_UNIT);
 
-    reg->src = src;
+    reg->src          = src;
+    reg->current_unit = &root->unit;
 
     return vertex_visit(
         &(AstVisitor) {
