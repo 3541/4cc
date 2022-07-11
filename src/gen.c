@@ -627,6 +627,57 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
     return true;
 }
 
+static bool gen_data(Generator* gen, Vertex* root) {
+    assert(gen);
+    assert(root);
+
+    assert(root->type == V_UNIT);
+
+    gen_asm(gen, "section .data");
+    A3_SLL_FOR_EACH(Item, decl, &root->unit.items, link) {
+        assert(VERTEX(decl, item)->type == V_DECL);
+
+        Type const* type = decl->decl_type;
+
+        if (type->type == TY_FN || !decl->name.ptr)
+            continue;
+
+        gen_asm(gen, "global " A3_S_F, A3_S_FORMAT(decl->name));
+        if (type->align != 1)
+            gen_asm(gen, "align %zu, db 0", type->align);
+
+        if (decl->init) {
+            switch (type->type) {
+            case TY_ARRAY:
+                assert(type->parent->type == TY_CHAR && decl->init->type == EXPR_LIT);
+
+                fprintf(gen->cfg->out, A3_S_F ": db ", A3_S_FORMAT(decl->name));
+                for (size_t i = 0; i < decl->init->lit.str.len; i++)
+                    fprintf(gen->cfg->out, "%d,", decl->init->lit.str.ptr[i]);
+                gen_asm(gen, "0");
+                break;
+            case TY_PTR:
+                assert(type->parent->type == TY_CHAR && decl->init->type == EXPR_LIT);
+
+                gen_asm(gen, A3_S_F ": dq " A3_S_F, A3_S_FORMAT(decl->name),
+                        A3_S_FORMAT(decl->init->lit.storage->name));
+                break;
+            default:
+                assert(decl->init->type == EXPR_LIT && decl->init->lit.type == LIT_NUM);
+
+                gen_asm(gen, A3_S_F ": %s %" PRId64, A3_S_FORMAT(decl->name),
+                        type->size == 1 ? "db" : "dq", decl->init->lit.num);
+
+                break;
+            }
+        } else {
+            gen_asm(gen, A3_S_F ": times %zu db 0", A3_S_FORMAT(decl->name), type->size);
+        }
+    }
+
+    return true;
+}
+
 bool gen(Config const* cfg, A3CString src, Vertex* root) {
     assert(cfg);
     assert(src.ptr);
@@ -640,31 +691,7 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
                       .line        = 0,
                       .in_loop     = { .in_loop = false } };
 
-    gen_asm(&gen, "section .data");
-    A3_SLL_FOR_EACH(Item, decl, &root->unit.items, link) {
-        assert(VERTEX(decl, item)->type == V_DECL);
-
-        if (!decl->name.ptr || decl->decl_type->type == TY_FN)
-            continue;
-
-        gen_asm(&gen, "global " A3_S_F, A3_S_FORMAT(decl->obj->name));
-        if (decl->obj->type->type == TY_ARRAY && decl->obj->type->parent->type == TY_CHAR) {
-            assert(decl->init->type == EXPR_LIT && decl->init->res_type->type == TY_ARRAY &&
-                   decl->init->res_type->parent->type == TY_CHAR);
-            fprintf(gen.cfg->out, A3_S_F ": db ", A3_S_FORMAT(decl->obj->name));
-
-            for (size_t i = 0; i < decl->init->lit.str.len; i++)
-                fprintf(gen.cfg->out, "%d,", decl->init->lit.str.ptr[i]);
-            gen_asm(&gen, "0");
-        } else {
-            Type const* type = decl->obj->type;
-
-            if (type->align != 1)
-                gen_asm(&gen, "align %zu, db 0", type->align);
-
-            gen_asm(&gen, A3_S_F ": times %zu db 0", A3_S_FORMAT(decl->obj->name), type->size);
-        }
-    }
+    A3_TRYB(gen_data(&gen, root));
 
     gen.line = 0;
     gen_asm(&gen,

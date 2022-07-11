@@ -875,7 +875,19 @@ static bool parse_global_var(Parser* parser, PType* base) {
             return false;
 
         Item* decl = parse_declarator(parser, base);
+        if (!decl)
+            return false;
         A3_SLL_ENQUEUE(&parser->current_unit->items, decl, link);
+
+        if (lex_peek(parser->lexer).type == TOK_EQ) {
+            lex_next(parser->lexer);
+
+            Expr* init = parse_expr(parser, INFIX_PRECEDENCE[TOK_EQ][1]);
+            if (!init)
+                return false;
+
+            decl->init = init;
+        }
     }
 
     return parse_consume(parser, A3_CS("semicolon"), TOK_SEMI);
@@ -913,6 +925,16 @@ static bool parse_global_decl(Parser* parser) {
         return parse_fn(parser, decl);
 
     A3_SLL_ENQUEUE(&parser->current_unit->items, decl, link);
+    if (lex_peek(parser->lexer).type == TOK_EQ) {
+        lex_next(parser->lexer);
+
+        Expr* init = parse_expr(parser, INFIX_PRECEDENCE[TOK_EQ][1]);
+        if (!init)
+            return false;
+
+        decl->init = init;
+    }
+
     return parse_global_var(parser, base);
 }
 

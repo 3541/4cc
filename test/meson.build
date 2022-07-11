@@ -114,7 +114,8 @@ tests = {
   ],
   'global': [
     'simple',
-    'array'
+    'array',
+    'init'
   ],
   'string': [
     'empty',

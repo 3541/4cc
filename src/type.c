@@ -238,7 +238,9 @@ static bool type_is_assignable(Type const* lhs, Type const* rhs) {
     assert(rhs);
 
     return lhs == rhs ||
-           (lhs->type == TY_PTR && rhs->type == TY_ARRAY && lhs->parent == rhs->parent);
+           (lhs->type == TY_PTR && rhs->type == TY_ARRAY && lhs->parent == rhs->parent) ||
+           (lhs->type == TY_ARRAY && rhs->type == TY_ARRAY && lhs->parent == rhs->parent &&
+            lhs->len == rhs->len);
 }
 
 Member const* type_struct_find_member(Type const* s, A3CString name) {
@@ -714,22 +716,47 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
     if (decl->decl_ptype->type == PTY_FN)
         return type_fn(visitor, decl);
 
-    if (decl->init)
-        A3_TRYB(vertex_visit(visitor, VERTEX(decl->init, expr)));
-
     Type const* type = type_from_ptype(reg, decl->decl_ptype);
     if (!type)
         return false;
-
-    if (decl->init && !type_is_assignable(type, decl->init->res_type))
-        type_error_mismatch(reg, VERTEX(decl->init, expr), type, decl->init->res_type);
-
-    decl->decl_type = type;
 
     if (!decl->name.ptr && (type->type == TY_STRUCT || type->type == TY_UNION) && type->name.ptr)
         return true;
 
     bool global = !reg->current_scope->fn;
+
+    if (decl->init) {
+        if (global) {
+            if (decl->init->type != EXPR_LIT) {
+                type_error(reg, VERTEX(decl->init, expr),
+                           "Initialization of global variable with non-literal value.");
+                return false;
+            }
+
+            if (type->type == TY_ARRAY) {
+                if (decl->init->lit.type != LIT_STR) {
+                    type_error(reg, VERTEX(decl->init, expr),
+                               "Initialization of global variable with incompatible literal.");
+                    return false;
+                }
+
+                decl->init->res_type =
+                    type_array_of(BUILTIN_TYPES[TY_CHAR], decl->init->lit.str.len + 1);
+            } else {
+                A3_TRYB(vertex_visit(visitor, VERTEX(decl->init, expr)));
+            }
+
+            if (!type_is_assignable(type, decl->init->res_type)) {
+                type_error_mismatch(reg, VERTEX(decl->init, expr), type, decl->init->res_type);
+                return false;
+            }
+        } else {
+            A3_TRYB(vertex_visit(visitor, VERTEX(decl->init, expr)));
+        }
+    }
+
+    decl->decl_type = type;
+
     if (!global) {
         reg->current_scope->fn->stack_depth =
             align_up(reg->current_scope->fn->stack_depth, type->align) + type->size;
