@@ -603,6 +603,7 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
         Item*     global_decl = vertex_decl_new(
                 span, global_name,
                 ptype_array_new(span, ptype_builtin_new(span, TOK_CHAR), lit->str.len + 1));
+        global_decl->init = EXPR(lit, lit);
         A3_SLL_PUSH(&reg->current_unit->items, global_decl, link);
 
         Scope* current = reg->current_scope;
@@ -705,13 +706,8 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
     assert(decl);
     assert(VERTEX(decl, item)->type == V_DECL);
 
-    Registry* reg = visitor->ctx;
-
-    Obj* prev = scope_find_in(reg->current_scope, decl->name);
-    if (prev && prev->type->type != TY_FN) {
-        type_error(reg, VERTEX(decl, item), "Redeclaration of existing item.");
-        return false;
-    }
+    Registry* reg    = visitor->ctx;
+    bool      global = !reg->current_scope->fn;
 
     if (decl->decl_ptype->type == PTY_FN)
         return type_fn(visitor, decl);
@@ -720,10 +716,21 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
     if (!type)
         return false;
 
+    Obj* prev = scope_find_in(reg->current_scope, decl->name);
+    if (prev) {
+        if (prev->type != type) {
+            type_error_mismatch(reg, VERTEX(decl, item), prev->type, type);
+            return false;
+        }
+
+        if (!global) {
+            type_error(reg, VERTEX(decl, item), "Redeclaration of existing item.");
+            return false;
+        }
+    }
+
     if (!decl->name.ptr && (type->type == TY_STRUCT || type->type == TY_UNION) && type->name.ptr)
         return true;
-
-    bool global = !reg->current_scope->fn;
 
     if (decl->init) {
         if (global) {
@@ -755,18 +762,35 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
         }
     }
 
+    if (prev && decl->init) {
+        if (prev->init) {
+            type_error(reg, VERTEX(decl->init, expr), "Reinitialization of global variable.");
+            return false;
+        }
+
+        prev->init = decl->init;
+        decl->init = NULL;
+    }
+
     decl->decl_type = type;
 
     if (!global) {
         reg->current_scope->fn->stack_depth =
             align_up(reg->current_scope->fn->stack_depth, type->align) + type->size;
     }
-    decl->obj =
-        scope_add(reg->current_scope,
-                  (Obj) { .name         = decl->name,
-                          .type         = type,
-                          .global       = global,
-                          .stack_offset = !global ? reg->current_scope->fn->stack_depth : 0 });
+
+    if (prev) {
+        decl->obj = prev;
+    } else {
+        decl->obj =
+            scope_add(reg->current_scope,
+                      (Obj) { .name         = decl->name,
+                              .type         = type,
+                              .global       = global,
+                              .init         = decl->init,
+                              .defined      = false,
+                              .stack_offset = !global ? reg->current_scope->fn->stack_depth : 0 });
+    }
 
     return true;
 }
@@ -801,6 +825,11 @@ static bool type_call(AstVisitor* visitor, Call* call) {
     call->obj = scope_find(reg->current_scope, call->name);
     if (!call->obj) {
         type_error(reg, VERTEX(call, expr.call), "Call of undeclared function.");
+        return false;
+    }
+
+    if (call->obj->type->type != TY_FN) {
+        type_error(reg, VERTEX(call, expr.call), "Call of non-function object.");
         return false;
     }
 

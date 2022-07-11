@@ -646,30 +646,36 @@ static bool gen_data(Generator* gen, Vertex* root) {
         if (type->align != 1)
             gen_asm(gen, "align %zu, db 0", type->align);
 
-        if (decl->init) {
+        if (decl->obj->init) {
+            if (decl->obj->defined)
+                return true;
+
+            Expr* init = decl->obj->init;
             switch (type->type) {
             case TY_ARRAY:
-                assert(type->parent->type == TY_CHAR && decl->init->type == EXPR_LIT);
+                assert(type->parent->type == TY_CHAR && init->type == EXPR_LIT);
 
                 fprintf(gen->cfg->out, A3_S_F ": db ", A3_S_FORMAT(decl->name));
-                for (size_t i = 0; i < decl->init->lit.str.len; i++)
-                    fprintf(gen->cfg->out, "%d,", decl->init->lit.str.ptr[i]);
+                for (size_t i = 0; i < init->lit.str.len; i++)
+                    fprintf(gen->cfg->out, "%d,", init->lit.str.ptr[i]);
                 gen_asm(gen, "0");
                 break;
             case TY_PTR:
-                assert(type->parent->type == TY_CHAR && decl->init->type == EXPR_LIT);
+                assert(type->parent->type == TY_CHAR && init->type == EXPR_LIT);
 
                 gen_asm(gen, A3_S_F ": dq " A3_S_F, A3_S_FORMAT(decl->name),
-                        A3_S_FORMAT(decl->init->lit.storage->name));
+                        A3_S_FORMAT(init->lit.storage->name));
                 break;
             default:
-                assert(decl->init->type == EXPR_LIT && decl->init->lit.type == LIT_NUM);
+                assert(init->type == EXPR_LIT && init->lit.type == LIT_NUM);
 
                 gen_asm(gen, A3_S_F ": %s %" PRId64, A3_S_FORMAT(decl->name),
-                        type->size == 1 ? "db" : "dq", decl->init->lit.num);
+                        type->size == 1 ? "db" : "dq", init->lit.num);
 
                 break;
             }
+
+            decl->obj->defined = true;
         } else {
             gen_asm(gen, A3_S_F ": times %zu db 0", A3_S_FORMAT(decl->name), type->size);
         }

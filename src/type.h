@@ -18,6 +18,7 @@
 typedef struct Vertex Vertex;
 typedef struct Item   Item;
 typedef struct Member Member;
+typedef struct Expr   Expr;
 
 typedef struct Type     Type;
 typedef struct Registry Registry;
@@ -74,7 +75,10 @@ typedef struct Obj {
     bool        defined;
 
     union {
-        size_t stack_offset;
+        struct {
+            Expr*  init;
+            size_t stack_offset;
+        };
 
         // TY_FN.
         struct {
