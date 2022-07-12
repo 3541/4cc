@@ -56,7 +56,7 @@ typedef struct Registry {
 } Registry;
 
 Type const* BUILTIN_TYPES[3] = {
-    [TY_INT]   = &(Type) { .type = TY_INT, .size = sizeof(int64_t), .align = alignof(int64_t) },
+    [TY_INT]   = &(Type) { .type = TY_INT, .size = sizeof(int32_t), .align = alignof(int32_t) },
     [TY_CHAR]  = &(Type) { .type = TY_CHAR, .size = sizeof(char), .align = alignof(char) },
     [TY_USIZE] = &(Type) { .type = TY_USIZE, .size = sizeof(size_t), .align = alignof(size_t) },
 };
