@@ -18,6 +18,7 @@
 #include <sys/wait.h>
 
 #include <a3/str.h>
+#include <a3/vec.h>
 
 static char* cstring_clone(A3CString s) {
     assert(s.ptr);
@@ -54,6 +55,26 @@ static void subprocess_run(char* const argv[]) {
         fprintf(stderr, "Subprocess %s exited with status %d.\n", argv[0], WEXITSTATUS(status));
         exit(-1);
     }
+}
+
+void preprocess(A3CString src, A3CString dst, A3Vec* args) {
+    assert(src.ptr);
+    assert(dst.ptr);
+
+    A3Vec final_args;
+    A3_VEC_INIT(char*, &final_args);
+
+    A3_VEC_PUSH(&final_args, &(char*) { "cc" });
+    A3_VEC_PUSH(&final_args, &(char*) { "-E" });
+    A3_VEC_PUSH(&final_args, &(char*) { "-P" });
+    A3_VEC_PUSH(&final_args, &(char*) { "-C" });
+    A3_VEC_FOR_EACH(A3CString, arg, args) { A3_VEC_PUSH(&final_args, arg); }
+    A3_VEC_PUSH(&final_args, &(char*) { "-o" });
+    A3_VEC_PUSH(&final_args, &(char*) { cstring_clone(dst) });
+    A3_VEC_PUSH(&final_args, &(char*) { cstring_clone(src) });
+    A3_VEC_PUSH(&final_args, &(char*) { NULL });
+
+    subprocess_run(final_args.buf);
 }
 
 void assemble(A3CString src, A3CString dst) {

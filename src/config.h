@@ -13,18 +13,21 @@
 #include <stdio.h>
 
 #include <a3/str.h>
+#include <a3/vec.h>
 
 typedef struct Config {
     A3CString src_path;
     A3CString src_name;
-    A3CString src;
     A3CString out_path;
     A3CString tmp_dir;
+    A3CString preprocess_out_path;
+    A3Vec     preprocess_args;
     A3CString asm_out_path;
     A3CString obj_out_path;
     FILE*     asm_out;
     bool      dump_ast;
     bool      keep_tmp;
+    bool      output_preprocessed;
     bool      output_asm;
     bool      output_obj;
 } Config;

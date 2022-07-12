@@ -10,5 +10,7 @@
 #pragma once
 
 #include <a3/str.h>
+#include <a3/vec.h>
 
+void preprocess(A3CString src, A3CString dst, A3Vec* args);
 void assemble(A3CString src, A3CString dst);
