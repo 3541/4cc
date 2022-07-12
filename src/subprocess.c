@@ -7,7 +7,6 @@
  * for details.
  */
 
-#define _GNU_SOURCE
 #include "subprocess.h"
 
 #include <assert.h>
@@ -19,6 +18,8 @@
 
 #include <a3/str.h>
 #include <a3/vec.h>
+
+extern char** environ;
 
 static char* cstring_clone(A3CString s) {
     assert(s.ptr);
@@ -33,7 +34,7 @@ static void subprocess_run(char* const argv[]) {
     assert(argv);
 
     pid_t pid;
-    int   res = posix_spawnp(&pid, argv[0], NULL, NULL, argv, NULL);
+    int   res = posix_spawnp(&pid, argv[0], NULL, NULL, argv, environ);
     if (res != 0) {
         errno = res;
         perror("posix_spawnp");
@@ -67,7 +68,6 @@ void preprocess(A3CString src, A3CString dst, A3Vec* args) {
     A3_VEC_PUSH(&final_args, &(char*) { "cc" });
     A3_VEC_PUSH(&final_args, &(char*) { "-E" });
     A3_VEC_PUSH(&final_args, &(char*) { "-P" });
-    A3_VEC_PUSH(&final_args, &(char*) { "-C" });
     A3_VEC_FOR_EACH(A3CString, arg, args) { A3_VEC_PUSH(&final_args, arg); }
     A3_VEC_PUSH(&final_args, &(char*) { "-o" });
     A3_VEC_PUSH(&final_args, &(char*) { cstring_clone(dst) });

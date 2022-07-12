@@ -14,7 +14,8 @@ object = tempfile.NamedTemporaryFile(suffix = ".o")
 binary_path = os.path.splitext(object.name)[0]
 
 obj_result = subprocess.check_output(
-    [cc, "-I", os.path.dirname(sys.argv[0]), "-c", input_path, "-o", object.name, "--dump-ast"])
+    [cc, "-C", "-I", os.path.dirname(sys.argv[0]), "-c", input_path, "-o", object.name, "--dump-ast"]
+)
 print(f"Output:\n{obj_result.decode('utf-8')}", file = sys.stderr)
 
 subprocess.run(["gcc", "-static", "-o", binary_path, object.name, test_lib], check = True)

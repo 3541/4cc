@@ -127,6 +127,9 @@ static Config arg_parse(size_t argc, char const* argv[]) {
 
             break;
         }
+        case 'C':
+            A3_VEC_PUSH(&ret.preprocess_args, &A3_CS("-C"));
+            break;
         default:
             if (strcmp(argv[i], "--dump-ast") == 0) {
                 ret.dump_ast = true;
