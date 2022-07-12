@@ -26,8 +26,39 @@
 #include "error.h"
 #include "type.h"
 
-static char* REGISTERS_8[]  = { "dil", "sil", "dl", "cl", "r8b", "r9b" };
-static char* REGISTERS_64[] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
+typedef enum Register { REG_A, REG_DI, REG_SI, REG_D, REG_C, REG_R8, REG_R9 } Register;
+
+static Register const ARG_REGISTERS[] = { REG_DI, REG_SI, REG_D, REG_C, REG_R8, REG_R9 };
+
+static char const* const REGISTERS_8[] = {
+    [REG_A] = "al",   [REG_C] = "cl",   [REG_D] = "dl",   [REG_DI] = "dil",
+    [REG_SI] = "sil", [REG_R8] = "r8b", [REG_R9] = "r9b",
+};
+static char const* const REGISTERS_16[] = {
+    [REG_A] = "ax",  [REG_C] = "cx",   [REG_D] = "dx",   [REG_DI] = "di",
+    [REG_SI] = "si", [REG_R8] = "r8w", [REG_R9] = "r9w",
+};
+static char const* const REGISTERS_32[] = {
+    [REG_A] = "eax",  [REG_C] = "ecx",  [REG_D] = "edx",  [REG_DI] = "edi",
+    [REG_SI] = "esi", [REG_R8] = "r8d", [REG_R9] = "r9d",
+};
+static char const* const REGISTERS_64[] = {
+    [REG_A] = "rax",  [REG_C] = "rcx", [REG_D] = "rdx", [REG_DI] = "rdi",
+    [REG_SI] = "rsi", [REG_R8] = "r8", [REG_R9] = "r9",
+};
+
+static char const* gen_reg_for(Register reg, Type const* type) {
+    assert(type);
+    assert(type->size <= 8);
+
+    if (type->size == 1)
+        return REGISTERS_8[reg];
+    if (type->size == 2)
+        return REGISTERS_16[reg];
+    if (type->size <= 4)
+        return REGISTERS_32[reg];
+    return REGISTERS_64[reg];
+}
 
 typedef struct LoopCtx {
     size_t label;
@@ -83,11 +114,11 @@ static void gen_stack_push(Generator* gen) {
     gen->stack_depth++;
 }
 
-static void gen_stack_pop(Generator* gen, char* reg) {
+static void gen_stack_pop(Generator* gen, Register reg) {
     assert(gen);
     assert(gen->stack_depth);
 
-    gen_asm(gen, "pop %s", reg);
+    gen_asm(gen, "pop %s", REGISTERS_64[reg]);
     gen->stack_depth--;
 }
 
@@ -114,25 +145,40 @@ static void gen_load(Generator* gen, Type const* type) {
     if (type->type == TY_ARRAY || type->type == TY_STRUCT)
         return;
 
-    gen_asm(gen, "mov rax, [rax]");
+    if (type->size == 1)
+        gen_asm(gen, "movzx rax, BYTE [rax]");
+    else if (type->size == 2)
+        gen_asm(gen, "movzx rax, WORD [rax]");
+    else if (type->size <= 4)
+        gen_asm(gen, "mov eax, [rax]");
+    else
+        gen_asm(gen, "mov rax, [rax]");
 }
 
 static void gen_store(Generator* gen, Type const* type) {
     assert(gen);
 
-    gen_stack_pop(gen, "rdi");
+    gen_stack_pop(gen, REG_DI);
 
-    if (type->size == 1) {
-        gen_asm(gen, "mov BYTE [rdi], al");
-    } else if (type->type == TY_STRUCT) {
+    if (type->type == TY_STRUCT) {
         gen_asm(gen,
                 "mov rcx, %zu\n"
                 "mov rsi, rax\n"
                 "rep movsb",
                 type->size);
-    } else {
-        gen_asm(gen, "mov [rdi], rax");
+
+        return;
     }
+
+    gen_asm(gen, "mov [rdi], %s", gen_reg_for(REG_A, type));
+}
+
+static void gen_store_local(Generator* gen, Obj* obj, Register reg) {
+    assert(gen);
+    assert(obj);
+    assert(type_is_scalar(obj->type));
+
+    gen_asm(gen, "mov [rbp - %zu], %s", obj->stack_offset, gen_reg_for(reg, obj->type));
 }
 
 static bool gen_line(AstVisitor* visitor, Vertex* vertex) {
@@ -331,7 +377,7 @@ static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
     A3_TRYB(vertex_visit(visitor, VERTEX(op->rhs, expr)));
     gen_stack_push(visitor->ctx);
     A3_TRYB(vertex_visit(visitor, VERTEX(op->lhs, expr)));
-    gen_stack_pop(visitor->ctx, "rdi");
+    gen_stack_pop(visitor->ctx, REG_DI);
 
     // Arguments now in rdi, rax.
 
@@ -491,7 +537,7 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
     assert(args <= 6);
 
     for (size_t i = 0; i < args; i++)
-        gen_stack_pop(visitor->ctx, REGISTERS_64[args - i - 1]);
+        gen_stack_pop(visitor->ctx, ARG_REGISTERS[args - i - 1]);
 
     if (!call->obj->defined)
         gen_asm(visitor->ctx, "extern " A3_S_F, A3_S_FORMAT(call->name));
@@ -519,12 +565,7 @@ static bool gen_fn(AstVisitor* visitor, Item* decl) {
 
     size_t i = 0;
     A3_SLL_FOR_EACH(Item, param, &decl->obj->params, link) {
-        if (param->decl_type->size == 1)
-            gen_asm(visitor->ctx, "movsx BYTE [rbp - %zu], %s", param->obj->stack_offset,
-                    REGISTERS_8[i++]);
-        else
-            gen_asm(visitor->ctx, "mov [rbp - %zu], %s", param->obj->stack_offset,
-                    REGISTERS_64[i++]);
+        gen_store_local(visitor->ctx, param->obj, ARG_REGISTERS[i++]);
         assert(i <= 6);
     }
 
