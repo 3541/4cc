@@ -996,7 +996,7 @@ Vertex* parse(Parser* parser) {
     }
 
     Token next = lex_peek(parser->lexer);
-    if (next.type != TOK_EOF) {
+    if (parser->status && next.type != TOK_EOF) {
         parse_error(parser, next, "Expected end of file.");
         return NULL;
     }
