@@ -33,6 +33,7 @@ tests = {
     'ge_gt',
     'multiple_stmts',
     'mod',
+    'i32'
   ],
   'var': [
     'simple',

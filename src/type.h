@@ -25,7 +25,7 @@ typedef struct Registry Registry;
 typedef struct Scope    Scope;
 
 typedef enum TypeType {
-    TY_INT,
+    TY_I32,
     TY_CHAR,
     TY_USIZE,
 

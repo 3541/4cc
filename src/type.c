@@ -56,7 +56,7 @@ typedef struct Registry {
 } Registry;
 
 Type const* BUILTIN_TYPES[3] = {
-    [TY_INT]   = &(Type) { .type = TY_INT, .size = sizeof(int32_t), .align = alignof(int32_t) },
+    [TY_I32]   = &(Type) { .type = TY_I32, .size = sizeof(int32_t), .align = alignof(int32_t) },
     [TY_CHAR]  = &(Type) { .type = TY_CHAR, .size = sizeof(char), .align = alignof(char) },
     [TY_USIZE] = &(Type) { .type = TY_USIZE, .size = sizeof(size_t), .align = alignof(size_t) },
 };
@@ -160,8 +160,8 @@ A3String type_name(Type const* type) {
     assert(type);
 
     switch (type->type) {
-    case TY_INT:
-        return a3_string_clone(A3_CS("int"));
+    case TY_I32:
+        return a3_string_clone(A3_CS("__i32"));
     case TY_CHAR:
         return a3_string_clone(A3_CS("char"));
     case TY_USIZE:
@@ -230,7 +230,7 @@ A3String type_name(Type const* type) {
 bool type_is_scalar(Type const* type) {
     assert(type);
 
-    return type->type == TY_INT || type->type == TY_CHAR || type->type == TY_USIZE;
+    return type->type == TY_I32 || type->type == TY_CHAR || type->type == TY_USIZE;
 }
 
 static bool type_is_assignable(Type const* lhs, Type const* rhs) {
@@ -432,8 +432,9 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
         return type_aggregate_from_ptype(reg, ptype);
     case PTY_BUILTIN:
         switch (ptype->builtin) {
+        case TOK_I32:
         case TOK_INT:
-            return BUILTIN_TYPES[TY_INT];
+            return BUILTIN_TYPES[TY_I32];
         case TOK_CHAR:
             return BUILTIN_TYPES[TY_CHAR];
         default:
@@ -500,7 +501,7 @@ static bool type_bin_op(AstVisitor* visitor, BinOp* op) {
     case OP_LE:
     case OP_LT:
     case OP_NE:
-        EXPR(op, bin_op)->res_type = BUILTIN_TYPES[TY_INT];
+        EXPR(op, bin_op)->res_type = BUILTIN_TYPES[TY_I32];
         break;
     case OP_OR:
     case OP_AND:
@@ -510,7 +511,7 @@ static bool type_bin_op(AstVisitor* visitor, BinOp* op) {
             return false;
         }
 
-        EXPR(op, bin_op)->res_type = BUILTIN_TYPES[TY_INT];
+        EXPR(op, bin_op)->res_type = BUILTIN_TYPES[TY_I32];
         break;
     }
 
@@ -547,7 +548,7 @@ static bool type_unary_op(AstVisitor* visitor, UnaryOp* op) {
             return false;
         }
 
-        EXPR(op, unary_op)->res_type = BUILTIN_TYPES[TY_INT];
+        EXPR(op, unary_op)->res_type = BUILTIN_TYPES[TY_I32];
         break;
     case OP_BW_NOT:
     case OP_NEG:
@@ -589,7 +590,7 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
 
     switch (lit->type) {
     case LIT_NUM:
-        EXPR(lit, lit)->res_type = BUILTIN_TYPES[TY_INT];
+        EXPR(lit, lit)->res_type = BUILTIN_TYPES[TY_I32];
         break;
     case LIT_STR: {
         // TODO: There really should be a separate resolution pass for this and other things like

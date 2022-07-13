@@ -367,6 +367,7 @@ static Token lex_ident_or_kw(Lexer* lexer) {
         { A3_CS("sizeof"), TOK_SIZEOF },     { A3_CS("struct"), TOK_STRUCT },
         { A3_CS("union"), TOK_UNION },       { A3_CS("break"), TOK_BREAK },
         { A3_CS("continue"), TOK_CONTINUE }, { A3_CS("do"), TOK_DO },
+        { A3_CS("__i32"), TOK_I32 },
     };
 
     A3CString lexeme = lex_consume_until(lexer, is_not_ident);
