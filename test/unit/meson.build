@@ -202,8 +202,6 @@ libtest = static_library(
   'testlib',
   'lib/test.c',
   override_options: 'b_sanitize=none',
-  # Redeclaration of puts() without const qualifier.
-  c_args: c.get_supported_arguments('-Wno-builtin-declaration-mismatch')
 )
 
 foreach suite, ts : tests
