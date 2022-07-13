@@ -144,7 +144,13 @@ tests = {
   'sizeof': [
     'int',
     'ptr',
-    'array'
+    'array',
+    'i8',
+    'i16',
+    'i32',
+    'i64',
+    'short',
+    'long'
   ],
   'comment': [
     'line',

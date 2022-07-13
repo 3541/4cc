@@ -55,9 +55,12 @@ typedef struct Registry {
     size_t    lit_count;
 } Registry;
 
-Type const* BUILTIN_TYPES[3] = {
-    [TY_I32]   = &(Type) { .type = TY_I32, .size = sizeof(int32_t), .align = alignof(int32_t) },
-    [TY_CHAR]  = &(Type) { .type = TY_CHAR, .size = sizeof(char), .align = alignof(char) },
+static Type const* BUILTIN_TYPES[6] = {
+    [TY_I8]    = &(Type) { .type = TY_I8, .size = 1, .align = 1 },
+    [TY_I16]   = &(Type) { .type = TY_I16, .size = 2, .align = 2 },
+    [TY_I32]   = &(Type) { .type = TY_I32, .size = 4, .align = 4 },
+    [TY_I64]   = &(Type) { .type = TY_I64, .size = 8, .align = 8 },
+    [TY_CHAR]  = &(Type) { .type = TY_CHAR, .size = 1, .align = 1 },
     [TY_USIZE] = &(Type) { .type = TY_USIZE, .size = sizeof(size_t), .align = alignof(size_t) },
 };
 
@@ -160,12 +163,18 @@ A3String type_name(Type const* type) {
     assert(type);
 
     switch (type->type) {
+    case TY_I8:
+        return a3_string_clone(A3_CS("__i8"));
+    case TY_I16:
+        return a3_string_clone(A3_CS("__i16"));
     case TY_I32:
         return a3_string_clone(A3_CS("__i32"));
+    case TY_I64:
+        return a3_string_clone(A3_CS("__i64"));
     case TY_CHAR:
         return a3_string_clone(A3_CS("char"));
     case TY_USIZE:
-        return a3_string_clone(A3_CS("size_t"));
+        return a3_string_clone(A3_CS("__usize"));
     case TY_PTR: {
         A3String base = type_name(type->parent);
         A3String ret  = a3_string_alloc(base.len + 1);
@@ -230,14 +239,15 @@ A3String type_name(Type const* type) {
 bool type_is_scalar(Type const* type) {
     assert(type);
 
-    return type->type == TY_I32 || type->type == TY_CHAR || type->type == TY_USIZE;
+    return type->type == TY_I8 || type->type == TY_I16 || type->type == TY_I32 ||
+           type->type == TY_I64 || type->type == TY_USIZE || type->type == TY_CHAR;
 }
 
 static bool type_is_assignable(Type const* lhs, Type const* rhs) {
     assert(lhs);
     assert(rhs);
 
-    return lhs == rhs ||
+    return lhs == rhs || (type_is_scalar(lhs) && type_is_scalar(rhs) && rhs->size <= lhs->size) ||
            (lhs->type == TY_PTR && rhs->type == TY_ARRAY && lhs->parent == rhs->parent) ||
            (lhs->type == TY_ARRAY && rhs->type == TY_ARRAY && lhs->parent == rhs->parent &&
             lhs->len == rhs->len);
@@ -432,9 +442,17 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
         return type_aggregate_from_ptype(reg, ptype);
     case PTY_BUILTIN:
         switch (ptype->builtin) {
+        case TOK_I8:
+            return BUILTIN_TYPES[TY_I8];
+        case TOK_I16:
+        case TOK_SHORT:
+            return BUILTIN_TYPES[TY_I16];
         case TOK_I32:
         case TOK_INT:
             return BUILTIN_TYPES[TY_I32];
+        case TOK_I64:
+        case TOK_LONG:
+            return BUILTIN_TYPES[TY_I64];
         case TOK_CHAR:
             return BUILTIN_TYPES[TY_CHAR];
         default:

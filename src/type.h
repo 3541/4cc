@@ -25,9 +25,12 @@ typedef struct Registry Registry;
 typedef struct Scope    Scope;
 
 typedef enum TypeType {
+    TY_I8,
+    TY_I16,
     TY_I32,
-    TY_CHAR,
+    TY_I64,
     TY_USIZE,
+    TY_CHAR,
 
     TY_ARRAY,
     TY_FN,
@@ -88,8 +91,6 @@ typedef struct Obj {
         };
     };
 } Obj;
-
-extern Type const* BUILTIN_TYPES[3];
 
 Registry*     type_registry_new(void);
 A3String      type_name(Type const*);
