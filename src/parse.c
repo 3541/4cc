@@ -726,11 +726,23 @@ static PType* parse_decl_suffix(Parser* parser, PType* base) {
     return parse_decl_suffix_array(parser, base);
 }
 
+static PType* parse_declarator_dummy_replace(PType* nested, PType* base) {
+    assert(nested);
+    assert(base);
+
+    if (nested->type == PTY_DUMMY)
+        return base;
+
+    assert(nested->type == PTY_ARRAY || nested->type == PTY_PTR);
+    assert(nested->parent);
+    nested->parent = parse_declarator_dummy_replace(nested->parent, base);
+
+    return nested;
+}
+
 static Item* parse_declarator(Parser* parser, PType* type) {
     assert(parser);
     assert(type);
-
-    Token first = lex_peek(parser->lexer);
 
     while (lex_peek(parser->lexer).type == TOK_STAR) {
         Token next = lex_next(parser->lexer);
@@ -741,10 +753,33 @@ static Item* parse_declarator(Parser* parser, PType* type) {
     if (next.type == TOK_RPAREN || next.type == TOK_COMMA)
         return vertex_decl_new(type->span, A3_CS_NULL, type);
 
-    Token ident = lex_next(parser->lexer);
-    if (ident.type != TOK_IDENT) {
-        parse_error(parser, ident, "Expected an identifier.");
-        return NULL;
+    // Nested declarator.
+    Item* nested = NULL;
+    PType dummy  = { .type = PTY_DUMMY, .span = type->span };
+    if (lex_peek(parser->lexer).type == TOK_LPAREN) {
+        lex_next(parser->lexer);
+
+        // Declarators are awful. A nested declarator applies to the outer type, /including
+        // suffixes/, so that needs to be parsed in order to establish the base type. This is done
+        // by looking up the base chain of the below declaration and replacing PTY_DUMMY with the
+        // actual type.
+        nested = parse_declarator(parser, &dummy);
+
+        if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
+            return NULL;
+    }
+
+    A3CString name = A3_CS_NULL;
+    if (nested) {
+        name = nested->name;
+    } else {
+        Token ident = lex_next(parser->lexer);
+        if (ident.type != TOK_IDENT) {
+            parse_error(parser, ident, "Expected an identifier.");
+            return NULL;
+        }
+
+        name = ident.lexeme.text;
     }
 
     next = lex_peek(parser->lexer);
@@ -754,10 +789,10 @@ static Item* parse_declarator(Parser* parser, PType* type) {
     if (!type)
         return NULL;
 
-    return vertex_decl_new(first.lexeme.text.ptr != ident.lexeme.text.ptr
-                               ? parse_span_merge(first.lexeme, ident.lexeme)
-                               : ident.lexeme,
-                           ident.lexeme.text, type);
+    if (nested)
+        type = parse_declarator_dummy_replace(nested->decl_ptype, type);
+
+    return vertex_decl_new(type->span, name, type);
 }
 
 static bool parse_decl(Parser* parser, Block* block) {

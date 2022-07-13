@@ -187,6 +187,13 @@ tests = {
     'simple',
     'nested',
     'omit_true'
+  ],
+  'decl': [
+    'simple',
+    'array',
+    'array_of_array',
+    'array_of_ptr',
+    'ptr_to_array',
   ]
 }
 

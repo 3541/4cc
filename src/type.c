@@ -458,6 +458,8 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
         default:
             A3_UNREACHABLE();
         }
+    case PTY_DUMMY:
+        A3_UNREACHABLE();
     }
 
     return ret;

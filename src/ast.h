@@ -185,7 +185,15 @@ typedef struct Member {
     };
 } Member;
 
-typedef enum PTypeType { PTY_PTR, PTY_BUILTIN, PTY_FN, PTY_ARRAY, PTY_STRUCT, PTY_UNION } PTypeType;
+typedef enum PTypeType {
+    PTY_ARRAY,
+    PTY_BUILTIN,
+    PTY_DUMMY,
+    PTY_FN,
+    PTY_PTR,
+    PTY_STRUCT,
+    PTY_UNION,
+} PTypeType;
 
 typedef struct PType {
     PTypeType type;
