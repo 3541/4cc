@@ -2,5 +2,5 @@
 	path = boilerplate
 	url = ../boilerplate
 [submodule "test/extra"]
-	path = test/extra
+	path = test/unit/extra
 	url = https://github.com/nlsandler/write_a_c_compiler
