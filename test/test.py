@@ -26,11 +26,14 @@ result = subprocess.run([binary_path], stdout = subprocess.PIPE)
 exit = result.returncode
 os.remove(binary_path)
 
-if output_path.endswith(".out"):
-    output = open(output_path).read()
+if os.path.isfile(output_path):
+    if output_path.endswith(".out"):
+        output = open(output_path).read()
+    else:
+        p = subprocess.run([output_path])
+        output = str(p.returncode)
 else:
-    p = subprocess.run([output_path])
-    output = str(p.returncode)
+    output = "0"
 
 if output.strip().isdigit():
     expected_status = output.strip()
