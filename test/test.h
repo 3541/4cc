@@ -13,6 +13,6 @@ int puts(char*);
 #include <stddef.h>
 #endif
 
-int test_assert_eq(size_t, size_t, char*, int);
+void test_assert_eq(size_t, size_t, char*, int);
 
 #define ASSERT_EQ(EXPR, EXPECTED) test_assert_eq((EXPR), (EXPECTED), #EXPR, __LINE__)

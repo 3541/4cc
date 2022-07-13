@@ -96,7 +96,7 @@ static bool parse_has_decl(Parser* parser) {
     return next.type == TOK_I8 || next.type == TOK_I16 || next.type == TOK_I32 ||
            next.type == TOK_I64 || next.type == TOK_CHAR || next.type == TOK_SHORT ||
            next.type == TOK_INT || next.type == TOK_LONG || next.type == TOK_STRUCT ||
-           next.type == TOK_UNION;
+           next.type == TOK_UNION || next.type == TOK_VOID;
 }
 
 static BinOpType parse_bin_op(TokenType type) {
@@ -637,6 +637,7 @@ static PType* parse_declspec(Parser* parser) {
     case TOK_I16:
     case TOK_I32:
     case TOK_I64:
+    case TOK_VOID:
         lex_next(parser->lexer);
         return ptype_builtin_new(next.lexeme, next.type);
     case TOK_STRUCT:

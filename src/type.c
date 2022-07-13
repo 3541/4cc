@@ -55,7 +55,8 @@ typedef struct Registry {
     size_t    lit_count;
 } Registry;
 
-static Type const* BUILTIN_TYPES[6] = {
+static Type const* BUILTIN_TYPES[7] = {
+    [TY_VOID]  = &(Type) { .type = TY_VOID, .size = 0, .align = 0 },
     [TY_I8]    = &(Type) { .type = TY_I8, .size = 1, .align = 1 },
     [TY_I16]   = &(Type) { .type = TY_I16, .size = 2, .align = 2 },
     [TY_I32]   = &(Type) { .type = TY_I32, .size = 4, .align = 4 },
@@ -163,6 +164,8 @@ A3String type_name(Type const* type) {
     assert(type);
 
     switch (type->type) {
+    case TY_VOID:
+        return a3_string_clone(A3_CS("void"));
     case TY_I8:
         return a3_string_clone(A3_CS("__i8"));
     case TY_I16:
@@ -250,7 +253,9 @@ static bool type_is_assignable(Type const* lhs, Type const* rhs) {
     return lhs == rhs || (type_is_scalar(lhs) && type_is_scalar(rhs) && rhs->size <= lhs->size) ||
            (lhs->type == TY_PTR && rhs->type == TY_ARRAY && lhs->parent == rhs->parent) ||
            (lhs->type == TY_ARRAY && rhs->type == TY_ARRAY && lhs->parent == rhs->parent &&
-            lhs->len == rhs->len);
+            lhs->len == rhs->len) ||
+           (lhs->type == TY_PTR && rhs->type == TY_PTR &&
+            (lhs->parent->type == TY_VOID || rhs->parent->type == TY_VOID));
 }
 
 Member const* type_struct_find_member(Type const* s, A3CString name) {
@@ -442,6 +447,8 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
         return type_aggregate_from_ptype(reg, ptype);
     case PTY_BUILTIN:
         switch (ptype->builtin) {
+        case TOK_VOID:
+            return BUILTIN_TYPES[TY_VOID];
         case TOK_I8:
             return BUILTIN_TYPES[TY_I8];
         case TOK_I16:
@@ -535,6 +542,7 @@ static bool type_bin_op(AstVisitor* visitor, BinOp* op) {
         break;
     }
 
+    assert(EXPR(op, bin_op)->res_type->type != TY_VOID);
     return true;
 }
 
@@ -588,6 +596,7 @@ static bool type_unary_op(AstVisitor* visitor, UnaryOp* op) {
         break;
     }
 
+    assert(EXPR(op, unary_op)->res_type->type != TY_VOID);
     return true;
 }
 
@@ -736,6 +745,11 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
     Type const* type = type_from_ptype(reg, decl->decl_ptype);
     if (!type)
         return false;
+
+    if (type->type == TY_VOID) {
+        type_error(reg, VERTEX(decl, item), "Cannot declare object of type void.");
+        return false;
+    }
 
     Obj* prev = scope_find_in(reg->current_scope, decl->name);
     if (prev) {

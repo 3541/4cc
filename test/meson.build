@@ -85,7 +85,8 @@ tests = {
     'sub',
     'add_lhs',
     'sub_lhs',
-    'diff'
+    'diff',
+    'void'
   ],
   'call': [
     'simple',
