@@ -1,8 +1,8 @@
 fs = import('fs')
 
 c = meson.get_compiler('c')
-
 python = find_program('python3')
+
 tests = {
   'expr': [
     'num0',
