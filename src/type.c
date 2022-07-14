@@ -56,14 +56,23 @@ typedef struct Registry {
     size_t    lit_count;
 } Registry;
 
-static Type const* BUILTIN_TYPES[7] = {
-    [TY_VOID]  = &(Type) { .type = TY_VOID, .size = 0, .align = 0 },
-    [TY_I8]    = &(Type) { .type = TY_I8, .size = 1, .align = 1 },
-    [TY_I16]   = &(Type) { .type = TY_I16, .size = 2, .align = 2 },
-    [TY_I32]   = &(Type) { .type = TY_I32, .size = 4, .align = 4 },
-    [TY_I64]   = &(Type) { .type = TY_I64, .size = 8, .align = 8 },
-    [TY_CHAR]  = &(Type) { .type = TY_CHAR, .size = 1, .align = 1 },
-    [TY_USIZE] = &(Type) { .type = TY_USIZE, .size = sizeof(size_t), .align = alignof(size_t) },
+static Type const* BUILTIN_TYPES[11] = {
+    [TY_VOID] = &(Type) { .type = TY_VOID, .size = 0, .align = 0 },
+    [TY_I8]   = &(Type) { .type = TY_I8, .size = 1, .align = 1, .is_signed = true },
+    [TY_I16]  = &(Type) { .type = TY_I16, .size = 2, .align = 2, .is_signed = true },
+    [TY_I32]  = &(Type) { .type = TY_I32, .size = 4, .align = 4, .is_signed = true },
+    [TY_I64]  = &(Type) { .type = TY_I64, .size = 8, .align = 8, .is_signed = true },
+    [TY_U8]   = &(Type) { .type = TY_U8, .size = 1, .align = 1, .is_signed = false },
+    [TY_ISIZE] =
+        &(Type) {
+            .type = TY_ISIZE, .size = sizeof(size_t), .align = alignof(size_t), .is_signed = true },
+    [TY_U16]   = &(Type) { .type = TY_U16, .size = 2, .align = 2, .is_signed = false },
+    [TY_U32]   = &(Type) { .type = TY_U32, .size = 4, .align = 4, .is_signed = false },
+    [TY_U64]   = &(Type) { .type = TY_U64, .size = 8, .align = 8, .is_signed = false },
+    [TY_USIZE] = &(Type) { .type      = TY_USIZE,
+                           .size      = sizeof(size_t),
+                           .align     = alignof(size_t),
+                           .is_signed = false },
 };
 
 static Type const* type_from_ptype(Registry*, PType*);
@@ -195,8 +204,16 @@ A3String type_name(Type const* type) {
         return a3_string_clone(A3_CS("__i32"));
     case TY_I64:
         return a3_string_clone(A3_CS("__i64"));
-    case TY_CHAR:
-        return a3_string_clone(A3_CS("char"));
+    case TY_ISIZE:
+        return a3_string_clone(A3_CS("__isize"));
+    case TY_U8:
+        return a3_string_clone(A3_CS("__u8"));
+    case TY_U16:
+        return a3_string_clone(A3_CS("__u16"));
+    case TY_U32:
+        return a3_string_clone(A3_CS("__u32"));
+    case TY_U64:
+        return a3_string_clone(A3_CS("__u64"));
     case TY_USIZE:
         return a3_string_clone(A3_CS("__usize"));
     case TY_PTR: {
@@ -264,7 +281,9 @@ bool type_is_scalar(Type const* type) {
     assert(type);
 
     return type->type == TY_I8 || type->type == TY_I16 || type->type == TY_I32 ||
-           type->type == TY_I64 || type->type == TY_USIZE || type->type == TY_CHAR;
+           type->type == TY_I64 || type->type == TY_ISIZE || type->type == TY_U8 ||
+           type->type == TY_U16 || type->type == TY_U32 || type->type == TY_U64 ||
+           type->type == TY_USIZE;
 }
 
 static bool type_is_assignable(Type const* lhs, Type const* rhs) {
@@ -470,22 +489,66 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
         case PTY_VOID:
             return BUILTIN_TYPES[TY_VOID];
         case PTY_I8:
+        case PTY_I8 | PTY_SIGNED:
+        case PTY_U8 | PTY_SIGNED:
+        case PTY_CHAR | PTY_SIGNED:
             return BUILTIN_TYPES[TY_I8];
         case PTY_I16:
+        case PTY_I16 | PTY_SIGNED:
+        case PTY_U16 | PTY_SIGNED:
         case PTY_SHORT:
         case PTY_SHORT | PTY_INT:
+        case PTY_SHORT | PTY_INT | PTY_SIGNED:
             return BUILTIN_TYPES[TY_I16];
         case PTY_I32:
+        case PTY_I32 | PTY_SIGNED:
+        case PTY_U32 | PTY_SIGNED:
         case PTY_INT:
+        case PTY_INT | PTY_SIGNED:
             return BUILTIN_TYPES[TY_I32];
         case PTY_I64:
+        case PTY_I64 | PTY_SIGNED:
+        case PTY_U64 | PTY_SIGNED:
         case PTY_LONG:
         case PTY_LONG | PTY_INT:
+        case PTY_LONG | PTY_INT | PTY_SIGNED:
         case PTY_LONG_LONG:
         case PTY_LONG_LONG | PTY_INT:
+        case PTY_LONG_LONG | PTY_INT | PTY_SIGNED:
             return BUILTIN_TYPES[TY_I64];
+        case PTY_ISIZE:
+        case PTY_ISIZE | PTY_SIGNED:
+        case PTY_USIZE | PTY_SIGNED:
+            return BUILTIN_TYPES[TY_ISIZE];
+        case PTY_U8:
+        case PTY_U8 | PTY_UNSIGNED:
+        case PTY_I8 | PTY_UNSIGNED:
         case PTY_CHAR:
-            return BUILTIN_TYPES[TY_CHAR];
+        case PTY_CHAR | PTY_UNSIGNED:
+            return BUILTIN_TYPES[TY_U8];
+        case PTY_U16:
+        case PTY_U16 | PTY_UNSIGNED:
+        case PTY_I16 | PTY_UNSIGNED:
+        case PTY_SHORT | PTY_UNSIGNED:
+        case PTY_SHORT | PTY_INT | PTY_UNSIGNED:
+            return BUILTIN_TYPES[TY_U16];
+        case PTY_U32:
+        case PTY_U32 | PTY_UNSIGNED:
+        case PTY_I32 | PTY_UNSIGNED:
+        case PTY_INT | PTY_UNSIGNED:
+            return BUILTIN_TYPES[TY_U32];
+        case PTY_U64:
+        case PTY_U64 | PTY_UNSIGNED:
+        case PTY_I64 | PTY_UNSIGNED:
+        case PTY_LONG | PTY_UNSIGNED:
+        case PTY_LONG | PTY_INT | PTY_UNSIGNED:
+        case PTY_LONG_LONG | PTY_UNSIGNED:
+        case PTY_LONG_LONG | PTY_INT | PTY_UNSIGNED:
+            return BUILTIN_TYPES[TY_U64];
+        case PTY_USIZE:
+        case PTY_USIZE | PTY_UNSIGNED:
+        case PTY_ISIZE | PTY_UNSIGNED:
+            return BUILTIN_TYPES[TY_USIZE];
         default:
             error_at(reg->src, ptype->span, "Invalid declaration type.");
             return NULL;
@@ -659,7 +722,7 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
         // TODO: There really should be a separate resolution pass for this and other things like
         // it...
 
-        EXPR(lit, lit)->res_type = type_array_of(BUILTIN_TYPES[TY_CHAR], lit->str.len + 1);
+        EXPR(lit, lit)->res_type = type_array_of(BUILTIN_TYPES[TY_U8], lit->str.len + 1);
 
         // Synthesize global declaration for storage.
         A3CString global_name = type_lit_name(reg);
@@ -848,7 +911,7 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
                 }
 
                 decl->init->res_type =
-                    type_array_of(BUILTIN_TYPES[TY_CHAR], decl->init->lit.str.len + 1);
+                    type_array_of(BUILTIN_TYPES[TY_U8], decl->init->lit.str.len + 1);
             } else {
                 A3_TRYB(vertex_visit(visitor, VERTEX(decl->init, expr)));
             }

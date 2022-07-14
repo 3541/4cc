@@ -151,7 +151,9 @@ tests = {
     'i32',
     'i64',
     'short',
-    'long'
+    'long',
+    'unsigned',
+    'signed'
   ],
   'comment': [
     'line',

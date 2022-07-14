@@ -30,8 +30,12 @@ typedef enum TypeType {
     TY_I16,
     TY_I32,
     TY_I64,
+    TY_ISIZE,
+    TY_U8,
+    TY_U16,
+    TY_U32,
+    TY_U64,
     TY_USIZE,
-    TY_CHAR,
 
     TY_ARRAY,
     TY_FN,
@@ -52,6 +56,8 @@ typedef struct Type {
     size_t   align;
 
     union {
+        bool is_signed; // Builtins
+
         // TY_STRUCT
         struct {
             A3CString name;

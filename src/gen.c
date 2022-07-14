@@ -694,7 +694,7 @@ static bool gen_data(Generator* gen, Vertex* root) {
             Expr* init = decl->obj->init;
             switch (type->type) {
             case TY_ARRAY:
-                assert(type->parent->type == TY_CHAR && init->type == EXPR_LIT);
+                assert(type->parent->type == TY_U8 && init->type == EXPR_LIT);
 
                 fprintf(gen->cfg->asm_out, A3_S_F ": db ", A3_S_FORMAT(decl->name));
                 for (size_t i = 0; i < init->lit.str.len; i++)
@@ -702,7 +702,7 @@ static bool gen_data(Generator* gen, Vertex* root) {
                 gen_asm(gen, "0");
                 break;
             case TY_PTR:
-                assert(type->parent->type == TY_CHAR && init->type == EXPR_LIT);
+                assert(type->parent->type == TY_U8 && init->type == EXPR_LIT);
 
                 gen_asm(gen, A3_S_F ": dq " A3_S_F, A3_S_FORMAT(decl->name),
                         A3_S_FORMAT(init->lit.storage->name));

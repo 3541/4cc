@@ -153,8 +153,11 @@ static bool parse_has_decl_builtin(Parser* parser) {
 
     Token next = lex_peek(parser->lexer);
     return next.type == TOK_VOID || next.type == TOK_I8 || next.type == TOK_I16 ||
-           next.type == TOK_I32 || next.type == TOK_I64 || next.type == TOK_CHAR ||
-           next.type == TOK_SHORT || next.type == TOK_INT || next.type == TOK_LONG;
+           next.type == TOK_I32 || next.type == TOK_I64 || next.type == TOK_ISIZE ||
+           next.type == TOK_U8 || next.type == TOK_U16 || next.type == TOK_U32 ||
+           next.type == TOK_U64 || next.type == TOK_USIZE || next.type == TOK_CHAR ||
+           next.type == TOK_SHORT || next.type == TOK_INT || next.type == TOK_LONG ||
+           next.type == TOK_SIGNED || next.type == TOK_UNSIGNED;
 }
 
 static bool parse_has_decl_aggregate(Parser* parser) {
@@ -710,6 +713,138 @@ static PType* parse_aggregate_decl(Parser* parser) {
     return ret;
 }
 
+static PTypeBuiltinType parse_decl_flag(Parser* parser, Token tok, PTypeBuiltinType prev) {
+    assert(parser);
+
+    PTypeBuiltinType ret = prev;
+
+    switch (tok.type) {
+    case TOK_VOID:
+        if (ret != PTY_NOTHING) {
+            parse_error(parser, tok, "Invalid use of void type.");
+            return PTY_NOTHING;
+        }
+        ret |= PTY_VOID;
+        break;
+    case TOK_I8:
+        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+            parse_error(parser, tok, "Duplicate types in type declaration.");
+            return PTY_NOTHING;
+        }
+        ret |= PTY_I8;
+        break;
+    case TOK_I16:
+        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+            parse_error(parser, tok, "Duplicate types in type declaration.");
+            return PTY_NOTHING;
+        }
+        ret |= PTY_I16;
+        break;
+    case TOK_I32:
+        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+            parse_error(parser, tok, "Duplicate types in type declaration.");
+            return PTY_NOTHING;
+        }
+        ret |= PTY_I32;
+        break;
+    case TOK_I64:
+        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+            parse_error(parser, tok, "Duplicate types in type declaration.");
+            return PTY_NOTHING;
+        }
+        ret |= PTY_I64;
+        break;
+    case TOK_ISIZE:
+        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+            parse_error(parser, tok, "Duplicate types in type declaration.");
+            return PTY_NOTHING;
+        }
+        ret |= PTY_ISIZE;
+        break;
+    case TOK_U8:
+        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+            parse_error(parser, tok, "Duplicate types in type declaration.");
+            return PTY_NOTHING;
+        }
+        ret |= PTY_U8;
+        break;
+    case TOK_U16:
+        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+            parse_error(parser, tok, "Duplicate types in type declaration.");
+            return PTY_NOTHING;
+        }
+        ret |= PTY_U16;
+        break;
+    case TOK_U32:
+        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+            parse_error(parser, tok, "Duplicate types in type declaration.");
+            return PTY_NOTHING;
+        }
+        ret |= PTY_U32;
+        break;
+    case TOK_U64:
+        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+            parse_error(parser, tok, "Duplicate types in type declaration.");
+            return PTY_NOTHING;
+        }
+        ret |= PTY_U64;
+        break;
+    case TOK_USIZE:
+        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+            parse_error(parser, tok, "Duplicate types in type declaration.");
+            return PTY_NOTHING;
+        }
+        ret |= PTY_USIZE;
+        break;
+    case TOK_CHAR:
+        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+            parse_error(parser, tok, "Duplicate types in type declaration.");
+            return PTY_NOTHING;
+        }
+        ret |= PTY_CHAR;
+        break;
+    case TOK_SHORT:
+        if (ret & PTY_TYPE_QUALIFIERS) {
+            parse_error(parser, tok, "Duplicate type qualifiers in type declaration.");
+            return PTY_NOTHING;
+        }
+        ret |= PTY_SHORT;
+        break;
+    case TOK_INT:
+        if (ret & PTY_TYPES) {
+            parse_error(parser, tok, "Duplicate types in type declaration.");
+            return PTY_NOTHING;
+        }
+        ret |= PTY_INT;
+        break;
+    case TOK_LONG:
+        if (ret & PTY_TYPES) {
+            parse_error(parser, tok, "Duplicate types in type declaration.");
+            return PTY_NOTHING;
+        }
+        ret += PTY_LONG;
+        break;
+    case TOK_SIGNED:
+        if (ret & (PTY_SIGNED | PTY_UNSIGNED)) {
+            parse_error(parser, tok, "Duplicate signed/unsigned qualifier in type declaration.");
+            return PTY_NOTHING;
+        }
+        ret |= PTY_SIGNED;
+        break;
+    case TOK_UNSIGNED:
+        if (ret & (PTY_SIGNED | PTY_UNSIGNED)) {
+            parse_error(parser, tok, "Duplicate signed/unsigned qualifier in type declaration.");
+            return PTY_NOTHING;
+        }
+        ret |= PTY_UNSIGNED;
+        break;
+    default:
+        A3_UNREACHABLE();
+    }
+
+    return ret;
+}
+
 static PType* parse_declspec(Parser* parser) {
     assert(parser);
 
@@ -741,75 +876,9 @@ static PType* parse_declspec(Parser* parser) {
     Token            next = lex_peek(parser->lexer);
     PTypeBuiltinType type = PTY_NOTHING;
     while (parse_has_decl_builtin(parser)) {
-        next = lex_next(parser->lexer);
-
-        switch (next.type) {
-        case TOK_VOID:
-            if (type != PTY_NOTHING) {
-                parse_error(parser, next, "Invalid use of void type.");
-                return NULL;
-            }
-            type |= PTY_VOID;
-            break;
-        case TOK_I8:
-            if (type & PTY_I8) {
-                parse_error(parser, next, "__i8 cannot appear multiple times in a type.");
-                return NULL;
-            }
-            type |= PTY_I8;
-            break;
-        case TOK_I16:
-            if (type & PTY_I16) {
-                parse_error(parser, next, "__i16 cannot appear multiple times in a type.");
-                return NULL;
-            }
-            type |= PTY_I16;
-            break;
-        case TOK_I32:
-            if (type & PTY_I32) {
-                parse_error(parser, next, "__i32 cannot appear multiple times in a type.");
-                return NULL;
-            }
-            type |= PTY_I32;
-            break;
-        case TOK_I64:
-            if (type & PTY_I64) {
-                parse_error(parser, next, "__i64 cannot appear multiple times in a type.");
-                return NULL;
-            }
-            type |= PTY_I64;
-            break;
-        case TOK_CHAR:
-            if (type & PTY_CHAR) {
-                parse_error(parser, next, "char cannot appear multiple times in a type.");
-                return NULL;
-            }
-            type |= PTY_CHAR;
-            break;
-        case TOK_SHORT:
-            if (type & PTY_SHORT) {
-                parse_error(parser, next, "short cannot appear multiple times in a type.");
-                return NULL;
-            }
-            type |= PTY_SHORT;
-            break;
-        case TOK_INT:
-            if (type & PTY_INT) {
-                parse_error(parser, next, "int cannot appear multiple times in a type.");
-                return NULL;
-            }
-            type |= PTY_INT;
-            break;
-        case TOK_LONG:
-            if (type & PTY_LONG_LONG) {
-                parse_error(parser, next, "long cannot appear more than two times in a type.");
-                return NULL;
-            }
-            type += PTY_LONG;
-            break;
-        default:
-            A3_UNREACHABLE();
-        }
+        type = parse_decl_flag(parser, lex_next(parser->lexer), type);
+        if (type == PTY_NOTHING)
+            return NULL;
     }
 
     if (is_typedef && type == PTY_NOTHING)
