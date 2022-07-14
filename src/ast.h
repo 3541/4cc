@@ -225,13 +225,13 @@ typedef enum PTypeBuiltin {
     PTY_TYPE_QUALIFIERS = PTY_SHORT | PTY_LONG | PTY_LONG_LONG,
     PTY_TYPES = PTY_I8 | PTY_I16 | PTY_I32 | PTY_I64 | PTY_ISIZE | PTY_U8 | PTY_U16 | PTY_U32 |
                 PTY_U64 | PTY_USIZE | PTY_INT | PTY_CHAR,
-
 } PTypeBuiltin;
 
 typedef int PTypeBuiltinType;
 
 typedef struct DeclAttributes {
     bool is_typedef;
+    bool is_extern;
 } DeclAttributes;
 
 typedef struct PType {

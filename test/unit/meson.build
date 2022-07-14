@@ -198,6 +198,8 @@ tests = {
     'array_of_ptr',
     'ptr_to_array',
     'composite',
+    'extern',
+    'extern_fn'
   ],
   'typedef': [
     'simple',

@@ -180,7 +180,7 @@ static bool parse_has_decl(Parser* parser) {
 
     Token next = lex_peek(parser->lexer);
     return parse_has_decl_builtin(parser) || parse_has_decl_aggregate(parser) ||
-           parse_has_defined_type(parser) || next.type == TOK_TYPEDEF;
+           parse_has_defined_type(parser) || next.type == TOK_TYPEDEF || next.type == TOK_EXTERN;
 }
 
 static BinOpType parse_bin_op(TokenType type) {
@@ -706,136 +706,144 @@ static PType* parse_aggregate_decl(Parser* parser) {
     return ret;
 }
 
-static PTypeBuiltinType parse_decl_flag(Parser* parser, Token tok, PTypeBuiltinType prev) {
+static bool parse_decl_flag(Parser* parser, Token tok, PTypeBuiltinType* type,
+                            DeclAttributes* attrib) {
     assert(parser);
-
-    PTypeBuiltinType ret = prev;
+    assert(type);
+    assert(attrib);
 
     switch (tok.type) {
-    case TOK_VOID:
-        if (ret != PTY_NOTHING) {
-            parse_error(parser, tok, "Invalid use of void type.");
-            return PTY_NOTHING;
+    case TOK_EXTERN:
+        if (attrib->is_extern) {
+            parse_error(parser, tok, "Duplicate use of extern in type declaration.");
+            return false;
         }
-        ret |= PTY_VOID;
+        attrib->is_extern = true;
+        break;
+    case TOK_VOID:
+        if (*type != PTY_NOTHING) {
+            parse_error(parser, tok, "Invalid use of void type.");
+            return false;
+        }
+        *type |= PTY_VOID;
         break;
     case TOK_I8:
-        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+        if (*type & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
             parse_error(parser, tok, "Duplicate types in type declaration.");
-            return PTY_NOTHING;
+            return false;
         }
-        ret |= PTY_I8;
+        *type |= PTY_I8;
         break;
     case TOK_I16:
-        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+        if (*type & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
             parse_error(parser, tok, "Duplicate types in type declaration.");
-            return PTY_NOTHING;
+            return false;
         }
-        ret |= PTY_I16;
+        *type |= PTY_I16;
         break;
     case TOK_I32:
-        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+        if (*type & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
             parse_error(parser, tok, "Duplicate types in type declaration.");
-            return PTY_NOTHING;
+            return false;
         }
-        ret |= PTY_I32;
+        *type |= PTY_I32;
         break;
     case TOK_I64:
-        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+        if (*type & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
             parse_error(parser, tok, "Duplicate types in type declaration.");
-            return PTY_NOTHING;
+            return false;
         }
-        ret |= PTY_I64;
+        *type |= PTY_I64;
         break;
     case TOK_ISIZE:
-        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+        if (*type & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
             parse_error(parser, tok, "Duplicate types in type declaration.");
-            return PTY_NOTHING;
+            return false;
         }
-        ret |= PTY_ISIZE;
+        *type |= PTY_ISIZE;
         break;
     case TOK_U8:
-        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+        if (*type & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
             parse_error(parser, tok, "Duplicate types in type declaration.");
-            return PTY_NOTHING;
+            return false;
         }
-        ret |= PTY_U8;
+        *type |= PTY_U8;
         break;
     case TOK_U16:
-        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+        if (*type & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
             parse_error(parser, tok, "Duplicate types in type declaration.");
-            return PTY_NOTHING;
+            return false;
         }
-        ret |= PTY_U16;
+        *type |= PTY_U16;
         break;
     case TOK_U32:
-        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+        if (*type & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
             parse_error(parser, tok, "Duplicate types in type declaration.");
-            return PTY_NOTHING;
+            return false;
         }
-        ret |= PTY_U32;
+        *type |= PTY_U32;
         break;
     case TOK_U64:
-        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+        if (*type & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
             parse_error(parser, tok, "Duplicate types in type declaration.");
-            return PTY_NOTHING;
+            return false;
         }
-        ret |= PTY_U64;
+        *type |= PTY_U64;
         break;
     case TOK_USIZE:
-        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+        if (*type & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
             parse_error(parser, tok, "Duplicate types in type declaration.");
-            return PTY_NOTHING;
+            return false;
         }
-        ret |= PTY_USIZE;
+        *type |= PTY_USIZE;
         break;
     case TOK_CHAR:
-        if (ret & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+        if (*type & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
             parse_error(parser, tok, "Duplicate types in type declaration.");
-            return PTY_NOTHING;
+            return false;
         }
-        ret |= PTY_CHAR;
+        *type |= PTY_CHAR;
         break;
     case TOK_SHORT:
-        if (ret & PTY_TYPE_QUALIFIERS) {
+        if (*type & PTY_TYPE_QUALIFIERS) {
             parse_error(parser, tok, "Duplicate type qualifiers in type declaration.");
-            return PTY_NOTHING;
+            return false;
         }
-        ret |= PTY_SHORT;
+        *type |= PTY_SHORT;
         break;
     case TOK_INT:
-        if (ret & PTY_TYPES) {
+        if (*type & PTY_TYPES) {
             parse_error(parser, tok, "Duplicate types in type declaration.");
-            return PTY_NOTHING;
+            return false;
         }
-        ret |= PTY_INT;
+        *type |= PTY_INT;
         break;
     case TOK_LONG:
-        if (ret & PTY_TYPES) {
+        if (*type & PTY_TYPES) {
             parse_error(parser, tok, "Duplicate types in type declaration.");
-            return PTY_NOTHING;
+            return false;
         }
-        ret += PTY_LONG;
+        *type += PTY_LONG;
         break;
     case TOK_SIGNED:
-        if (ret & (PTY_SIGNED | PTY_UNSIGNED)) {
+        if (*type & (PTY_SIGNED | PTY_UNSIGNED)) {
             parse_error(parser, tok, "Duplicate signed/unsigned qualifier in type declaration.");
-            return PTY_NOTHING;
+            return false;
         }
-        ret |= PTY_SIGNED;
+        *type |= PTY_SIGNED;
         break;
     case TOK_UNSIGNED:
-        if (ret & (PTY_SIGNED | PTY_UNSIGNED)) {
+        if (*type & (PTY_SIGNED | PTY_UNSIGNED)) {
             parse_error(parser, tok, "Duplicate signed/unsigned qualifier in type declaration.");
-            return PTY_NOTHING;
+            return false;
         }
-        ret |= PTY_UNSIGNED;
+        *type |= PTY_UNSIGNED;
         break;
     default:
         A3_UNREACHABLE();
     }
 
-    return ret;
+    return true;
 }
 
 static PType* parse_declspec(Parser* parser) {
@@ -848,39 +856,38 @@ static PType* parse_declspec(Parser* parser) {
 
     Token first = lex_peek(parser->lexer);
 
-    bool is_typedef = false;
+    DeclAttributes attrib = { 0 };
     if (first.type == TOK_TYPEDEF) {
         lex_next(parser->lexer);
-        is_typedef = true;
+        attrib.is_typedef = true;
     }
 
     if (parse_has_decl_aggregate(parser)) {
         PType* ret = parse_aggregate_decl(parser);
         if (!ret)
             return NULL;
-        ret->attributes.is_typedef = is_typedef;
+        ret->attributes = attrib;
         return ret;
     }
 
     if (parse_has_defined_type(parser)) {
-        PType* ret                 = ptype_defined_new(lex_next(parser->lexer).lexeme);
-        ret->attributes.is_typedef = is_typedef;
+        PType* ret      = ptype_defined_new(lex_next(parser->lexer).lexeme);
+        ret->attributes = attrib;
         return ret;
     }
 
     Token            next = lex_peek(parser->lexer);
     PTypeBuiltinType type = PTY_NOTHING;
-    while (parse_has_decl_builtin(parser)) {
-        type = parse_decl_flag(parser, lex_next(parser->lexer), type);
-        if (type == PTY_NOTHING)
+    while (parse_has_decl_builtin(parser) || lex_peek(parser->lexer).type == TOK_EXTERN) {
+        if (!parse_decl_flag(parser, lex_next(parser->lexer), &type, &attrib))
             return NULL;
     }
 
-    if (is_typedef && type == PTY_NOTHING)
+    if (attrib.is_typedef && type == PTY_NOTHING)
         type = PTY_INT;
 
-    PType* ret = ptype_builtin_new(parse_span_merge(first.lexeme, next.lexeme), type);
-    ret->attributes.is_typedef = is_typedef;
+    PType* ret      = ptype_builtin_new(parse_span_merge(first.lexeme, next.lexeme), type);
+    ret->attributes = attrib;
 
     return ret;
 }

@@ -556,8 +556,8 @@ static bool gen_fn(AstVisitor* visitor, Item* decl) {
         return true;
 
     gen_asm(visitor->ctx,
-            "\nglobal " A3_S_F "\n"
-            "" A3_S_F ":\n"
+            "\nglobal $" A3_S_F "\n"
+            "$" A3_S_F ":\n"
             "push rbp\n"
             "mov rbp, rsp\n"
             "sub rsp, %zu",
@@ -683,20 +683,25 @@ static bool gen_data(Generator* gen, Vertex* root) {
         if (type->type == TY_FN || !decl->name.ptr || !decl->obj)
             continue;
 
-        gen_asm(gen, "global " A3_S_F, A3_S_FORMAT(decl->name));
+        if (decl->attributes.is_extern) {
+            gen_asm(gen, "extern $" A3_S_F, A3_S_FORMAT(decl->name));
+            continue;
+        }
+
+        gen_asm(gen, "global $" A3_S_F, A3_S_FORMAT(decl->name));
         if (type->align != 1)
             gen_asm(gen, "align %zu, db 0", type->align);
 
         if (decl->obj->init) {
             if (decl->obj->defined)
-                return true;
+                continue;
 
             Expr* init = decl->obj->init;
             switch (type->type) {
             case TY_ARRAY:
                 assert(type->parent->type == TY_U8 && init->type == EXPR_LIT);
 
-                fprintf(gen->cfg->asm_out, A3_S_F ": db ", A3_S_FORMAT(decl->name));
+                fprintf(gen->cfg->asm_out, "$" A3_S_F ": db ", A3_S_FORMAT(decl->name));
                 for (size_t i = 0; i < init->lit.str.len; i++)
                     fprintf(gen->cfg->asm_out, "%d,", init->lit.str.ptr[i]);
                 gen_asm(gen, "0");
@@ -704,13 +709,13 @@ static bool gen_data(Generator* gen, Vertex* root) {
             case TY_PTR:
                 assert(type->parent->type == TY_U8 && init->type == EXPR_LIT);
 
-                gen_asm(gen, A3_S_F ": dq " A3_S_F, A3_S_FORMAT(decl->name),
+                gen_asm(gen, "$" A3_S_F ": dq " A3_S_F, A3_S_FORMAT(decl->name),
                         A3_S_FORMAT(init->lit.storage->name));
                 break;
             default:
                 assert(init->type == EXPR_LIT && init->lit.type == LIT_NUM);
 
-                gen_asm(gen, A3_S_F ": %s %" PRId64, A3_S_FORMAT(decl->name),
+                gen_asm(gen, "$" A3_S_F ": %s %" PRId64, A3_S_FORMAT(decl->name),
                         type->size == 1 ? "db" : "dq", init->lit.num);
 
                 break;
@@ -718,7 +723,7 @@ static bool gen_data(Generator* gen, Vertex* root) {
 
             decl->obj->defined = true;
         } else {
-            gen_asm(gen, A3_S_F ": times %zu db 0", A3_S_FORMAT(decl->name), type->size);
+            gen_asm(gen, "$" A3_S_F ": times %zu db 0", A3_S_FORMAT(decl->name), type->size);
         }
     }
 

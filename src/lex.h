@@ -32,6 +32,7 @@ typedef enum TokenType {
     TOK_ELSE,
     TOK_EQ,
     TOK_EQ_EQ,
+    TOK_EXTERN,
     TOK_FOR,
     TOK_GT,
     TOK_GT_EQ,
