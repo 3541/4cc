@@ -62,12 +62,37 @@ static void usage(char const* name, int status) {
     exit(status);
 }
 
+static A3CString append(A3CString s1, A3CString s2) {
+    assert(s1.ptr);
+    assert(s2.ptr);
+
+    A3String ret = a3_string_alloc(s1.len + s2.len + 1);
+    a3_string_concat(ret, 2, s1, s2);
+
+    return A3_S_CONST(ret);
+}
+
+static void preprocess_args_init(char const* bin, A3Vec* args) {
+    assert(bin);
+    assert(args);
+
+    A3_VEC_INIT(A3CString, args);
+
+    A3String prefix = a3_string_clone(a3_cstring_from(bin));
+    prefix.len -= a3_string_rchr(prefix, '/').len;
+
+    A3CString path = append(A3_S_CONST(prefix), A3_CS("/include"));
+
+    A3_VEC_PUSH(args, &A3_CS("-I"));
+    A3_VEC_PUSH(args, &path);
+}
+
 static Config arg_parse(size_t argc, char const* argv[]) {
     if (argc < 2)
         usage(argv[0], -1);
 
     Config ret = { 0 };
-    A3_VEC_INIT(A3CString, &ret.preprocess_args);
+    preprocess_args_init(argv[0], &ret.preprocess_args);
 
     for (size_t i = 1; i < argc; i++) {
         if (*argv[i] != '-') {
@@ -155,16 +180,6 @@ static A3CString make_file(A3CString path, A3CString name, A3CString ext) {
 
     A3String ret = a3_string_alloc(path.len + name.len + ext.len + 2);
     a3_string_concat(ret, 4, path, A3_CS("/"), name, ext);
-
-    return A3_S_CONST(ret);
-}
-
-static A3CString append(A3CString s1, A3CString s2) {
-    assert(s1.ptr);
-    assert(s2.ptr);
-
-    A3String ret = a3_string_alloc(s1.len + s2.len + 1);
-    a3_string_concat(ret, 2, s1, s2);
 
     return A3_S_CONST(ret);
 }

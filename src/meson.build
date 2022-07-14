@@ -1,3 +1,5 @@
+subdir('include')
+
 c = meson.get_compiler('c')
 c_arg = c.get_argument_syntax()
 
