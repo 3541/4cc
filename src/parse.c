@@ -862,7 +862,9 @@ static PType* parse_declspec(Parser* parser) {
     }
 
     if (parse_has_decl_aggregate(parser)) {
-        PType* ret      = parse_aggregate_decl(parser);
+        PType* ret = parse_aggregate_decl(parser);
+        if (!ret)
+            return NULL;
         ret->is_typedef = is_typedef;
         return ret;
     }
