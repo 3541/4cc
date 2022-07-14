@@ -17,17 +17,25 @@
 #include <a3/buffer.h>
 #include <a3/str.h>
 #include <a3/util.h>
+#include <a3/vec.h>
 
 #include "ast.h"
 #include "error.h"
 #include "lex.h"
 
+typedef struct PTypeScope PTypeScope;
+typedef struct PTypeScope {
+    A3Vec       typedefs;
+    PTypeScope* parent;
+} PTypeScope;
+
 typedef struct Parser {
-    A3CString src;
-    Lexer*    lexer;
-    Unit*     current_unit;
-    size_t    error_depth;
-    bool      status;
+    A3CString   src;
+    Lexer*      lexer;
+    Unit*       current_unit;
+    PTypeScope* current_scope;
+    size_t      error_depth;
+    bool        status;
 } Parser;
 
 static Expr*  parse_expr(Parser*, uint8_t precedence);
@@ -38,11 +46,62 @@ static PType* parse_decl_suffix(Parser*, PType*);
 static PType* parse_declspec(Parser*);
 static bool   parse_decl(Parser*, Block*);
 
+static void parse_scope_push(Parser* parser) {
+    assert(parser);
+
+    A3_UNWRAPNI(PTypeScope*, scope, calloc(1, sizeof(*scope)));
+    A3_VEC_INIT(A3CString, &scope->typedefs);
+    scope->parent         = parser->current_scope;
+    parser->current_scope = scope;
+}
+
+static void parse_scope_pop(Parser* parser) {
+    assert(parser);
+    assert(parser->current_scope);
+
+    parser->current_scope = parser->current_scope->parent;
+}
+
+static void parse_scope_typedef_add(Parser* parser, A3CString name) {
+    assert(parser);
+    assert(parser->current_scope);
+
+    A3_VEC_PUSH(&parser->current_scope->typedefs, &name);
+}
+
+static bool parse_scope_typedef_find_in(PTypeScope* scope, A3CString name) {
+    assert(scope);
+
+    A3_VEC_FOR_EACH(A3CString, type, &scope->typedefs) {
+        if (a3_string_cmp(*type, name) == 0)
+            return true;
+    }
+
+    return false;
+}
+
+static bool parse_scope_typedef_find(PTypeScope* scope, A3CString name) {
+    assert(scope);
+
+    if (parse_scope_typedef_find_in(scope, name))
+        return true;
+
+    if (!scope->parent)
+        return false;
+
+    return parse_scope_typedef_find(scope->parent, name);
+}
+
 Parser* parse_new(A3CString src, Lexer* lexer) {
     A3_UNWRAPNI(Parser*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Parser) {
-        .src = src, .lexer = lexer, .current_unit = NULL, .error_depth = 0, .status = true
-    };
+    *ret = (Parser) { .src           = src,
+                      .lexer         = lexer,
+                      .current_unit  = NULL,
+                      .current_scope = NULL,
+                      .error_depth   = 0,
+                      .status        = true };
+    parse_scope_push(ret);
+
     return ret;
 }
 
@@ -98,11 +157,27 @@ static bool parse_has_decl_builtin(Parser* parser) {
            next.type == TOK_SHORT || next.type == TOK_INT || next.type == TOK_LONG;
 }
 
+static bool parse_has_decl_aggregate(Parser* parser) {
+    assert(parser);
+
+    Token next = lex_peek(parser->lexer);
+    return next.type == TOK_STRUCT || next.type == TOK_UNION;
+}
+
+static bool parse_has_defined_type(Parser* parser) {
+    assert(parser);
+
+    Token next = lex_peek(parser->lexer);
+    return next.type == TOK_IDENT &&
+           parse_scope_typedef_find(parser->current_scope, next.lexeme.text);
+}
+
 static bool parse_has_decl(Parser* parser) {
     assert(parser);
 
     Token next = lex_peek(parser->lexer);
-    return parse_has_decl_builtin(parser) || next.type == TOK_STRUCT || next.type == TOK_UNION;
+    return parse_has_decl_builtin(parser) || parse_has_decl_aggregate(parser) ||
+           parse_has_defined_type(parser) || next.type == TOK_TYPEDEF;
 }
 
 static BinOpType parse_bin_op(TokenType type) {
@@ -603,6 +678,11 @@ static PType* parse_aggregate_decl(Parser* parser) {
         PType* base = parse_declspec(parser);
         if (!base)
             return NULL;
+        if (base->is_typedef) {
+            error_at(parser->src, base->span,
+                     "typedef is not permitted inside an aggregate declaration.");
+            return NULL;
+        }
 
         bool first = true;
         while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_SEMI) {
@@ -638,12 +718,27 @@ static PType* parse_declspec(Parser* parser) {
         return NULL;
     }
 
-    if (!parse_has_decl_builtin(parser))
-        return parse_aggregate_decl(parser);
-
     Token first = lex_peek(parser->lexer);
-    Token next  = first;
 
+    bool is_typedef = false;
+    if (first.type == TOK_TYPEDEF) {
+        lex_next(parser->lexer);
+        is_typedef = true;
+    }
+
+    if (parse_has_decl_aggregate(parser)) {
+        PType* ret      = parse_aggregate_decl(parser);
+        ret->is_typedef = is_typedef;
+        return ret;
+    }
+
+    if (parse_has_defined_type(parser)) {
+        PType* ret      = ptype_defined_new(lex_next(parser->lexer).lexeme);
+        ret->is_typedef = is_typedef;
+        return ret;
+    }
+
+    Token            next = lex_peek(parser->lexer);
     PTypeBuiltinType type = PTY_NOTHING;
     while (parse_has_decl_builtin(parser)) {
         next = lex_next(parser->lexer);
@@ -717,7 +812,13 @@ static PType* parse_declspec(Parser* parser) {
         }
     }
 
-    return ptype_builtin_new(parse_span_merge(first.lexeme, next.lexeme), type);
+    if (is_typedef && type == PTY_NOTHING)
+        type = PTY_INT;
+
+    PType* ret      = ptype_builtin_new(parse_span_merge(first.lexeme, next.lexeme), type);
+    ret->is_typedef = is_typedef;
+
+    return ret;
 }
 
 static PType* parse_decl_suffix_fn(Parser* parser, PType* base) {
@@ -738,6 +839,11 @@ static PType* parse_decl_suffix_fn(Parser* parser, PType* base) {
             PType* param_type = parse_declspec(parser);
             if (!param_type)
                 return NULL;
+            if (param_type->is_typedef) {
+                error_at(parser->src, param_type->span,
+                         "typedef is not permitted in function parameters.");
+                return NULL;
+            }
 
             Item* param = parse_declarator(parser, param_type);
             if (!param)
@@ -864,6 +970,15 @@ static Item* parse_declarator(Parser* parser, PType* type) {
     if (nested)
         type = parse_declarator_dummy_replace(nested->decl_ptype, type);
 
+    if (type->is_typedef) {
+        if (!name.ptr) {
+            error_at(parser->src, type->span, "typedef declaration must have a name.");
+            return NULL;
+        }
+
+        parse_scope_typedef_add(parser, name);
+    }
+
     return vertex_decl_new(type->span, name, type);
 }
 
@@ -874,7 +989,8 @@ static bool parse_decl(Parser* parser, Block* block) {
     PType* base = parse_declspec(parser);
     if (!base)
         return false;
-    assert(base->type == PTY_BUILTIN || base->type == PTY_STRUCT || base->type == PTY_UNION);
+    assert(base->type == PTY_BUILTIN || base->type == PTY_STRUCT || base->type == PTY_UNION ||
+           base->type == PTY_DEFINED);
 
     bool first = true;
     while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_SEMI) {
@@ -925,6 +1041,8 @@ static bool parse_block_item(Parser* parser, Block* block) {
 static Block* parse_block(Parser* parser) {
     assert(parser);
 
+    parse_scope_push(parser);
+
     Token left_tok = lex_next(parser->lexer);
     assert(left_tok.type == TOK_LBRACE);
 
@@ -944,16 +1062,21 @@ static Block* parse_block(Parser* parser) {
     }
     next = lex_peek(parser->lexer);
 
-    if (next.type == TOK_ERR)
-        return NULL;
+    if (next.type == TOK_ERR) {
+        block = NULL;
+        goto done;
+    }
 
     Token right_tok = lex_next(parser->lexer);
     if (right_tok.type != TOK_RBRACE) {
         parse_error(parser, right_tok, "Expected a closing brace.");
-        return NULL;
+        block = NULL;
+        goto done;
     }
 
     SPAN(block, item.block) = parse_span_merge(left_tok.lexeme, right_tok.lexeme);
+done:
+    parse_scope_pop(parser);
     return block;
 }
 

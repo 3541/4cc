@@ -67,6 +67,7 @@ typedef enum TokenType {
     TOK_STAR,
     TOK_STRUCT,
     TOK_TILDE,
+    TOK_TYPEDEF,
     TOK_UNION,
     TOK_VOID,
     TOK_WHILE,

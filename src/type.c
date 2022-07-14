@@ -44,6 +44,7 @@ typedef struct Scope {
     Obj*   fn;
     A3_HT(A3CString, Obj) idents;
     A3_HT(A3CString, TypePtr) tags;
+    A3_HT(A3CString, TypePtr) typedefs;
 } Scope;
 
 typedef struct Registry {
@@ -72,6 +73,7 @@ static Scope* scope_new(Scope* parent) {
     *ret = (Scope) { .parent = parent, .fn = parent ? parent->fn : NULL };
     A3_HT_INIT(A3CString, Obj)(&ret->idents, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
     A3_HT_INIT(A3CString, TypePtr)(&ret->tags, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
+    A3_HT_INIT(A3CString, TypePtr)(&ret->typedefs, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
 
     return ret;
 }
@@ -126,6 +128,25 @@ static Type const* scope_find_struct(Scope* scope, A3CString name) {
     Type const* ret = scope_find_struct_in(scope, name);
     if (!ret && scope->parent)
         return scope_find_struct(scope->parent, name);
+
+    return ret;
+}
+
+static Type const* scope_find_typedef_in(Scope* scope, A3CString name) {
+    assert(scope);
+    assert(name.ptr);
+
+    Type const** entry = A3_HT_FIND(A3CString, TypePtr)(&scope->typedefs, name);
+    return entry ? *entry : NULL;
+}
+
+static Type const* scope_find_typedef(Scope* scope, A3CString name) {
+    assert(scope);
+    assert(name.ptr);
+
+    Type const* ret = scope_find_typedef_in(scope, name);
+    if (!ret && scope->parent)
+        return scope_find_typedef(scope->parent, name);
 
     return ret;
 }
@@ -434,7 +455,6 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
     assert(reg);
     assert(ptype);
 
-    Type const* ret = NULL;
     switch (ptype->type) {
     case PTY_PTR:
         return type_ptr_to(reg, type_from_ptype(reg, ptype->parent));
@@ -470,11 +490,20 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
             error_at(reg->src, ptype->span, "Invalid declaration type.");
             return NULL;
         }
+    case PTY_DEFINED: {
+        Type const* ret = scope_find_typedef(reg->current_scope, ptype->defined_name);
+        if (!ret) {
+            error_at(reg->src, ptype->span, "Undefined type name.");
+            return NULL;
+        }
+
+        return ret;
+    }
     case PTY_DUMMY:
         A3_UNREACHABLE();
     }
 
-    return ret;
+    A3_UNREACHABLE();
 }
 
 static bool type_bin_op(AstVisitor* visitor, BinOp* op) {
@@ -736,6 +765,34 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
     return true;
 }
 
+static bool type_typedef(AstVisitor* visitor, Item* decl) {
+    assert(visitor);
+    assert(decl);
+    assert(VERTEX(decl, item)->type == V_DECL);
+    assert(decl->decl_ptype->is_typedef);
+
+    Registry* reg = visitor->ctx;
+
+    if (decl->init) {
+        type_error(reg, VERTEX(decl, item), "typedef declaration cannot have an initializer.");
+        return false;
+    }
+
+    Type const* prev = scope_find_typedef_in(reg->current_scope, decl->name);
+    Type const* type = type_from_ptype(reg, decl->decl_ptype);
+    if (prev) {
+        if (type != prev) {
+            type_error_mismatch(reg, VERTEX(decl, item), prev, type);
+            return false;
+        }
+
+        return true;
+    }
+
+    A3_HT_INSERT(A3CString, TypePtr)(&reg->current_scope->typedefs, decl->name, type);
+    return true;
+}
+
 static bool type_decl(AstVisitor* visitor, Item* decl) {
     assert(visitor);
     assert(decl);
@@ -743,6 +800,9 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
 
     Registry* reg    = visitor->ctx;
     bool      global = !reg->current_scope->fn;
+
+    if (decl->decl_ptype->is_typedef)
+        return type_typedef(visitor, decl);
 
     if (decl->decl_ptype->type == PTY_FN)
         return type_fn(visitor, decl);

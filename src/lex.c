@@ -370,6 +370,7 @@ static Token lex_ident_or_kw(Lexer* lexer) {
         { A3_CS("__i8"), TOK_I8 },           { A3_CS("__i16"), TOK_I16 },
         { A3_CS("__i32"), TOK_I32 },         { A3_CS("__i64"), TOK_I64 },
         { A3_CS("short"), TOK_SHORT },       { A3_CS("long"), TOK_LONG },
+        { A3_CS("typedef"), TOK_TYPEDEF },
     };
 
     A3CString lexeme = lex_consume_until(lexer, is_not_ident);

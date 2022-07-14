@@ -420,7 +420,7 @@ PType* ptype_builtin_new(Span span, PTypeBuiltinType type) {
     assert(type == PTY_VOID || !(type & PTY_VOID));
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
-    *ret = (PType) { .type = PTY_BUILTIN, .span = span, .builtin_type = type };
+    *ret = (PType) { .type = PTY_BUILTIN, .span = span, .is_typedef = false, .builtin_type = type };
 
     return ret;
 }
@@ -430,7 +430,8 @@ PType* ptype_ptr_new(Span span, PType* type) {
     assert(type);
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
-    *ret = (PType) { .type = PTY_PTR, .span = span, .parent = type };
+    *ret =
+        (PType) { .type = PTY_PTR, .span = span, .is_typedef = type->is_typedef, .parent = type };
 
     return ret;
 }
@@ -440,7 +441,9 @@ PType* ptype_fn_new(Span span, PType* ret_type) {
     assert(ret_type);
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
-    *ret = (PType) { .type = PTY_FN, .span = span, .ret = ret_type };
+    *ret = (PType) {
+        .type = PTY_FN, .span = span, .is_typedef = ret_type->is_typedef, .ret = ret_type
+    };
     A3_SLL_INIT(&ret->params);
 
     return ret;
@@ -451,7 +454,9 @@ PType* ptype_array_new(Span span, PType* base, size_t len) {
     assert(base);
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
-    *ret = (PType) { .type = PTY_ARRAY, .span = span, .parent = base, .len = len };
+    *ret = (PType) {
+        .type = PTY_ARRAY, .span = span, .is_typedef = base->is_typedef, .parent = base, .len = len
+    };
 
     return ret;
 }
@@ -461,8 +466,17 @@ PType* ptype_aggregate_new(Span span, PTypeType type, Span name) {
     assert(type == PTY_STRUCT || type == PTY_UNION);
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
-    *ret = (PType) { .type = type, .span = span, .name = name };
+    *ret = (PType) { .type = type, .span = span, .is_typedef = false, .name = name };
     A3_SLL_INIT(&ret->members);
+
+    return ret;
+}
+
+PType* ptype_defined_new(Span name) {
+    assert(name.text.ptr);
+
+    A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
+    *ret = (PType) { .type = PTY_DEFINED, .span = name, .name = name };
 
     return ret;
 }

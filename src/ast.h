@@ -188,6 +188,7 @@ typedef struct Member {
 typedef enum PTypeType {
     PTY_ARRAY,
     PTY_BUILTIN,
+    PTY_DEFINED,
     PTY_DUMMY,
     PTY_FN,
     PTY_PTR,
@@ -215,20 +216,25 @@ typedef int PTypeBuiltinType;
 typedef struct PType {
     PTypeType type;
     Span      span;
+    bool      is_typedef;
 
     union {
-        PTypeBuiltinType builtin_type; // PTY_BUILTIN
+        // PTY_BUILTIN and PTY_DEFINED.
+        struct {
+            PTypeBuiltinType builtin_type;
+            A3CString        defined_name; // PTY_DEFINED
+        };
 
         // PTY_STRUCT
         struct {
-            Span name;
+            Span name; // PTY_DEFINED
             A3_SLL(, Member) members;
         };
 
         // PTY_FN
         struct {
-            A3_SLL(, Item) params;
             PType* ret;
+            A3_SLL(, Item) params;
         };
 
         // PTY_ARRAY and PTY_PTR.
@@ -342,6 +348,7 @@ PType* ptype_ptr_new(Span, PType*);
 PType* ptype_fn_new(Span, PType* ret_type);
 PType* ptype_array_new(Span, PType*, size_t);
 PType* ptype_aggregate_new(Span, PTypeType, Span name);
+PType* ptype_defined_new(Span name);
 
 Arg*    arg_new(Expr*);
 Member* member_new(A3CString name, PType*);

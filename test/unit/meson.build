@@ -196,6 +196,15 @@ tests = {
     'array_of_ptr',
     'ptr_to_array',
     'composite',
+  ],
+  'typedef': [
+    'simple',
+    'struct',
+    'scope',
+    'empty',
+    'global',
+    'nested',
+    'suffix'
   ]
 }
 

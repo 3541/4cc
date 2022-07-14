@@ -218,25 +218,33 @@ static void compile(Config const* cfg) {
     assert(cfg);
 
     A3CString src = file_read(cfg->preprocess_out_path);
-    if (!src.ptr)
+    if (!src.ptr) {
+        fprintf(stderr, "Failed to read preprocessed source.\n");
         exit(-1);
+    }
 
     Lexer*  lexer  = lex_new(src);
     Parser* parser = parse_new(src, lexer);
 
     Vertex* root = parse(parser);
-    if (!root)
+    if (!root) {
+        fprintf(stderr, "Parsing failed.\n");
         exit(-1);
+    }
 
     Registry* reg = type_registry_new();
-    if (!type(reg, src, root))
+    if (!type(reg, src, root)) {
+        fprintf(stderr, "Typechecking failed.\n");
         exit(-1);
+    }
 
     if (cfg->dump_ast)
         dump(root);
 
-    if (!gen(cfg, src, root))
+    if (!gen(cfg, src, root)) {
+        fprintf(stderr, "Codegen failed.\n");
         exit(-1);
+    }
 }
 
 static void cleanup(Config const* cfg) {

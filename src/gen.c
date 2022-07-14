@@ -680,7 +680,7 @@ static bool gen_data(Generator* gen, Vertex* root) {
 
         Type const* type = decl->decl_type;
 
-        if (type->type == TY_FN || !decl->name.ptr)
+        if (type->type == TY_FN || !decl->name.ptr || !decl->obj)
             continue;
 
         gen_asm(gen, "global " A3_S_F, A3_S_FORMAT(decl->name));
