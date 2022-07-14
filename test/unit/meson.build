@@ -195,6 +195,7 @@ tests = {
     'array_of_array',
     'array_of_ptr',
     'ptr_to_array',
+    'composite',
   ]
 }
 

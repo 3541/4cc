@@ -195,12 +195,29 @@ typedef enum PTypeType {
     PTY_UNION,
 } PTypeType;
 
+typedef enum PTypeBuiltin {
+    PTY_NOTHING   = 0,
+    PTY_VOID      = 1,
+    PTY_CHAR      = 1 << 1,
+    PTY_SHORT     = 1 << 2,
+    PTY_INT       = 1 << 3,
+    PTY_LONG      = 1 << 4,
+    PTY_LONG_LONG = (1 << 5),
+
+    PTY_I8  = 1 << 6,
+    PTY_I16 = 1 << 7,
+    PTY_I32 = 1 << 8,
+    PTY_I64 = 1 << 9,
+} PTypeBuiltin;
+
+typedef int PTypeBuiltinType;
+
 typedef struct PType {
     PTypeType type;
     Span      span;
 
     union {
-        TokenType builtin; // PTY_BUILTIN
+        PTypeBuiltinType builtin_type; // PTY_BUILTIN
 
         // PTY_STRUCT
         struct {
@@ -320,7 +337,7 @@ Loop*  vertex_loop_new(Span, bool cond_pos, Item* init, Expr* cond, Expr* post, 
 Unit*  vertex_unit_new(void);
 bool   vertex_visit(AstVisitor*, Vertex*);
 
-PType* ptype_builtin_new(Span, TokenType);
+PType* ptype_builtin_new(Span, PTypeBuiltinType);
 PType* ptype_ptr_new(Span, PType*);
 PType* ptype_fn_new(Span, PType* ret_type);
 PType* ptype_array_new(Span, PType*, size_t);

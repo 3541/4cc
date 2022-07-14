@@ -75,7 +75,7 @@ static bool parse_consume(Parser* parser, A3CString name, TokenType token) {
 static Span parse_span_merge(Span lhs, Span rhs) {
     assert(lhs.text.ptr);
     assert(rhs.text.ptr);
-    assert(lhs.text.ptr < rhs.text.ptr);
+    assert(lhs.text.ptr <= rhs.text.ptr);
 
     return (Span) { .line = lhs.line,
                     .text = a3_cstring_new(lhs.text.ptr,
@@ -89,14 +89,20 @@ static bool parse_has_next(Parser* parser) {
     return next.type != TOK_EOF && next.type != TOK_ERR;
 }
 
+static bool parse_has_decl_builtin(Parser* parser) {
+    assert(parser);
+
+    Token next = lex_peek(parser->lexer);
+    return next.type == TOK_VOID || next.type == TOK_I8 || next.type == TOK_I16 ||
+           next.type == TOK_I32 || next.type == TOK_I64 || next.type == TOK_CHAR ||
+           next.type == TOK_SHORT || next.type == TOK_INT || next.type == TOK_LONG;
+}
+
 static bool parse_has_decl(Parser* parser) {
     assert(parser);
 
     Token next = lex_peek(parser->lexer);
-    return next.type == TOK_I8 || next.type == TOK_I16 || next.type == TOK_I32 ||
-           next.type == TOK_I64 || next.type == TOK_CHAR || next.type == TOK_SHORT ||
-           next.type == TOK_INT || next.type == TOK_LONG || next.type == TOK_STRUCT ||
-           next.type == TOK_UNION || next.type == TOK_VOID;
+    return parse_has_decl_builtin(parser) || next.type == TOK_STRUCT || next.type == TOK_UNION;
 }
 
 static BinOpType parse_bin_op(TokenType type) {
@@ -627,26 +633,91 @@ static PType* parse_aggregate_decl(Parser* parser) {
 static PType* parse_declspec(Parser* parser) {
     assert(parser);
 
-    Token next = lex_peek(parser->lexer);
-    switch (next.type) {
-    case TOK_CHAR:
-    case TOK_SHORT:
-    case TOK_INT:
-    case TOK_LONG:
-    case TOK_I8:
-    case TOK_I16:
-    case TOK_I32:
-    case TOK_I64:
-    case TOK_VOID:
-        lex_next(parser->lexer);
-        return ptype_builtin_new(next.lexeme, next.type);
-    case TOK_STRUCT:
-    case TOK_UNION:
-        return parse_aggregate_decl(parser);
-    default:
-        parse_error(parser, next, "Expected a type name.");
+    if (!parse_has_decl(parser)) {
+        parse_error(parser, lex_next(parser->lexer), "Expected a type name.");
         return NULL;
     }
+
+    if (!parse_has_decl_builtin(parser))
+        return parse_aggregate_decl(parser);
+
+    Token first = lex_peek(parser->lexer);
+    Token next  = first;
+
+    PTypeBuiltinType type = PTY_NOTHING;
+    while (parse_has_decl_builtin(parser)) {
+        next = lex_next(parser->lexer);
+
+        switch (next.type) {
+        case TOK_VOID:
+            if (type != PTY_NOTHING) {
+                parse_error(parser, next, "Invalid use of void type.");
+                return NULL;
+            }
+            type |= PTY_VOID;
+            break;
+        case TOK_I8:
+            if (type & PTY_I8) {
+                parse_error(parser, next, "__i8 cannot appear multiple times in a type.");
+                return NULL;
+            }
+            type |= PTY_I8;
+            break;
+        case TOK_I16:
+            if (type & PTY_I16) {
+                parse_error(parser, next, "__i16 cannot appear multiple times in a type.");
+                return NULL;
+            }
+            type |= PTY_I16;
+            break;
+        case TOK_I32:
+            if (type & PTY_I32) {
+                parse_error(parser, next, "__i32 cannot appear multiple times in a type.");
+                return NULL;
+            }
+            type |= PTY_I32;
+            break;
+        case TOK_I64:
+            if (type & PTY_I64) {
+                parse_error(parser, next, "__i64 cannot appear multiple times in a type.");
+                return NULL;
+            }
+            type |= PTY_I64;
+            break;
+        case TOK_CHAR:
+            if (type & PTY_CHAR) {
+                parse_error(parser, next, "char cannot appear multiple times in a type.");
+                return NULL;
+            }
+            type |= PTY_CHAR;
+            break;
+        case TOK_SHORT:
+            if (type & PTY_SHORT) {
+                parse_error(parser, next, "short cannot appear multiple times in a type.");
+                return NULL;
+            }
+            type |= PTY_SHORT;
+            break;
+        case TOK_INT:
+            if (type & PTY_INT) {
+                parse_error(parser, next, "int cannot appear multiple times in a type.");
+                return NULL;
+            }
+            type |= PTY_INT;
+            break;
+        case TOK_LONG:
+            if (type & PTY_LONG_LONG) {
+                parse_error(parser, next, "long cannot appear more than two times in a type.");
+                return NULL;
+            }
+            type += PTY_LONG;
+            break;
+        default:
+            A3_UNREACHABLE();
+        }
+    }
+
+    return ptype_builtin_new(parse_span_merge(first.lexeme, next.lexeme), type);
 }
 
 static PType* parse_decl_suffix_fn(Parser* parser, PType* base) {

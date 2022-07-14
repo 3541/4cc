@@ -446,24 +446,29 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
     case PTY_UNION:
         return type_aggregate_from_ptype(reg, ptype);
     case PTY_BUILTIN:
-        switch (ptype->builtin) {
-        case TOK_VOID:
+        switch (ptype->builtin_type) {
+        case PTY_VOID:
             return BUILTIN_TYPES[TY_VOID];
-        case TOK_I8:
+        case PTY_I8:
             return BUILTIN_TYPES[TY_I8];
-        case TOK_I16:
-        case TOK_SHORT:
+        case PTY_I16:
+        case PTY_SHORT:
+        case PTY_SHORT | PTY_INT:
             return BUILTIN_TYPES[TY_I16];
-        case TOK_I32:
-        case TOK_INT:
+        case PTY_I32:
+        case PTY_INT:
             return BUILTIN_TYPES[TY_I32];
-        case TOK_I64:
-        case TOK_LONG:
+        case PTY_I64:
+        case PTY_LONG:
+        case PTY_LONG | PTY_INT:
+        case PTY_LONG_LONG:
+        case PTY_LONG_LONG | PTY_INT:
             return BUILTIN_TYPES[TY_I64];
-        case TOK_CHAR:
+        case PTY_CHAR:
             return BUILTIN_TYPES[TY_CHAR];
         default:
-            A3_UNREACHABLE();
+            error_at(reg->src, ptype->span, "Invalid declaration type.");
+            return NULL;
         }
     case PTY_DUMMY:
         A3_UNREACHABLE();
@@ -632,7 +637,7 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
         Span      span        = SPAN(lit, expr.lit);
         Item*     global_decl = vertex_decl_new(
                 span, global_name,
-                ptype_array_new(span, ptype_builtin_new(span, TOK_CHAR), lit->str.len + 1));
+                ptype_array_new(span, ptype_builtin_new(span, PTY_CHAR), lit->str.len + 1));
         global_decl->init = EXPR(lit, lit);
         A3_SLL_PUSH(&reg->current_unit->items, global_decl, link);
 
