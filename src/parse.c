@@ -687,7 +687,7 @@ static PType* parse_aggregate_decl(Parser* parser) {
         A3_SLL_FOR_EACH(Item, item, &items, link) {
             assert(VERTEX(item, item)->type == V_DECL);
 
-            if (item->decl_ptype->is_typedef) {
+            if (item->attributes.is_typedef) {
                 error_at(parser->src, SPAN(item, item),
                          "typedef is not permitted inside an aggregate declaration.");
                 return NULL;
@@ -858,13 +858,13 @@ static PType* parse_declspec(Parser* parser) {
         PType* ret = parse_aggregate_decl(parser);
         if (!ret)
             return NULL;
-        ret->is_typedef = is_typedef;
+        ret->attributes.is_typedef = is_typedef;
         return ret;
     }
 
     if (parse_has_defined_type(parser)) {
-        PType* ret      = ptype_defined_new(lex_next(parser->lexer).lexeme);
-        ret->is_typedef = is_typedef;
+        PType* ret                 = ptype_defined_new(lex_next(parser->lexer).lexeme);
+        ret->attributes.is_typedef = is_typedef;
         return ret;
     }
 
@@ -879,8 +879,8 @@ static PType* parse_declspec(Parser* parser) {
     if (is_typedef && type == PTY_NOTHING)
         type = PTY_INT;
 
-    PType* ret      = ptype_builtin_new(parse_span_merge(first.lexeme, next.lexeme), type);
-    ret->is_typedef = is_typedef;
+    PType* ret = ptype_builtin_new(parse_span_merge(first.lexeme, next.lexeme), type);
+    ret->attributes.is_typedef = is_typedef;
 
     return ret;
 }
@@ -903,7 +903,7 @@ static PType* parse_decl_suffix_fn(Parser* parser, PType* base) {
             PType* param_type = parse_declspec(parser);
             if (!param_type)
                 return NULL;
-            if (param_type->is_typedef) {
+            if (param_type->attributes.is_typedef) {
                 error_at(parser->src, param_type->span,
                          "typedef is not permitted in function parameters.");
                 return NULL;
@@ -1034,7 +1034,7 @@ static Item* parse_declarator(Parser* parser, PType* type) {
     if (nested)
         type = parse_declarator_dummy_replace(nested->decl_ptype, type);
 
-    if (type->is_typedef) {
+    if (type->attributes.is_typedef) {
         if (!name.ptr) {
             error_at(parser->src, type->span, "typedef declaration must have a name.");
             return NULL;

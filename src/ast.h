@@ -230,10 +230,14 @@ typedef enum PTypeBuiltin {
 
 typedef int PTypeBuiltinType;
 
+typedef struct DeclAttributes {
+    bool is_typedef;
+} DeclAttributes;
+
 typedef struct PType {
-    PTypeType type;
-    Span      span;
-    bool      is_typedef;
+    PTypeType      type;
+    Span           span;
+    DeclAttributes attributes;
 
     union {
         // PTY_BUILTIN and PTY_DEFINED.
@@ -279,8 +283,9 @@ typedef struct Item {
 
         // V_DECL
         struct {
-            A3CString name;
-            Obj*      obj;
+            A3CString      name;
+            Obj*           obj;
+            DeclAttributes attributes;
 
             union {
                 PType*      decl_ptype;

@@ -832,7 +832,7 @@ static bool type_typedef(AstVisitor* visitor, Item* decl) {
     assert(visitor);
     assert(decl);
     assert(VERTEX(decl, item)->type == V_DECL);
-    assert(decl->decl_ptype->is_typedef);
+    assert(decl->attributes.is_typedef);
 
     Registry* reg = visitor->ctx;
 
@@ -864,7 +864,7 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
     Registry* reg    = visitor->ctx;
     bool      global = !reg->current_scope->fn;
 
-    if (decl->decl_ptype->is_typedef)
+    if (decl->attributes.is_typedef)
         return type_typedef(visitor, decl);
 
     if (decl->decl_ptype->type == PTY_FN)

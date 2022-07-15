@@ -112,9 +112,11 @@ Item* vertex_decl_new(Span span, A3CString name, PType* type) {
     assert(type);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .span = span,
-                      .type = V_DECL,
-                      .item = { .name = name, .obj = NULL, .decl_ptype = type } };
+    *ret = (Vertex) {
+        .span = span,
+        .type = V_DECL,
+        .item = { .name = name, .obj = NULL, .attributes = type->attributes, .decl_ptype = type }
+    };
 
     return &ret->item;
 }
@@ -420,7 +422,7 @@ PType* ptype_builtin_new(Span span, PTypeBuiltinType type) {
     assert(type == PTY_VOID || !(type & PTY_VOID));
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
-    *ret = (PType) { .type = PTY_BUILTIN, .span = span, .is_typedef = false, .builtin_type = type };
+    *ret = (PType) { .type = PTY_BUILTIN, .span = span, .attributes = { 0 }, .builtin_type = type };
 
     return ret;
 }
@@ -431,7 +433,7 @@ PType* ptype_ptr_new(Span span, PType* type) {
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
     *ret =
-        (PType) { .type = PTY_PTR, .span = span, .is_typedef = type->is_typedef, .parent = type };
+        (PType) { .type = PTY_PTR, .span = span, .attributes = type->attributes, .parent = type };
 
     return ret;
 }
@@ -442,7 +444,7 @@ PType* ptype_fn_new(Span span, PType* ret_type) {
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
     *ret = (PType) {
-        .type = PTY_FN, .span = span, .is_typedef = ret_type->is_typedef, .ret = ret_type
+        .type = PTY_FN, .span = span, .attributes = ret_type->attributes, .ret = ret_type
     };
     A3_SLL_INIT(&ret->params);
 
@@ -455,7 +457,7 @@ PType* ptype_array_new(Span span, PType* base, size_t len) {
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
     *ret = (PType) {
-        .type = PTY_ARRAY, .span = span, .is_typedef = base->is_typedef, .parent = base, .len = len
+        .type = PTY_ARRAY, .span = span, .attributes = base->attributes, .parent = base, .len = len
     };
 
     return ret;
@@ -466,7 +468,7 @@ PType* ptype_aggregate_new(Span span, PTypeType type, Span name) {
     assert(type == PTY_STRUCT || type == PTY_UNION);
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
-    *ret = (PType) { .type = type, .span = span, .is_typedef = false, .name = name };
+    *ret = (PType) { .type = type, .span = span, .attributes = { 0 }, .name = name };
     A3_SLL_INIT(&ret->members);
 
     return ret;
