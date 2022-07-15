@@ -160,6 +160,13 @@ static bool parse_has_decl_builtin(Parser* parser) {
            next.type == TOK_SIGNED || next.type == TOK_UNSIGNED;
 }
 
+static bool parse_has_decl_typename(Parser* parser) {
+    assert(parser);
+
+    Token next = lex_peek(parser->lexer);
+    return parse_has_decl_builtin(parser) || next.type == TOK_EXTERN || next.type == TOK_CONST;
+}
+
 static bool parse_has_decl_aggregate(Parser* parser) {
     assert(parser);
 
@@ -179,8 +186,8 @@ static bool parse_has_decl(Parser* parser) {
     assert(parser);
 
     Token next = lex_peek(parser->lexer);
-    return parse_has_decl_builtin(parser) || parse_has_decl_aggregate(parser) ||
-           parse_has_defined_type(parser) || next.type == TOK_TYPEDEF || next.type == TOK_EXTERN;
+    return parse_has_decl_aggregate(parser) || parse_has_defined_type(parser) ||
+           parse_has_decl_typename(parser) || next.type == TOK_TYPEDEF;
 }
 
 static BinOpType parse_bin_op(TokenType type) {
@@ -878,7 +885,12 @@ static PType* parse_declspec(Parser* parser) {
 
     Token            next = lex_peek(parser->lexer);
     PTypeBuiltinType type = PTY_NOTHING;
-    while (parse_has_decl_builtin(parser) || lex_peek(parser->lexer).type == TOK_EXTERN) {
+    while (parse_has_decl_typename(parser)) {
+        if (lex_peek(parser->lexer).type == TOK_CONST) {
+            lex_next(parser->lexer);
+            continue;
+        }
+
         if (!parse_decl_flag(parser, lex_next(parser->lexer), &type, &attrib))
             return NULL;
     }

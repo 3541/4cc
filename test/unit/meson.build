@@ -199,7 +199,8 @@ tests = {
     'ptr_to_array',
     'composite',
     'extern',
-    'extern_fn'
+    'extern_fn',
+    'const'
   ],
   'typedef': [
     'simple',
