@@ -1066,6 +1066,14 @@ static bool type_expr_cond(AstVisitor* visitor, CondExpr* expr) {
     return true;
 }
 
+static bool type_expr_type(AstVisitor* visitor, Expr* expr) {
+    assert(visitor);
+    assert(expr);
+    assert(expr->type == EXPR_TYPE);
+
+    return (expr->res_type = type_from_ptype(visitor->ctx, expr->res_ptype));
+}
+
 static bool type_block(AstVisitor* visitor, Block* block) {
     assert(visitor);
     assert(block);
@@ -1135,6 +1143,7 @@ bool type(Registry* reg, A3CString src, Vertex* root) {
             .visit_call      = type_call,
             .visit_member    = type_member,
             .visit_expr_cond = type_expr_cond,
+            .visit_expr_type = type_expr_type,
             .visit_block     = type_block,
             .visit_loop      = type_loop,
             .visit_decl      = type_decl,

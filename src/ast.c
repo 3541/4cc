@@ -71,6 +71,17 @@ Expr* vertex_lit_str_new(Span span, A3CString str) {
     return &ret->expr;
 }
 
+Expr* vertex_expr_type_new(Span span, PType* type) {
+    assert(span.text.ptr);
+    assert(type);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret =
+        (Vertex) { .span = span, .type = V_EXPR, .expr = { .type = EXPR_TYPE, .res_ptype = type } };
+
+    return &ret->expr;
+}
+
 Item* vertex_expr_stmt_new(Span span, Expr* expr) {
     assert(expr);
 
@@ -349,6 +360,17 @@ static bool visit_expr_cond(AstVisitor* visitor, CondExpr* expr) {
     return vertex_visit(visitor, VERTEX(expr->res_false, expr));
 }
 
+static bool visit_expr_type(AstVisitor* visitor, Expr* expr) {
+    assert(visitor);
+    assert(expr);
+    assert(expr->type == EXPR_TYPE);
+
+    (void)visitor;
+    (void)expr;
+
+    return true;
+}
+
 static bool visit_break_continue(AstVisitor* visitor, Item* item) {
     assert(visitor);
     assert(item);
@@ -389,6 +411,8 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
             return VISIT(visitor, visit_member, &vertex->expr.member);
         case EXPR_COND:
             return VISIT(visitor, visit_expr_cond, &vertex->expr.cond);
+        case EXPR_TYPE:
+            return VISIT(visitor, visit_expr_type, &vertex->expr);
         }
         break;
     case V_STMT:

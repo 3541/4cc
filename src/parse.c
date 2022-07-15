@@ -325,6 +325,31 @@ static Expr* parse_lit_str(Parser* parser) {
     return vertex_lit_str_new(tok.lexeme, tok.lit_str);
 }
 
+static PType* parse_anon_type(Parser* parser) {
+    assert(parser);
+
+    PType* base = parse_declspec(parser);
+    if (!base)
+        return NULL;
+
+    assert(base->type == PTY_BUILTIN || base->type == PTY_STRUCT || base->type == PTY_UNION ||
+           base->type == PTY_DEFINED);
+
+    Item* decl = parse_declarator(parser, base);
+    if (!decl)
+        return NULL;
+
+    if (decl->attributes.is_typedef) {
+        error_at(parser->src, SPAN(decl, item), "typedef not allowed in this context.");
+        return NULL;
+    }
+
+    PType* ret = decl->decl_ptype;
+    free(VERTEX(decl, item));
+
+    return ret;
+}
+
 static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
     [TOK_PLUS] = 17, [TOK_MINUS] = 17, [TOK_AMP] = 17,    [TOK_STAR] = 17,
     [TOK_BANG] = 17, [TOK_TILDE] = 17, [TOK_SIZEOF] = 17,
@@ -379,6 +404,32 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
     case TOK_IDENT:
         lhs = parse_var(parser);
         break;
+    case TOK_SIZEOF: {
+        lex_next(parser->lexer);
+        bool paren = lex_peek(parser->lexer).type == TOK_LPAREN;
+        if (paren)
+            lex_next(parser->lexer);
+
+        Expr* operand = NULL;
+        if (parse_has_decl(parser)) {
+            PType* type = parse_anon_type(parser);
+            if (!type)
+                return NULL;
+
+            operand = vertex_expr_type_new(type->span, type);
+        } else {
+            operand = parse_expr(parser, PREFIX_PRECEDENCE[TOK_SIZEOF]);
+        }
+        if (!operand)
+            return NULL;
+
+        if (paren && !parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
+            return NULL;
+
+        lhs = vertex_unary_op_new(parse_span_merge(tok.lexeme, SPAN(operand, expr)), OP_SIZEOF,
+                                  operand);
+        break;
+    }
     default:
         if (!PREFIX_PRECEDENCE[tok.type]) {
             parse_error(parser, lex_next(parser->lexer),
@@ -388,6 +439,7 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
         }
 
         lex_next(parser->lexer);
+
         Expr* rhs = parse_expr(parser, PREFIX_PRECEDENCE[tok.type]);
         if (!rhs)
             return NULL;
@@ -395,8 +447,6 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
         lhs = vertex_unary_op_new(parse_span_merge(tok.lexeme, SPAN(rhs, expr)),
                                   parse_unary_op(tok.type), rhs);
         break;
-
-        return NULL;
     }
 
     while (true) {
@@ -1034,13 +1084,11 @@ static Item* parse_declarator(Parser* parser, PType* type) {
     if (nested) {
         name = nested->name;
     } else {
-        Token ident = lex_next(parser->lexer);
-        if (ident.type != TOK_IDENT) {
-            parse_error(parser, ident, "Expected an identifier.");
-            return NULL;
+        Token ident = lex_peek(parser->lexer);
+        if (ident.type == TOK_IDENT) {
+            lex_next(parser->lexer);
+            name = ident.lexeme.text;
         }
-
-        name = ident.lexeme.text;
     }
 
     next = lex_peek(parser->lexer);

@@ -233,6 +233,18 @@ static bool dump_expr_cond(AstVisitor* visitor, CondExpr* expr) {
     return dump_child(visitor, VERTEX(expr->res_false, expr));
 }
 
+static bool dump_expr_type(AstVisitor* visitor, Expr* expr) {
+    assert(visitor);
+    assert(expr);
+    assert(expr->type == EXPR_TYPE);
+
+    A3String type = dump_get_type(expr->res_type);
+    dump_print(visitor->ctx, "TY<" A3_S_F ">", A3_S_FORMAT(type));
+    a3_string_free(&type);
+
+    return true;
+}
+
 static bool dump_expr_stmt(AstVisitor* visitor, Item* stmt) {
     assert(visitor);
     assert(stmt->type == STMT_EXPR_STMT);
@@ -356,6 +368,7 @@ bool dump(Vertex* root) {
             .visit_call      = dump_call,
             .visit_member    = dump_member,
             .visit_expr_cond = dump_expr_cond,
+            .visit_expr_type = dump_expr_type,
             .visit_expr_stmt = dump_expr_stmt,
             .visit_ret       = dump_ret,
             .visit_decl      = dump_decl,

@@ -153,7 +153,8 @@ tests = {
     'short',
     'long',
     'unsigned',
-    'signed'
+    'signed',
+    'type'
   ],
   'comment': [
     'line',
