@@ -87,8 +87,10 @@ typedef enum ExprType {
 
 typedef enum LiteralType { LIT_NUM, LIT_STR } LiteralType;
 
+typedef A3_SLL(Items, Item) Items;
+
 typedef struct Block {
-    A3_SLL(body, Item) body;
+    Items  body;
     Scope* scope;
 } Block;
 
@@ -294,7 +296,7 @@ typedef struct Item {
 } Item;
 
 typedef struct Unit {
-    A3_SLL(items, Item) items;
+    Items items;
 } Unit;
 
 typedef struct Vertex {

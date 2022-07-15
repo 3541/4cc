@@ -44,7 +44,7 @@ static Block* parse_block(Parser*);
 static Item*  parse_declarator(Parser*, PType*);
 static PType* parse_decl_suffix(Parser*, PType*);
 static PType* parse_declspec(Parser*);
-static bool   parse_decl(Parser*, Block*);
+static bool   parse_decl(Parser*, Items*);
 
 static void parse_scope_push(Parser* parser) {
     assert(parser);
@@ -554,7 +554,7 @@ static Item* parse_loop(Parser* parser) {
     if (loop_tok.type == TOK_FOR) {
         if (parse_has_decl(parser)) {
             Block* init_block = vertex_block_new();
-            if (!parse_decl(parser, init_block))
+            if (!parse_decl(parser, &init_block->body))
                 return NULL;
             init = ITEM(init_block, block);
         } else {
@@ -678,33 +678,26 @@ static PType* parse_aggregate_decl(Parser* parser) {
     lex_next(parser->lexer);
 
     while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_RBRACE) {
-        PType* base = parse_declspec(parser);
-        if (!base)
+        Items items;
+        A3_SLL_INIT(&items);
+
+        if (!parse_decl(parser, &items))
             return NULL;
-        if (base->is_typedef) {
-            error_at(parser->src, base->span,
-                     "typedef is not permitted inside an aggregate declaration.");
-            return NULL;
-        }
 
-        bool first = true;
-        while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_SEMI) {
-            if (!first && !parse_consume(parser, A3_CS("comma"), TOK_COMMA))
+        A3_SLL_FOR_EACH(Item, item, &items, link) {
+            assert(VERTEX(item, item)->type == V_DECL);
+
+            if (item->decl_ptype->is_typedef) {
+                error_at(parser->src, SPAN(item, item),
+                         "typedef is not permitted inside an aggregate declaration.");
                 return NULL;
-            first = false;
+            }
 
-            Item* decl = parse_declarator(parser, base);
-            if (!decl)
-                return NULL;
-
-            Member* member = member_new(decl->name, decl->decl_ptype);
-            free(VERTEX(decl, item));
+            Member* member = member_new(item->name, item->decl_ptype);
+            free(VERTEX(item, item));
 
             A3_SLL_ENQUEUE(&ret->members, member, link);
         }
-
-        if (!parse_consume(parser, A3_CS("semicolon"), TOK_SEMI))
-            return NULL;
     }
 
     if (!parse_consume(parser, A3_CS("closing brace"), TOK_RBRACE))
@@ -1053,9 +1046,32 @@ static Item* parse_declarator(Parser* parser, PType* type) {
     return vertex_decl_new(type->span, name, type);
 }
 
-static bool parse_decl(Parser* parser, Block* block) {
+static bool parse_fn(Parser* parser, Item* decl) {
     assert(parser);
-    assert(block);
+    assert(parser->current_unit);
+    assert(decl);
+    assert(decl->decl_ptype->type == PTY_FN);
+
+    Block* body = NULL;
+
+    if (lex_peek(parser->lexer).type == TOK_LBRACE) {
+        body = parse_block(parser);
+        if (!body)
+            return false;
+
+        decl->body       = body;
+        SPAN(decl, item) = parse_span_merge(SPAN(decl, item), SPAN(body, item.block));
+    } else if (!parse_consume(parser, A3_CS("semicolon"), TOK_SEMI)) {
+        return false;
+    }
+
+    A3_SLL_ENQUEUE(&parser->current_unit->items, decl, link);
+    return true;
+}
+
+static bool parse_decl(Parser* parser, Items* items) {
+    assert(parser);
+    assert(items);
 
     PType* base = parse_declspec(parser);
     if (!base)
@@ -1072,7 +1088,19 @@ static bool parse_decl(Parser* parser, Block* block) {
         Item* decl = parse_declarator(parser, base);
         if (!decl)
             return false;
-        A3_SLL_ENQUEUE(&block->body, decl, link);
+
+        if (decl->decl_ptype->type == PTY_FN) {
+            if (items != &parser->current_unit->items) {
+                error_at(parser->src, SPAN(decl, item),
+                         "Function declaration not allowed inside block.");
+                return false;
+            }
+            A3_TRYB(parse_fn(parser, decl));
+
+            return true;
+        }
+
+        A3_SLL_ENQUEUE(items, decl, link);
 
         if (lex_peek(parser->lexer).type == TOK_EQ) {
             lex_next(parser->lexer);
@@ -1085,9 +1113,9 @@ static bool parse_decl(Parser* parser, Block* block) {
         }
     }
 
-    if (first && base->type == PTY_STRUCT && base->name.text.ptr) {
+    if (first && (base->type == PTY_STRUCT || base->type == PTY_UNION) && base->name.text.ptr) {
         Item* decl = vertex_decl_new(base->name, A3_CS_NULL, base);
-        A3_SLL_ENQUEUE(&block->body, decl, link);
+        A3_SLL_ENQUEUE(items, decl, link);
     }
 
     return parse_consume(parser, A3_CS("semicolon"), TOK_SEMI);
@@ -1098,7 +1126,7 @@ static bool parse_block_item(Parser* parser, Block* block) {
     assert(block);
 
     if (parse_has_decl(parser))
-        return parse_decl(parser, block);
+        return parse_decl(parser, &block->body);
 
     Item* res = parse_stmt(parser);
     if (!res)
@@ -1151,102 +1179,6 @@ done:
     return block;
 }
 
-static bool parse_fn(Parser* parser, Item* decl) {
-    assert(parser);
-    assert(parser->current_unit);
-    assert(decl);
-    assert(decl->decl_ptype->type == PTY_FN);
-
-    Block* body = NULL;
-
-    if (lex_peek(parser->lexer).type == TOK_LBRACE) {
-        body = parse_block(parser);
-        if (!body)
-            return false;
-
-        decl->body       = body;
-        SPAN(decl, item) = parse_span_merge(SPAN(decl, item), SPAN(body, item.block));
-    } else if (!parse_consume(parser, A3_CS("semicolon"), TOK_SEMI)) {
-        return false;
-    }
-
-    A3_SLL_ENQUEUE(&parser->current_unit->items, decl, link);
-    return true;
-}
-
-static bool parse_global_var(Parser* parser, PType* base) {
-    assert(parser);
-    assert(parser->current_unit);
-    assert(base);
-
-    while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_SEMI) {
-        if (!parse_consume(parser, A3_CS("comma"), TOK_COMMA))
-            return false;
-
-        Item* decl = parse_declarator(parser, base);
-        if (!decl)
-            return false;
-        A3_SLL_ENQUEUE(&parser->current_unit->items, decl, link);
-
-        if (lex_peek(parser->lexer).type == TOK_EQ) {
-            lex_next(parser->lexer);
-
-            Expr* init = parse_expr(parser, INFIX_PRECEDENCE[TOK_EQ][1]);
-            if (!init)
-                return false;
-
-            decl->init = init;
-        }
-    }
-
-    return parse_consume(parser, A3_CS("semicolon"), TOK_SEMI);
-}
-
-static bool parse_global_decl(Parser* parser) {
-    assert(parser);
-    assert(parser->current_unit);
-
-    PType* base = parse_declspec(parser);
-    if (!base)
-        return false;
-
-    Token next = lex_peek(parser->lexer);
-    Item* decl = NULL;
-    if (next.type == TOK_STAR || next.type == TOK_IDENT) {
-        decl = parse_declarator(parser, base);
-        if (!decl)
-            return false;
-    } else {
-        if (base->type != PTY_STRUCT && base->type != PTY_UNION) {
-            error_at(parser->src, base->name, "Declaration without name.");
-            return false;
-        }
-
-        if (!parse_consume(parser, A3_CS("semicolon"), TOK_SEMI))
-            return false;
-
-        decl = vertex_decl_new(base->name, A3_CS_NULL, base);
-        A3_SLL_ENQUEUE(&parser->current_unit->items, decl, link);
-        return true;
-    }
-
-    if (decl->decl_ptype->type == PTY_FN)
-        return parse_fn(parser, decl);
-
-    A3_SLL_ENQUEUE(&parser->current_unit->items, decl, link);
-    if (lex_peek(parser->lexer).type == TOK_EQ) {
-        lex_next(parser->lexer);
-
-        Expr* init = parse_expr(parser, INFIX_PRECEDENCE[TOK_EQ][1]);
-        if (!init)
-            return false;
-
-        decl->init = init;
-    }
-
-    return parse_global_var(parser, base);
-}
-
 Vertex* parse(Parser* parser) {
     assert(parser);
 
@@ -1254,7 +1186,7 @@ Vertex* parse(Parser* parser) {
     parser->current_unit = unit;
 
     while (parse_has_next(parser)) {
-        if (!parse_global_decl(parser)) {
+        if (!parse_decl(parser, &parser->current_unit->items)) {
             parser->status = false;
             break;
         }
