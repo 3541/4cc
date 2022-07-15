@@ -88,6 +88,7 @@ static void preprocess_args_init(char const* bin, A3Vec* args) {
 
     A3_VEC_PUSH(args, &A3_CS("-undef"));
     A3_VEC_PUSH(args, &A3_CS("-U_FORTIFY_SOURCE"));
+    A3_VEC_PUSH(args, &A3_CS("-U__STDC_VERSION__"));
     A3_VEC_PUSH(args, &A3_CS("-D__x86_64__"));
 }
 

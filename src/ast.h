@@ -41,6 +41,7 @@ typedef enum BinOpType {
     OP_ADD,
     OP_AND,
     OP_ASSIGN,
+    OP_CAST,
     OP_DIV,
     OP_EQ,
     OP_GE,

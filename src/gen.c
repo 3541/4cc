@@ -376,6 +376,100 @@ static bool gen_expr_cond(AstVisitor* visitor, CondExpr* expr) {
     return true;
 }
 
+static bool gen_cast(AstVisitor* visitor, BinOp* op) {
+    assert(visitor);
+    assert(op);
+    assert(op->type == OP_CAST);
+    assert(op->lhs->type == EXPR_TYPE);
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(op->rhs, expr)));
+
+    static char const* CASTS[][11] = {
+        [TY_I8]    = { [TY_U8]    = "movzx rax, al",
+                    [TY_U16]   = "movzx rax, al",
+                    [TY_U32]   = "movzx rax, al",
+                    [TY_U64]   = "movzx rax, al",
+                    [TY_USIZE] = "movzx rax, al" },
+        [TY_I16]   = { [TY_I8] = "movsx rax, al",
+
+                     [TY_U8]    = "movzx rax, al",
+                     [TY_U16]   = "movzx rax, ax",
+                     [TY_U32]   = "movzx rax, ax",
+                     [TY_U64]   = "movzx rax, ax",
+                     [TY_USIZE] = "movzx rax, ax" },
+        [TY_I32]   = { [TY_I8]  = "movsx rax, al",
+                     [TY_I16] = "movsx rax, ax",
+
+                     [TY_U8]    = "movzx rax, al",
+                     [TY_U16]   = "movzx rax, ax",
+                     [TY_U32]   = "mov eax, eax",
+                     [TY_U64]   = "mov eax, eax",
+                     [TY_USIZE] = "mov eax, eax" },
+        [TY_I64]   = { [TY_I8]  = "movsx rax, al",
+                     [TY_I16] = "movsx rax, ax",
+                     [TY_I32] = "movsx rax, eax",
+
+                     [TY_U8]  = "movzx rax, al",
+                     [TY_U16] = "movzx rax, ax",
+                     [TY_U32] = "mov eax, eax" },
+        [TY_ISIZE] = { [TY_I8]  = "movsx rax, al",
+                       [TY_I16] = "movsx rax, ax",
+                       [TY_I32] = "movsx rax, eax",
+
+                       [TY_U8]  = "movzx rax, al",
+                       [TY_U16] = "movzx rax, ax",
+                       [TY_U32] = "mov eax, eax" },
+
+        [TY_U8]    = { [TY_I8]    = "movsx rax, al",
+                    [TY_I16]   = "movsx rax, al",
+                    [TY_I32]   = "movsx rax, al",
+                    [TY_I64]   = "movsx rax, al",
+                    [TY_ISIZE] = "movsx rax, al" },
+        [TY_U16]   = { [TY_I8]    = "movsx rax, al",
+                     [TY_I16]   = "movsx rax, ax",
+                     [TY_I32]   = "movsx rax, ax",
+                     [TY_I64]   = "movsx rax, ax",
+                     [TY_ISIZE] = "movsx rax, ax",
+
+                     [TY_U8] = "movzx rax, al" },
+        [TY_U32]   = { [TY_I8]    = "movsx rax, al",
+                     [TY_I16]   = "movsx rax, ax",
+                     [TY_I32]   = "movsx rax, eax",
+                     [TY_I64]   = "movsx rax, eax",
+                     [TY_ISIZE] = "movsx rax, eax",
+
+                     [TY_U8]  = "movzx rax, al",
+                     [TY_U16] = "movzx rax, ax" },
+        [TY_U64]   = { [TY_I8]  = "movsx rax, al",
+                     [TY_I16] = "movsx rax, ax",
+                     [TY_I32] = "movsx rax, eax",
+
+                     [TY_U8]  = "movzx rax, al",
+                     [TY_U16] = "movzx rax, ax",
+                     [TY_U32] = "mov eax, eax" },
+        [TY_USIZE] = { [TY_I8]  = "movsx rax, al",
+                       [TY_I16] = "movsx rax, ax",
+                       [TY_I32] = "movsx rax, eax",
+
+                       [TY_U8]  = "movzx rax, al",
+                       [TY_U16] = "movzx rax, ax",
+                       [TY_U32] = "mov eax, eax" },
+    };
+
+    TypeType from = op->rhs->res_type->type;
+    TypeType to   = op->lhs->res_type->type;
+
+    from = from == TY_PTR ? TY_USIZE : from;
+    to   = to == TY_PTR ? TY_USIZE : to;
+
+    char const* insn = CASTS[from][to];
+    if (!insn)
+        return true;
+
+    gen_asm(visitor->ctx, "%s", insn);
+    return true;
+}
+
 static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
     assert(visitor);
     assert(op);
@@ -384,6 +478,8 @@ static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
         return gen_assign(visitor, op);
     if (op->type == OP_OR || op->type == OP_AND)
         return gen_bool_op(visitor, op);
+    if (op->type == OP_CAST)
+        return gen_cast(visitor, op);
 
     A3_TRYB(vertex_visit(visitor, VERTEX(op->rhs, expr)));
     gen_stack_push(visitor->ctx);
@@ -447,9 +543,10 @@ static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
                 insn);
         break;
     }
-    case OP_ASSIGN:
-    case OP_OR:
     case OP_AND:
+    case OP_ASSIGN:
+    case OP_CAST:
+    case OP_OR:
         A3_UNREACHABLE();
     }
 

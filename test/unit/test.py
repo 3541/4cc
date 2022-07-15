@@ -41,16 +41,17 @@ if os.path.isfile(output_path):
 else:
     output = "0"
 
-if output.strip().isdigit():
+output_is_number = output.strip().isnumeric() or (len(output.strip()) > 0 and output.strip()[0] == "-")
+if output_is_number:
     expected_status = output.strip()
 else:
     expected_status = "0"
 
 if str(exit) != expected_status:
-    print(f"FAIL: Expected status {output.strip()}, but got {exit}.")
+    print(f"FAIL: Expected status {expected_status}, but got {exit}.")
     sys.exit(-1)
 
 stdout = result.stdout.decode("utf-8")
-if not output.strip().isdigit() and stdout != output:
+if not output_is_number and stdout != output:
     print(f"FAIL: Expected output \"{output}\", but got \"{stdout}\".")
     sys.exit(-1)

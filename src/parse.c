@@ -160,6 +160,14 @@ static bool parse_has_decl_builtin(Parser* parser) {
            next.type == TOK_SIGNED || next.type == TOK_UNSIGNED;
 }
 
+static bool parse_has_defined_type(Parser* parser) {
+    assert(parser);
+
+    Token next = lex_peek(parser->lexer);
+    return next.type == TOK_IDENT &&
+           parse_scope_typedef_find(parser->current_scope, next.lexeme.text);
+}
+
 static bool parse_has_decl_typename(Parser* parser) {
     assert(parser);
 
@@ -172,14 +180,6 @@ static bool parse_has_decl_aggregate(Parser* parser) {
 
     Token next = lex_peek(parser->lexer);
     return next.type == TOK_STRUCT || next.type == TOK_UNION;
-}
-
-static bool parse_has_defined_type(Parser* parser) {
-    assert(parser);
-
-    Token next = lex_peek(parser->lexer);
-    return next.type == TOK_IDENT &&
-           parse_scope_typedef_find(parser->current_scope, next.lexeme.text);
 }
 
 static bool parse_has_decl(Parser* parser) {
@@ -352,7 +352,7 @@ static PType* parse_anon_type(Parser* parser) {
 
 static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
     [TOK_PLUS] = 17, [TOK_MINUS] = 17, [TOK_AMP] = 17,    [TOK_STAR] = 17,
-    [TOK_BANG] = 17, [TOK_TILDE] = 17, [TOK_SIZEOF] = 17,
+    [TOK_BANG] = 17, [TOK_TILDE] = 17, [TOK_SIZEOF] = 17, [TOK_LPAREN] = 17,
 };
 
 static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
@@ -389,9 +389,28 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
     switch (tok.type) {
     case TOK_LPAREN:
         lex_next(parser->lexer);
-        lhs = parse_expr(parser, 0);
-        if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
-            return NULL;
+
+        if (parse_has_decl(parser)) {
+            PType* type = parse_anon_type(parser);
+            if (!type)
+                return NULL;
+
+            if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
+                return NULL;
+
+            Expr* operand = parse_expr(parser, PREFIX_PRECEDENCE[TOK_LPAREN]);
+            if (!operand)
+                return NULL;
+
+            lhs = vertex_bin_op_new(parse_span_merge(tok.lexeme, SPAN(operand, expr)), OP_CAST,
+                                    vertex_expr_type_new(type->span, type), operand);
+        } else {
+            lhs = parse_expr(parser, 0);
+
+            if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
+                return NULL;
+        }
+
         break;
     case TOK_LIT_NUM: {
         lex_next(parser->lexer);

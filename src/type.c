@@ -637,9 +637,18 @@ static bool type_bin_op(AstVisitor* visitor, BinOp* op) {
 
         EXPR(op, bin_op)->res_type = BUILTIN_TYPES[TY_I32];
         break;
+    case OP_CAST:
+        if (!type_is_scalar(op->lhs->res_type) && op->lhs->res_type->type != TY_PTR &&
+            op->lhs->res_type->type != TY_VOID) {
+            type_error(visitor->ctx, VERTEX(op->lhs, expr), "Invalid target type for cast.");
+            return false;
+        }
+
+        EXPR(op, bin_op)->res_type = op->lhs->res_type;
+        break;
     }
 
-    assert(EXPR(op, bin_op)->res_type->type != TY_VOID);
+    assert(EXPR(op, bin_op)->res_type->type != TY_VOID || op->type == OP_CAST);
     return true;
 }
 

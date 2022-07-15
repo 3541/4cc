@@ -33,7 +33,8 @@ tests = {
     'ge_gt',
     'multiple_stmts',
     'mod',
-    'i32'
+    'i32',
+    'cast'
   ],
   'var': [
     'simple',
@@ -211,6 +212,9 @@ tests = {
     'global',
     'nested',
     'suffix'
+  ],
+  'std': [
+    'assert'
   ]
 }
 
