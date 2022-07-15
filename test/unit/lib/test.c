@@ -1,4 +1,3 @@
-#define REAL_COMPILER
 #include "test.h"
 
 #include <stdio.h>
