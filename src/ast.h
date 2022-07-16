@@ -266,7 +266,7 @@ typedef struct PType {
         // PTY_ARRAY and PTY_PTR.
         struct {
             PType* parent;
-            size_t len; // PTY_ARRAY
+            Expr*  len; // PTY_ARRAY
         };
     };
 } PType;
@@ -375,7 +375,7 @@ bool   vertex_visit(AstVisitor*, Vertex*);
 PType* ptype_builtin_new(Span, PTypeBuiltinType);
 PType* ptype_ptr_new(Span, PType*);
 PType* ptype_fn_new(Span, PType* ret_type);
-PType* ptype_array_new(Span, PType*, size_t);
+PType* ptype_array_new(Span, PType*, Expr* len);
 PType* ptype_aggregate_new(Span, PTypeType, Span name);
 PType* ptype_defined_new(Span name);
 

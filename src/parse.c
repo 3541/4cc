@@ -1021,11 +1021,7 @@ static PType* parse_decl_suffix_array(Parser* parser, PType* base) {
     assert(parser);
     assert(base);
 
-    Token next = lex_next(parser->lexer);
-    if (next.type != TOK_LIT_NUM) {
-        parse_error(parser, next, "Expected a numeric literal.");
-        return NULL;
-    }
+    Expr* len = parse_expr(parser, 0);
 
     Token tok_closing = lex_next(parser->lexer);
     if (tok_closing.type != TOK_RBRACKET) {
@@ -1040,7 +1036,7 @@ static PType* parse_decl_suffix_array(Parser* parser, PType* base) {
     return ptype_array_new(base->span.text.ptr <= tok_closing.lexeme.text.ptr
                                ? parse_span_merge(base->span, tok_closing.lexeme)
                                : base->span,
-                           base, (size_t)next.lit_num);
+                           base, len);
 }
 
 static PType* parse_decl_suffix(Parser* parser, PType* base) {

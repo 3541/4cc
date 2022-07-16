@@ -203,7 +203,8 @@ tests = {
     'composite',
     'extern',
     'extern_fn',
-    'const'
+    'const',
+    'const_eval'
   ],
   'typedef': [
     'simple',

@@ -10,6 +10,7 @@
 #include "type.h"
 
 #include <assert.h>
+#include <inttypes.h>
 #include <stdalign.h>
 #include <stdbool.h>
 
@@ -20,6 +21,7 @@
 
 #include "ast.h"
 #include "error.h"
+#include "eval.h"
 #include "stdlib.h"
 
 static int8_t key_eq(Type const* lhs, Type const* rhs) { return lhs == rhs ? 0 : 1; }
@@ -490,8 +492,18 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
     switch (ptype->type) {
     case PTY_PTR:
         return type_ptr_to(reg, type_from_ptype(reg, ptype->parent));
-    case PTY_ARRAY:
-        return type_array_of(type_from_ptype(reg, ptype->parent), ptype->len);
+    case PTY_ARRAY: {
+        EvalResult res = eval(reg->src, ptype->len);
+        if (!res.ok)
+            return NULL;
+        if (res.value < 0) {
+            type_error(reg, VERTEX(ptype->len, expr),
+                       "Array length must be non-negative (got %" PRId64 ")", res.value);
+            return NULL;
+        }
+
+        return type_array_of(type_from_ptype(reg, ptype->parent), (size_t)res.value);
+    }
     case PTY_FN:
         return type_fn_from_ptype(reg, ptype);
     case PTY_STRUCT:
@@ -749,9 +761,10 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
         // Synthesize global declaration for storage.
         A3CString global_name = type_lit_name(reg);
         Span      span        = SPAN(lit, expr.lit);
-        Item*     global_decl = vertex_decl_new(
-                span, global_name,
-                ptype_array_new(span, ptype_builtin_new(span, PTY_CHAR), lit->str.len + 1));
+        Item*     global_decl =
+            vertex_decl_new(span, global_name,
+                            ptype_array_new(span, ptype_builtin_new(span, PTY_CHAR),
+                                            vertex_lit_num_new(span, (int64_t)(lit->str.len + 1))));
         global_decl->init = EXPR(lit, lit);
         A3_SLL_PUSH(&reg->current_unit->items, global_decl, link);
 
@@ -891,6 +904,9 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
 
     if (decl->decl_ptype->type == PTY_FN)
         return type_fn(visitor, decl);
+
+    if (decl->decl_ptype->type == PTY_ARRAY)
+        A3_TRYB(vertex_visit(visitor, VERTEX(decl->decl_ptype->len, expr)));
 
     Type const* type = type_from_ptype(reg, decl->decl_ptype);
     if (!type)
