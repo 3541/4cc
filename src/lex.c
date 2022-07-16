@@ -514,7 +514,7 @@ Token lex_peek(Lexer* lexer) {
     if (lexer->peeking)
         return lexer->peek;
 
-    if (lexer->error_depth++ >= LEX_ERRORS_MAX)
+    if (lexer->error_depth >= LEX_ERRORS_MAX)
         return tok_new(lexer, TOK_EOF, A3_CS_NULL);
 
     lexer->peeking = true;
