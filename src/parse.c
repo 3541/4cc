@@ -1014,6 +1014,12 @@ static PType* parse_decl_suffix_fn(Parser* parser, PType* base) {
             return NULL;
         first = false;
 
+        if (lex_peek(parser->lexer).type == TOK_DOT_DOT_DOT) {
+            lex_next(parser->lexer);
+            ret->attributes.is_variadic = true;
+            break;
+        }
+
         PType* param_type = parse_declspec(parser);
         if (!param_type)
             return NULL;

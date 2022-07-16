@@ -229,9 +229,6 @@ static Token lex_op(Lexer* lexer) {
     case '~':
         type = TOK_TILDE;
         break;
-    case '.':
-        type = TOK_DOT;
-        break;
     case '?':
         type = TOK_QUERY;
         break;
@@ -310,6 +307,16 @@ static Token lex_op(Lexer* lexer) {
         lexeme.len++;
         lex_consume_any(lexer, 1);
         type = TOK_MINUS_GT;
+        break;
+    case '.':
+        if (lexeme.ptr[1] != '.' || lexeme.ptr[2] != '.') {
+            type = TOK_DOT;
+            break;
+        }
+
+        lexeme.len += 2;
+        lex_consume_any(lexer, 2);
+        type = TOK_DOT_DOT_DOT;
         break;
     default:
         A3_UNREACHABLE();

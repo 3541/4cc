@@ -12,4 +12,6 @@ int puts(char const*);
 
 void test_assert_eq(size_t, size_t, char*, int);
 
+size_t variadic_sum(size_t c, ...);
+
 #define ASSERT_EQ(EXPR, EXPECTED) test_assert_eq((EXPR), (EXPECTED), #EXPR, __LINE__)

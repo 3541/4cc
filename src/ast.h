@@ -237,6 +237,7 @@ typedef int PTypeBuiltinType;
 typedef struct DeclAttributes {
     bool is_typedef;
     bool is_extern;
+    bool is_variadic;
 } DeclAttributes;
 
 typedef struct PType {

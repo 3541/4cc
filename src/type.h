@@ -74,6 +74,7 @@ typedef struct Type {
         struct {
             A3_SLL(, Param) params;
             Type const* ret;
+            bool        is_variadic;
         };
     };
 } Type;

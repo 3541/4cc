@@ -95,7 +95,8 @@ tests = {
     'args',
     'args6',
     'nested',
-    'very_nested'
+    'very_nested',
+    'variadic'
   ],
   'fn': [
     'simple',

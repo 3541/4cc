@@ -247,6 +247,9 @@ A3String type_name(Type const* type) {
             a3_string_free(&param_name);
         }
 
+        if (type->is_variadic)
+            a3_buf_write_str(&buf, A3_CS(", ..."));
+
         a3_buf_write_byte(&buf, ')');
 
         return A3_CS_MUT(a3_buf_read_ptr(&buf));
@@ -386,10 +389,11 @@ static Type const* type_fn_from_ptype(Registry* reg, PType const* ptype) {
     assert(ptype->type == PTY_FN);
 
     A3_UNWRAPNI(Type*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Type) { .type  = TY_FN,
-                    .size  = sizeof(void (*)(void)),
-                    .align = alignof(void (*)(void)),
-                    .ret   = type_from_ptype(reg, ptype->ret) };
+    *ret = (Type) { .type        = TY_FN,
+                    .size        = sizeof(void (*)(void)),
+                    .align       = alignof(void (*)(void)),
+                    .ret         = type_from_ptype(reg, ptype->ret),
+                    .is_variadic = ptype->attributes.is_variadic };
     A3_SLL_INIT(&ret->params);
 
     A3_SLL_FOR_EACH(Item, decl, &ptype->params, link) {
@@ -1058,6 +1062,9 @@ static bool type_call(AstVisitor* visitor, Call* call) {
         A3_TRYB(vertex_visit(visitor, VERTEX(arg->expr, expr)));
 
         if (!param) {
+            if (call->obj->type->is_variadic)
+                continue;
+
             type_error(reg, VERTEX(arg->expr, expr),
                        "More arguments in call than function has parameters.");
             return false;

@@ -30,6 +30,7 @@ typedef enum TokenType {
     TOK_CONTINUE,
     TOK_DO,
     TOK_DOT,
+    TOK_DOT_DOT_DOT,
     TOK_ELSE,
     TOK_EQ,
     TOK_EQ_EQ,
