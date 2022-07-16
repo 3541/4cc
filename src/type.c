@@ -394,7 +394,12 @@ static Type const* type_fn_from_ptype(Registry* reg, PType const* ptype) {
 
     A3_SLL_FOR_EACH(Item, decl, &ptype->params, link) {
         assert(VERTEX(decl, item)->type == V_DECL);
-        Param* param = param_new(type_from_ptype(reg, decl->decl_ptype));
+
+        Type const* type = type_from_ptype(reg, decl->decl_ptype);
+        if (type->type == TY_VOID)
+            break;
+
+        Param* param = param_new(type);
 
         A3_SLL_ENQUEUE(&ret->params, param, link);
     }
@@ -814,6 +819,18 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
     if (decl->body) {
         reg_scope_push(reg);
         fn_scope = reg->current_scope;
+
+        if (!A3_SLL_IS_EMPTY(&decl->decl_ptype->params) &&
+            (A3_SLL_HEAD(&decl->decl_ptype->params)->decl_ptype->builtin_type & PTY_VOID)) {
+            A3_SLL_POP(&decl->decl_ptype->params, link);
+
+            if (!A3_SLL_IS_EMPTY(&decl->decl_ptype->params)) {
+                type_error(
+                    reg, VERTEX(A3_SLL_HEAD(&decl->decl_ptype->params), item),
+                    "Function with void parameter must have otherwise empty parameter list.");
+                return false;
+            }
+        }
 
         A3_SLL_FOR_EACH(Item, param, &decl->decl_ptype->params, link) {
             param->decl_type = type_from_ptype(reg, param->decl_ptype);

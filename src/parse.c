@@ -979,31 +979,27 @@ static PType* parse_decl_suffix_fn(Parser* parser, PType* base) {
 
     PType* ret = ptype_fn_new(base->span, base);
 
-    if (lex_peek(parser->lexer).type == TOK_VOID) {
-        lex_next(parser->lexer);
-    } else {
-        bool first = true;
-        while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_RPAREN) {
-            if (!first && !parse_consume(parser, A3_CS("comma"), TOK_COMMA))
-                return NULL;
-            first = false;
+    bool first = true;
+    while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_RPAREN) {
+        if (!first && !parse_consume(parser, A3_CS("comma"), TOK_COMMA))
+            return NULL;
+        first = false;
 
-            PType* param_type = parse_declspec(parser);
-            if (!param_type)
-                return NULL;
-            if (param_type->attributes.is_typedef) {
-                error_at(parser->src, param_type->span,
-                         "typedef is not permitted in function parameters.");
-                return NULL;
-            }
-
-            Item* param = parse_declarator(parser, param_type);
-            if (!param)
-                return NULL;
-            assert(VERTEX(param, item)->type == V_DECL);
-
-            A3_SLL_ENQUEUE(&ret->params, param, link);
+        PType* param_type = parse_declspec(parser);
+        if (!param_type)
+            return NULL;
+        if (param_type->attributes.is_typedef) {
+            error_at(parser->src, param_type->span,
+                     "typedef is not permitted in function parameters.");
+            return NULL;
         }
+
+        Item* param = parse_declarator(parser, param_type);
+        if (!param)
+            return NULL;
+        assert(VERTEX(param, item)->type == V_DECL);
+
+        A3_SLL_ENQUEUE(&ret->params, param, link);
     }
 
     Token tok_closing = lex_next(parser->lexer);
