@@ -33,18 +33,19 @@ A3_HT_DEFINE_STRUCTS(TypePtr, TypePtr);
 A3_HT_DECLARE_METHODS(TypePtr, TypePtr);
 A3_HT_DEFINE_METHODS(TypePtr, TypePtr, KEY_BYTES, KEY_SIZE, key_eq)
 
-A3_HT_DEFINE_STRUCTS(A3CString, Obj)
-A3_HT_DECLARE_METHODS(A3CString, Obj)
-A3_HT_DEFINE_METHODS(A3CString, Obj, a3_string_cptr, a3_string_len, a3_string_cmp)
-
 A3_HT_DEFINE_STRUCTS(A3CString, TypePtr);
 A3_HT_DECLARE_METHODS(A3CString, TypePtr);
 A3_HT_DEFINE_METHODS(A3CString, TypePtr, a3_string_cptr, a3_string_len, a3_string_cmp);
 
+typedef Obj* ObjPtr;
+A3_HT_DEFINE_STRUCTS(A3CString, ObjPtr)
+A3_HT_DECLARE_METHODS(A3CString, ObjPtr)
+A3_HT_DEFINE_METHODS(A3CString, ObjPtr, a3_string_cptr, a3_string_len, a3_string_cmp)
+
 typedef struct Scope {
     Scope* parent;
     Obj*   fn;
-    A3_HT(A3CString, Obj) idents;
+    A3_HT(A3CString, ObjPtr) idents;
     A3_HT(A3CString, TypePtr) tags;
     A3_HT(A3CString, TypePtr) typedefs;
 } Scope;
@@ -79,10 +80,39 @@ static Type const* BUILTIN_TYPES[11] = {
 
 static Type const* type_from_ptype(Registry*, PType*);
 
+#define OBJ_GLOBAL true
+#define OBJ_LOCAL  false
+static Obj* obj_new(A3CString name, Type const* type, Expr* init, size_t stack_offset,
+                    bool global) {
+    assert(name.ptr);
+    assert(type);
+
+    A3_UNWRAPNI(Obj*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Obj) {
+        .name         = name,
+        .type         = type,
+        .init         = init,
+        .stack_offset = stack_offset,
+        .global       = global,
+        .defined      = false,
+    };
+
+    return ret;
+}
+
+#define OBJ_FN_DEFINED   true
+#define OBJ_FN_UNDEFINED false
+static Obj* obj_fn_new(A3CString name, Type const* type, bool defined) {
+    Obj* ret     = obj_new(name, type, NULL, 0, OBJ_GLOBAL);
+    ret->defined = defined;
+
+    return ret;
+}
+
 static Scope* scope_new(Scope* parent) {
     A3_UNWRAPNI(Scope*, ret, calloc(1, sizeof(*ret)));
     *ret = (Scope) { .parent = parent, .fn = parent ? parent->fn : NULL };
-    A3_HT_INIT(A3CString, Obj)(&ret->idents, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
+    A3_HT_INIT(A3CString, ObjPtr)(&ret->idents, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
     A3_HT_INIT(A3CString, TypePtr)(&ret->tags, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
     A3_HT_INIT(A3CString, TypePtr)(&ret->typedefs, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
 
@@ -99,7 +129,9 @@ static Scope* scope_first_ancestor(Scope* scope) {
 }
 
 static Obj* scope_find_in(Scope* scope, A3CString name) {
-    return A3_HT_FIND(A3CString, Obj)(&scope->idents, name);
+    Obj** entry = A3_HT_FIND(A3CString, ObjPtr)(&scope->idents, name);
+
+    return entry ? *entry : NULL;
 }
 
 static Obj* scope_find(Scope* scope, A3CString name) {
@@ -113,15 +145,14 @@ static Obj* scope_find(Scope* scope, A3CString name) {
     return ret;
 }
 
-static Obj* scope_add(Scope* scope, Obj obj) {
+static void scope_add(Scope* scope, Obj* obj) {
     assert(scope);
-    assert(obj.name.ptr);
+    assert(obj);
+    assert(obj->name.ptr);
 
-    bool res = A3_HT_INSERT(A3CString, Obj)(&scope->idents, obj.name, obj);
+    bool res = A3_HT_INSERT(A3CString, ObjPtr)(&scope->idents, obj->name, obj);
     assert(res);
     (void)res;
-
-    return A3_HT_FIND(A3CString, Obj)(&scope->idents, obj.name);
 }
 
 static Type const* scope_find_struct_in(Scope* scope, A3CString name) {
@@ -842,10 +873,8 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
             stack_depth = align_up(stack_depth, param->decl_type->align);
             stack_depth += param->decl_type->size;
 
-            param->obj = scope_add(reg->current_scope, (Obj) { .name         = param->name,
-                                                               .type         = param->decl_type,
-                                                               .stack_offset = stack_depth,
-                                                               .global       = false });
+            param->obj = obj_new(param->name, param->decl_type, NULL, stack_depth, OBJ_LOCAL);
+            scope_add(reg->current_scope, param->obj);
         }
 
         reg_scope_pop(reg);
@@ -855,9 +884,8 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
         decl->obj          = prev;
         decl->obj->defined = decl->obj->defined || decl->body;
     } else {
-        decl->obj = scope_add(
-            reg->current_scope,
-            (Obj) { .name = decl->name, .type = fn_type, .global = true, .defined = decl->body });
+        decl->obj = obj_fn_new(decl->name, fn_type, decl->body ? OBJ_FN_DEFINED : OBJ_FN_UNDEFINED);
+        scope_add(reg->current_scope, decl->obj);
     }
 
     if (decl->body) {
@@ -1004,14 +1032,9 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
     if (prev) {
         decl->obj = prev;
     } else {
-        decl->obj =
-            scope_add(reg->current_scope,
-                      (Obj) { .name         = decl->name,
-                              .type         = type,
-                              .global       = global,
-                              .init         = decl->init,
-                              .defined      = false,
-                              .stack_offset = !global ? reg->current_scope->fn->stack_depth : 0 });
+        decl->obj = obj_new(decl->name, type, decl->init,
+                            !global ? reg->current_scope->fn->stack_depth : 0, global);
+        scope_add(reg->current_scope, decl->obj);
     }
 
     return true;
