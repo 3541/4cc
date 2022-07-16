@@ -32,4 +32,10 @@
 #ifndef __STDARG_H
 #define __STDARG_H
 
+typedef struct {
+    int __placeholder;
+} __va_list;
+
+typedef __va_list __gnuc_va_list;
+
 #endif

@@ -217,7 +217,8 @@ tests = {
     'suffix'
   ],
   'std': [
-    'assert'
+    'assert',
+    'stdio'
   ]
 }
 
