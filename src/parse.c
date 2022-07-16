@@ -1052,7 +1052,9 @@ static PType* parse_decl_suffix_array(Parser* parser, PType* base) {
     assert(parser);
     assert(base);
 
-    Expr* len = parse_expr(parser, 0);
+    Expr* len = NULL;
+    if (lex_peek(parser->lexer).type != TOK_RBRACKET)
+        len = parse_expr(parser, 0);
 
     Token tok_closing = lex_next(parser->lexer);
     if (tok_closing.type != TOK_RBRACKET) {

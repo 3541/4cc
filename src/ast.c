@@ -478,7 +478,6 @@ PType* ptype_fn_new(Span span, PType* ret_type) {
 PType* ptype_array_new(Span span, PType* base, Expr* len) {
     assert(span.text.ptr);
     assert(base);
-    assert(len);
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
     *ret = (PType) {

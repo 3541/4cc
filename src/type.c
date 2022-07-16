@@ -533,6 +533,9 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
     case PTY_PTR:
         return type_ptr_to(reg, type_from_ptype(reg, ptype->parent));
     case PTY_ARRAY: {
+        if (!ptype->len)
+            return type_ptr_to(reg, type_from_ptype(reg, ptype->parent));
+
         EvalResult res = eval(reg->src, ptype->len);
         if (!res.ok)
             return NULL;
@@ -954,7 +957,7 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
     if (decl->decl_ptype->type == PTY_FN)
         return type_fn(visitor, decl);
 
-    if (decl->decl_ptype->type == PTY_ARRAY)
+    if (decl->decl_ptype->type == PTY_ARRAY && decl->decl_ptype->len)
         A3_TRYB(vertex_visit(visitor, VERTEX(decl->decl_ptype->len, expr)));
 
     Type const* type = type_from_ptype(reg, decl->decl_ptype);
