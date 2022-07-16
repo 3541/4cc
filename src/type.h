@@ -58,7 +58,7 @@ typedef struct Type {
     union {
         bool is_signed; // Builtins
 
-        // TY_STRUCT
+        // TY_STRUCT and TY_UNION.
         struct {
             A3CString name;
             A3_SLL(, Member) members;

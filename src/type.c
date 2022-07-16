@@ -418,28 +418,41 @@ static Type const* type_aggregate_from_ptype(Registry* reg, PType* ptype) {
     assert(ptype->type == PTY_STRUCT || ptype->type == PTY_UNION);
 
     TypeType type = ptype->type == PTY_STRUCT ? TY_STRUCT : TY_UNION;
-    if (ptype->name.text.ptr && !A3_SLL_HEAD(&ptype->members)) {
-        // Naming an existing aggregate.
-        Type const* prev = scope_find_struct(reg->current_scope, ptype->name.text);
-        if (!prev) {
-            error_at(reg->src, ptype->span, "No tag with the given name in scope.");
-            return NULL;
-        }
-        if (prev->type != type) {
-            error_at(reg->src, ptype->span, "Mismatched tag types.");
-            return NULL;
+
+    Type* ret        = NULL;
+    bool  found_prev = false;
+    if (ptype->name.text.ptr) {
+        if (A3_SLL_IS_EMPTY(&ptype->members)) {
+            Type const* prev = scope_find_struct(reg->current_scope, ptype->name.text);
+            if (prev && type == prev->type)
+                return prev;
         }
 
-        return prev;
+        Type const* prev = scope_find_struct_in(reg->current_scope, ptype->name.text);
+        if (prev) {
+            if (!A3_SLL_IS_EMPTY(&prev->members)) {
+                error_at(reg->src, ptype->name,
+                         "Redeclaration of existing aggregate in the same scope.");
+                return NULL;
+            }
+
+            if (type != prev->type) {
+                error_at(reg->src, ptype->name,
+                         "Use of same tag name in same scope as different tag types.");
+                return NULL;
+            }
+
+            ret        = (Type*)prev;
+            found_prev = true;
+        } else {
+            A3_UNWRAPN(ret, calloc(1, sizeof(*ret)));
+        }
+    } else {
+        A3_UNWRAPN(ret, calloc(1, sizeof(*ret)));
     }
 
-    if (ptype->name.text.ptr && scope_find_struct_in(reg->current_scope, ptype->name.text)) {
-        error_at(reg->src, ptype->name, "Redeclaration of existing aggregate in the same scope.");
-        return NULL;
-    }
-
-    A3_UNWRAPNI(Type*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Type) { .type = type, .name = ptype->name.text };
+    ret->type = type;
+    ret->name = ptype->name.text;
     A3_SLL_INIT(&ret->members);
 
     size_t offset = 0;
@@ -464,7 +477,7 @@ static Type const* type_aggregate_from_ptype(Registry* reg, PType* ptype) {
     if (type == TY_STRUCT)
         ret->size = offset;
 
-    if (ret->name.ptr)
+    if (ret->name.ptr && !found_prev)
         A3_HT_INSERT(A3CString, TypePtr)(&reg->current_scope->tags, ret->name, ret);
 
     return ret;

@@ -178,7 +178,8 @@ tests = {
     'named_global_decl',
     'global',
     'assign',
-    'ptr_access'
+    'ptr_access',
+    'forward_decl'
   ],
   'union': [
     'simple',
