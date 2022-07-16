@@ -142,25 +142,26 @@ static void gen_load(Generator* gen, Type const* type) {
     assert(gen);
     assert(type);
 
-    if (type->type == TY_ARRAY || type->type == TY_STRUCT)
+    if (type->type == TY_ARRAY || type->type == TY_STRUCT || type->type == TY_UNION ||
+        type->type == TY_FN)
         return;
 
-    if (type->is_signed) {
-        if (type->size == 1)
-            gen_asm(gen, "movsx rax, BYTE [rax]");
-        else if (type->size == 2)
-            gen_asm(gen, "movsx rax, WORD [rax]");
-        else if (type->size <= 4)
-            gen_asm(gen, "movsx rax, DWORD [rax]");
-        else
-            gen_asm(gen, "mov rax, [rax]");
-    } else {
+    if (type->type == TY_PTR || !type->is_signed) {
         if (type->size == 1)
             gen_asm(gen, "movzx rax, BYTE [rax]");
         else if (type->size == 2)
             gen_asm(gen, "movzx rax, WORD [rax]");
         else if (type->size <= 4)
             gen_asm(gen, "mov eax, [rax]");
+        else
+            gen_asm(gen, "mov rax, [rax]");
+    } else {
+        if (type->size == 1)
+            gen_asm(gen, "movsx rax, BYTE [rax]");
+        else if (type->size == 2)
+            gen_asm(gen, "movsx rax, WORD [rax]");
+        else if (type->size <= 4)
+            gen_asm(gen, "movsx rax, DWORD [rax]");
         else
             gen_asm(gen, "mov rax, [rax]");
     }
@@ -171,7 +172,7 @@ static void gen_store(Generator* gen, Type const* type) {
 
     gen_stack_pop(gen, REG_DI);
 
-    if (type->type == TY_STRUCT) {
+    if (type->type == TY_STRUCT || type->type == TY_UNION) {
         gen_asm(gen,
                 "mov rcx, %zu\n"
                 "mov rsi, rax\n"
