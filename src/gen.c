@@ -637,20 +637,29 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
     assert(visitor);
     assert(call);
 
+    Generator* gen = visitor->ctx;
+
     size_t args = 0;
     A3_SLL_FOR_EACH(Arg, arg, &call->args, link) {
         args++;
         A3_TRYB(vertex_visit(visitor, VERTEX(arg->expr, expr)));
-        gen_stack_push(visitor->ctx);
+        gen_stack_push(gen);
     }
     assert(args <= 6);
 
     for (size_t i = 0; i < args; i++)
-        gen_stack_pop(visitor->ctx, ARG_REGISTERS[args - i - 1]);
+        gen_stack_pop(gen, ARG_REGISTERS[args - i - 1]);
+
+    bool align_stack = gen->stack_depth % 2 != 0;
+    if (align_stack)
+        gen_asm(gen, "sub rsp, 8");
 
     if (!call->obj->defined)
-        gen_asm(visitor->ctx, "extern " A3_S_F, A3_S_FORMAT(call->name));
-    gen_asm(visitor->ctx, "call " A3_S_F, A3_S_FORMAT(call->name));
+        gen_asm(gen, "extern " A3_S_F, A3_S_FORMAT(call->name));
+    gen_asm(gen, "call " A3_S_F, A3_S_FORMAT(call->name));
+
+    if (align_stack)
+        gen_asm(gen, "add rsp, 8");
 
     return true;
 }
