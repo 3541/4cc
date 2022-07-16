@@ -1101,9 +1101,12 @@ static Item* parse_declarator(Parser* parser, PType* type) {
     assert(parser);
     assert(type);
 
-    while (lex_peek(parser->lexer).type == TOK_STAR) {
+    while (lex_peek(parser->lexer).type == TOK_STAR || lex_peek(parser->lexer).type == TOK_CONST) {
         Token next = lex_next(parser->lexer);
-        type       = ptype_ptr_new(parse_span_merge(type->span, next.lexeme), type);
+        if (next.type == TOK_CONST)
+            continue;
+
+        type = ptype_ptr_new(parse_span_merge(type->span, next.lexeme), type);
     }
 
     Token next = lex_peek(parser->lexer);
