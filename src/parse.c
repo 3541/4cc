@@ -930,44 +930,73 @@ static PType* parse_declspec(Parser* parser) {
         return NULL;
     }
 
-    Token first = lex_peek(parser->lexer);
-
+    Token          first  = lex_peek(parser->lexer);
     DeclAttributes attrib = { 0 };
     if (first.type == TOK_TYPEDEF) {
         lex_next(parser->lexer);
         attrib.is_typedef = true;
     }
 
-    if (parse_has_decl_aggregate(parser)) {
-        PType* ret = parse_aggregate_decl(parser);
-        if (!ret)
-            return NULL;
-        ret->attributes = attrib;
-        return ret;
-    }
-
-    if (parse_has_defined_type(parser)) {
-        PType* ret      = ptype_defined_new(lex_next(parser->lexer).lexeme);
-        ret->attributes = attrib;
-        return ret;
-    }
-
-    Token            next = lex_peek(parser->lexer);
-    PTypeBuiltinType type = PTY_NOTHING;
-    while (parse_has_decl_typename(parser)) {
-        if (lex_peek(parser->lexer).type == TOK_CONST) {
+    PType*           ret          = NULL;
+    PTypeBuiltinType builtin_type = PTY_NOTHING;
+    Token            next         = lex_peek(parser->lexer);
+    while (parse_has_decl(parser)) {
+        next = lex_peek(parser->lexer);
+        if (next.type == TOK_CONST) {
             lex_next(parser->lexer);
             continue;
         }
 
-        if (!parse_decl_flag(parser, lex_next(parser->lexer), &type, &attrib))
+        if (parse_has_decl_aggregate(parser)) {
+            if (ret) {
+                parse_error(parser, lex_peek(parser->lexer),
+                            "Aggregate in declaration with existing type.");
+                return NULL;
+            }
+
+            ret = parse_aggregate_decl(parser);
+            if (!ret)
+                return NULL;
+            continue;
+        }
+
+        if (parse_has_defined_type(parser)) {
+            // This is technically wrong in the following situation:
+            //
+            //   typedef short T;
+            //   { typedef T; }
+            //
+            // Here, the type T in the inner scope should be defined as an alias to int. This code
+            // will not parse correctly.
+            if (ret || builtin_type != PTY_NOTHING)
+                break;
+
+            ret = ptype_defined_new(lex_next(parser->lexer).lexeme);
+            continue;
+        }
+
+        if (!parse_decl_flag(parser, lex_next(parser->lexer), &builtin_type, &attrib))
             return NULL;
     }
 
-    if (attrib.is_typedef && type == PTY_NOTHING)
-        type = PTY_INT;
+    if (ret) {
+        if (builtin_type != PTY_NOTHING) {
+            error_at(parser->src, ret->span, "Too many type names in declaration.");
+            return NULL;
+        }
+    } else {
+        if (builtin_type == PTY_NOTHING) {
+            if (attrib.is_typedef) {
+                builtin_type = PTY_INT;
+            } else {
+                error_at(parser->src, first.lexeme, "Type declaration without actual type.");
+                return NULL;
+            }
+        }
 
-    PType* ret      = ptype_builtin_new(parse_span_merge(first.lexeme, next.lexeme), type);
+        ret = ptype_builtin_new(parse_span_merge(first.lexeme, next.lexeme), builtin_type);
+    }
+
     ret->attributes = attrib;
 
     return ret;
