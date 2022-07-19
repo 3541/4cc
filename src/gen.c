@@ -216,7 +216,7 @@ static bool gen_lit(AstVisitor* visitor, Literal* lit) {
         break;
     case LIT_STR:
         assert(lit->storage);
-        assert(lit->storage->global);
+        assert(lit->storage->is_global);
 
         gen_asm(visitor->ctx, "lea rax, [rel " A3_S_F "]", A3_S_FORMAT(lit->storage->name));
         break;
@@ -229,7 +229,7 @@ static void gen_addr_obj(AstVisitor* visitor, Obj* obj) {
     assert(visitor);
     assert(obj);
 
-    if (obj->global)
+    if (obj->is_global)
         gen_asm(visitor->ctx, "lea rax, [rel " A3_S_F "]", A3_S_FORMAT(obj->name));
     else
         gen_asm(visitor->ctx, "lea rax, [rbp - %zu]", obj->stack_offset);
@@ -671,7 +671,7 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
     if (align_stack)
         gen_asm(gen, "sub rsp, 8");
 
-    if (!call->obj->defined)
+    if (!call->obj->is_defined)
         gen_asm(gen, "extern " A3_S_F, A3_S_FORMAT(call->name));
     gen_asm(gen, "call " A3_S_F, A3_S_FORMAT(call->name));
 
@@ -690,13 +690,16 @@ static bool gen_fn(AstVisitor* visitor, Item* decl) {
     if (!decl->body)
         return true;
 
+    gen_asm(visitor->ctx, "%c", '\n');
+    if (!decl->attributes.is_static)
+        gen_asm(visitor->ctx, "global $" A3_S_F, A3_S_FORMAT(decl->name));
+
     gen_asm(visitor->ctx,
-            "\nglobal $" A3_S_F "\n"
             "$" A3_S_F ":\n"
             "push rbp\n"
             "mov rbp, rsp\n"
             "sub rsp, %zu",
-            A3_S_FORMAT(decl->name), A3_S_FORMAT(decl->name), decl->obj->stack_depth);
+            A3_S_FORMAT(decl->name), decl->obj->stack_depth);
 
     size_t i = 0;
     A3_SLL_FOR_EACH(Item, param, &decl->obj->params, link) {
@@ -726,7 +729,7 @@ static bool gen_decl(AstVisitor* visitor, Item* decl) {
     if (decl->obj->type->type == TY_FN)
         return gen_fn(visitor, decl);
 
-    if (decl->obj->global || !decl->init)
+    if (decl->obj->is_global || !decl->init)
         return true;
 
     gen_addr_obj(visitor, decl->obj);
@@ -823,12 +826,13 @@ static bool gen_data(Generator* gen, Vertex* root) {
             continue;
         }
 
-        gen_asm(gen, "global $" A3_S_F, A3_S_FORMAT(decl->name));
+        if (!decl->attributes.is_static)
+            gen_asm(gen, "global $" A3_S_F, A3_S_FORMAT(decl->name));
         if (type->align != 1)
             gen_asm(gen, "align %zu, db 0", type->align);
 
         if (decl->obj->init) {
-            if (decl->obj->defined)
+            if (decl->obj->is_defined)
                 continue;
 
             Expr* init = decl->obj->init;
@@ -856,7 +860,7 @@ static bool gen_data(Generator* gen, Vertex* root) {
                 break;
             }
 
-            decl->obj->defined = true;
+            decl->obj->is_defined = true;
         } else {
             gen_asm(gen, "$" A3_S_F ": times %zu db 0", A3_S_FORMAT(decl->name), type->size);
         }

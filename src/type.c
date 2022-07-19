@@ -96,8 +96,8 @@ static Obj* obj_new(A3CString name, Type const* type, Expr* init, size_t stack_o
         .type         = type,
         .init         = init,
         .stack_offset = stack_offset,
-        .global       = global,
-        .defined      = false,
+        .is_global    = global,
+        .is_defined   = false,
     };
 
     return ret;
@@ -106,8 +106,8 @@ static Obj* obj_new(A3CString name, Type const* type, Expr* init, size_t stack_o
 #define OBJ_FN_DEFINED   true
 #define OBJ_FN_UNDEFINED false
 static Obj* obj_fn_new(A3CString name, Type const* type, bool defined) {
-    Obj* ret     = obj_new(name, type, NULL, 0, OBJ_GLOBAL);
-    ret->defined = defined;
+    Obj* ret        = obj_new(name, type, NULL, 0, OBJ_GLOBAL);
+    ret->is_defined = defined;
 
     return ret;
 }
@@ -882,7 +882,7 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
     Registry* reg  = visitor->ctx;
     Obj*      prev = scope_find(reg->current_scope, decl->name);
 
-    if (prev && prev->defined && decl->body) {
+    if (prev && prev->is_defined && decl->body) {
         type_error(reg, VERTEX(decl, item), "Redefinition of already-defined function.");
         return false;
     }
@@ -893,7 +893,7 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
         return false;
     }
 
-    if (prev && prev->defined) {
+    if (prev && prev->is_defined) {
         decl->decl_type = fn_type;
         return true;
     }
@@ -930,8 +930,8 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
     }
 
     if (prev) {
-        decl->obj          = prev;
-        decl->obj->defined = decl->obj->defined || decl->body;
+        decl->obj             = prev;
+        decl->obj->is_defined = decl->obj->is_defined || decl->body;
     } else {
         decl->obj = obj_fn_new(decl->name, fn_type, decl->body ? OBJ_FN_DEFINED : OBJ_FN_UNDEFINED);
         scope_add(reg->current_scope, decl->obj);

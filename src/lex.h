@@ -74,6 +74,7 @@ typedef enum TokenType {
     TOK_SIZEOF,
     TOK_SLASH,
     TOK_STAR,
+    TOK_STATIC,
     TOK_STRUCT,
     TOK_TILDE,
     TOK_TYPEDEF,

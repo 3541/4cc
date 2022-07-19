@@ -100,7 +100,8 @@ tests = {
     'args6',
     'nested',
     'very_nested',
-    'variadic'
+    'variadic',
+    'static'
   ],
   'fn': [
     'simple',

@@ -246,6 +246,7 @@ typedef struct DeclAttributes {
     bool is_typedef;
     bool is_extern;
     bool is_variadic;
+    bool is_static;
 } DeclAttributes;
 
 typedef struct PType {

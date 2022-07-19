@@ -84,8 +84,8 @@ typedef struct Type {
 typedef struct Obj {
     A3CString   name;
     Type const* type;
-    bool        global;
-    bool        defined;
+    bool        is_global;
+    bool        is_defined;
 
     union {
         struct {

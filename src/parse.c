@@ -172,7 +172,8 @@ static bool parse_has_decl_typename(Parser* parser) {
     assert(parser);
 
     Token next = lex_peek(parser->lexer);
-    return parse_has_decl_builtin(parser) || next.type == TOK_EXTERN || next.type == TOK_CONST;
+    return parse_has_decl_builtin(parser) || next.type == TOK_EXTERN || next.type == TOK_CONST ||
+           next.type == TOK_STATIC;
 }
 
 static bool parse_has_decl_aggregate(Parser* parser) {
@@ -852,6 +853,13 @@ static bool parse_decl_flag(Parser* parser, Token tok, PTypeBuiltinType* type,
             return false;
         }
         attrib->is_extern = true;
+        break;
+    case TOK_STATIC:
+        if (attrib->is_static) {
+            parse_error(parser, tok, "Duplicate use of static in type declaration.");
+            return false;
+        }
+        attrib->is_static = true;
         break;
     case TOK_VOID:
         if (*type != PTY_NOTHING) {
