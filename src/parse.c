@@ -220,6 +220,10 @@ static BinOpType parse_bin_op(TokenType type) {
         return OP_OR;
     case TOK_PERCENT:
         return OP_MOD;
+    case TOK_LT_LT:
+        return OP_SHL;
+    case TOK_GT_GT:
+        return OP_SHR;
     case TOK_AMP:
         A3_PANIC("TODO");
     default:
@@ -351,8 +355,8 @@ static PType* parse_anon_type(Parser* parser) {
 }
 
 static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
-    [TOK_PLUS] = 17, [TOK_MINUS] = 17, [TOK_AMP] = 17,    [TOK_STAR] = 17,
-    [TOK_BANG] = 17, [TOK_TILDE] = 17, [TOK_SIZEOF] = 17, [TOK_LPAREN] = 17,
+    [TOK_PLUS] = 19, [TOK_MINUS] = 19, [TOK_AMP] = 19,    [TOK_STAR] = 19,
+    [TOK_BANG] = 19, [TOK_TILDE] = 19, [TOK_SIZEOF] = 19, [TOK_LPAREN] = 19,
 };
 
 static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
@@ -369,16 +373,18 @@ static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
     [TOK_GT] = { 11, 12 },      [TOK_GT_EQ] = { 11, 12 },
     [TOK_LT] = { 11, 12 },      [TOK_LT_EQ] = { 11, 12 },
 
-    [TOK_PLUS] = { 13, 14 },    [TOK_MINUS] = { 13, 14 },
+    [TOK_LT_LT] = {13, 14}, [TOK_GT_GT] = { 13, 14 },
 
-    [TOK_STAR] = { 15, 16 },    [TOK_SLASH] = { 15, 16 }, [TOK_PERCENT] = { 15, 16, },
+    [TOK_PLUS] = { 15, 16 },    [TOK_MINUS] = { 15, 16 },
 
-    [TOK_DOT] = { 19, 20 },     [TOK_MINUS_GT] = { 19, 20 }
+    [TOK_STAR] = { 17, 18 },    [TOK_SLASH] = { 17, 18 }, [TOK_PERCENT] = { 17, 18, },
+
+    [TOK_DOT] = { 21, 22 },     [TOK_MINUS_GT] = { 21, 22 }
 };
 
 static uint8_t POSTFIX_PRECEDENCE[TOK_COUNT] = {
-    [TOK_LPAREN]   = 19,
-    [TOK_LBRACKET] = 19,
+    [TOK_LPAREN]   = 21,
+    [TOK_LBRACKET] = 21,
 };
 
 static Expr* parse_expr(Parser* parser, uint8_t precedence) {

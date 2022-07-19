@@ -79,6 +79,12 @@ static bool eval_bin_op(AstVisitor* visitor, BinOp* op) {
     case OP_GE:
         ctx->ret = lhs >= rhs;
         break;
+    case OP_SHL:
+        ctx->ret = lhs << rhs;
+        break;
+    case OP_SHR:
+        ctx->ret = lhs >> rhs;
+        break;
     case OP_AND:
     case OP_OR:
     case OP_ASSIGN:

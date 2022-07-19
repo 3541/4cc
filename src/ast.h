@@ -52,6 +52,8 @@ typedef enum BinOpType {
     OP_MUL,
     OP_NE,
     OP_OR,
+    OP_SHL,
+    OP_SHR,
     OP_SUB,
 } BinOpType;
 

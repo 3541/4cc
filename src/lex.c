@@ -259,24 +259,38 @@ static Token lex_op(Lexer* lexer) {
         type = TOK_BANG_EQ;
         break;
     case '<':
-        if (lexeme.ptr[1] != '=') {
+        switch (lexeme.ptr[1]) {
+        case '=':
+            lexeme.len++;
+            lex_consume_any(lexer, 1);
+            type = TOK_LT_EQ;
+            break;
+        case '<':
+            lexeme.len++;
+            lex_consume_any(lexer, 1);
+            type = TOK_LT_LT;
+            break;
+        default:
             type = TOK_LT;
             break;
         }
-
-        lexeme.len++;
-        lex_consume_any(lexer, 1);
-        type = TOK_LT_EQ;
         break;
     case '>':
-        if (lexeme.ptr[1] != '=') {
+        switch (lexeme.ptr[1]) {
+        case '=':
+            lexeme.len++;
+            lex_consume_any(lexer, 1);
+            type = TOK_GT_EQ;
+            break;
+        case '>':
+            lexeme.len++;
+            lex_consume_any(lexer, 1);
+            type = TOK_GT_GT;
+            break;
+        default:
             type = TOK_GT;
             break;
         }
-
-        lexeme.len++;
-        lex_consume_any(lexer, 1);
-        type = TOK_GT_EQ;
         break;
     case '&':
         if (lexeme.ptr[1] != '&') {

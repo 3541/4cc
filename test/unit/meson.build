@@ -34,7 +34,9 @@ tests = {
     'multiple_stmts',
     'mod',
     'i32',
-    'cast'
+    'cast',
+    'shl',
+    'shr'
   ],
   'var': [
     'simple',

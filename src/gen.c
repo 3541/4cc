@@ -539,6 +539,17 @@ static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
                 insn);
         break;
     }
+    case OP_SHL:
+        gen_asm(visitor->ctx, "mov rcx, rdi");
+        gen_asm(visitor->ctx, "shl rax, cl");
+        break;
+    case OP_SHR:
+        gen_asm(visitor->ctx, "mov rcx, rdi");
+        if (op->rhs->res_type->is_signed)
+            gen_asm(visitor->ctx, "sar rax, cl");
+        else
+            gen_asm(visitor->ctx, "shr rax, cl");
+        break;
     case OP_AND:
     case OP_ASSIGN:
     case OP_CAST:

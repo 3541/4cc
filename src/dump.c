@@ -119,6 +119,12 @@ static bool dump_bin_op(AstVisitor* visitor, BinOp* op) {
     case OP_CAST:
         op_str = "CAST";
         break;
+    case OP_SHL:
+        op_str = "<<";
+        break;
+    case OP_SHR:
+        op_str = ">>";
+        break;
     }
 
     A3String type = dump_get_type(EXPR(op, bin_op)->res_type);
