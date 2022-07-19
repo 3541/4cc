@@ -304,8 +304,8 @@ static Token lex_op(Lexer* lexer) {
         break;
     case '|':
         if (lexeme.ptr[1] != '|') {
-            lex_error(lexer, "Expected a '|'.");
-            return lex_recover(lexer);
+            type = TOK_PIPE;
+            break;
         }
 
         lexeme.len++;

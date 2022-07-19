@@ -125,6 +125,12 @@ static bool dump_bin_op(AstVisitor* visitor, BinOp* op) {
     case OP_SHR:
         op_str = ">>";
         break;
+    case OP_BW_AND:
+        op_str = "&";
+        break;
+    case OP_BW_OR:
+        op_str = "|";
+        break;
     }
 
     A3String type = dump_get_type(EXPR(op, bin_op)->res_type);

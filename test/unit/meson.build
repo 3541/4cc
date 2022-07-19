@@ -36,7 +36,9 @@ tests = {
     'i32',
     'cast',
     'shl',
-    'shr'
+    'shr',
+    'and',
+    'or'
   ],
   'var': [
     'simple',

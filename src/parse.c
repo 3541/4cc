@@ -225,7 +225,9 @@ static BinOpType parse_bin_op(TokenType type) {
     case TOK_GT_GT:
         return OP_SHR;
     case TOK_AMP:
-        A3_PANIC("TODO");
+        return OP_BW_AND;
+    case TOK_PIPE:
+        return OP_BW_OR;
     default:
         A3_PANIC("Not a binary operator.");
     }
@@ -355,8 +357,8 @@ static PType* parse_anon_type(Parser* parser) {
 }
 
 static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
-    [TOK_PLUS] = 19, [TOK_MINUS] = 19, [TOK_AMP] = 19,    [TOK_STAR] = 19,
-    [TOK_BANG] = 19, [TOK_TILDE] = 19, [TOK_SIZEOF] = 19, [TOK_LPAREN] = 19,
+    [TOK_PLUS] = 23, [TOK_MINUS] = 23, [TOK_AMP] = 23,    [TOK_STAR] = 23,
+    [TOK_BANG] = 23, [TOK_TILDE] = 23, [TOK_SIZEOF] = 23, [TOK_LPAREN] = 23,
 };
 
 static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
@@ -368,23 +370,27 @@ static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
 
     [TOK_AMP_AMP] = { 7, 8 },
 
-    [TOK_EQ_EQ] = { 9, 10 },    [TOK_BANG_EQ] = { 9, 10 },
+    [TOK_PIPE] = { 9, 10 },
 
-    [TOK_GT] = { 11, 12 },      [TOK_GT_EQ] = { 11, 12 },
-    [TOK_LT] = { 11, 12 },      [TOK_LT_EQ] = { 11, 12 },
+    [TOK_AMP] = { 11, 12 },
 
-    [TOK_LT_LT] = {13, 14}, [TOK_GT_GT] = { 13, 14 },
+    [TOK_EQ_EQ] = { 13, 14 },    [TOK_BANG_EQ] = { 13, 14 },
 
-    [TOK_PLUS] = { 15, 16 },    [TOK_MINUS] = { 15, 16 },
+    [TOK_GT] = { 15, 16 },      [TOK_GT_EQ] = { 15, 16 },
+    [TOK_LT] = { 15, 16 },      [TOK_LT_EQ] = { 15, 16 },
 
-    [TOK_STAR] = { 17, 18 },    [TOK_SLASH] = { 17, 18 }, [TOK_PERCENT] = { 17, 18, },
+    [TOK_LT_LT] = {17, 18}, [TOK_GT_GT] = { 17, 18 },
 
-    [TOK_DOT] = { 21, 22 },     [TOK_MINUS_GT] = { 21, 22 }
+    [TOK_PLUS] = { 19, 20 },    [TOK_MINUS] = { 19, 20 },
+
+    [TOK_STAR] = { 21, 22 },    [TOK_SLASH] = { 21, 22 }, [TOK_PERCENT] = { 21, 22, },
+
+    [TOK_DOT] = { 25, 26 },     [TOK_MINUS_GT] = { 25, 26 }
 };
 
 static uint8_t POSTFIX_PRECEDENCE[TOK_COUNT] = {
-    [TOK_LPAREN]   = 21,
-    [TOK_LBRACKET] = 21,
+    [TOK_LPAREN]   = 25,
+    [TOK_LBRACKET] = 25,
 };
 
 static Expr* parse_expr(Parser* parser, uint8_t precedence) {

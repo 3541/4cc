@@ -692,6 +692,8 @@ static bool type_bin_op(AstVisitor* visitor, BinOp* op) {
     case OP_MOD:
     case OP_SHL:
     case OP_SHR:
+    case OP_BW_AND:
+    case OP_BW_OR:
         if (!type_is_scalar(op->lhs->res_type)) {
             A3String name = type_name(op->lhs->res_type);
             type_error(visitor->ctx, VERTEX(op->lhs, expr),
