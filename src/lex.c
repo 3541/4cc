@@ -382,7 +382,7 @@ static Token lex_ident_or_kw(Lexer* lexer) {
         { A3_CS("short"), TOK_SHORT },       { A3_CS("long"), TOK_LONG },
         { A3_CS("typedef"), TOK_TYPEDEF },   { A3_CS("unsigned"), TOK_UNSIGNED },
         { A3_CS("signed"), TOK_SIGNED },     { A3_CS("extern"), TOK_EXTERN },
-        { A3_CS("const"), TOK_CONST },
+        { A3_CS("const"), TOK_CONST },       { A3_CS("enum"), TOK_ENUM },
     };
 
     A3CString lexeme = lex_consume_until(lexer, is_not_ident);

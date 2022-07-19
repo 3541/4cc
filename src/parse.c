@@ -179,7 +179,7 @@ static bool parse_has_decl_aggregate(Parser* parser) {
     assert(parser);
 
     Token next = lex_peek(parser->lexer);
-    return next.type == TOK_STRUCT || next.type == TOK_UNION;
+    return next.type == TOK_STRUCT || next.type == TOK_UNION || next.type == TOK_ENUM;
 }
 
 static bool parse_has_decl(Parser* parser) {
@@ -333,7 +333,7 @@ static PType* parse_anon_type(Parser* parser) {
         return NULL;
 
     assert(base->type == PTY_BUILTIN || base->type == PTY_STRUCT || base->type == PTY_UNION ||
-           base->type == PTY_DEFINED);
+           base->type == PTY_ENUM || base->type == PTY_DEFINED);
 
     Item* decl = parse_declarator(parser, base);
     if (!decl)
@@ -730,11 +730,50 @@ static Item* parse_stmt(Parser* parser) {
     }
 }
 
+static PType* parse_enum_decl(Parser* parser, PType* type) {
+    assert(parser);
+    assert(type);
+    assert(type->type == PTY_ENUM);
+
+    bool first = true;
+    while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_RBRACE) {
+        if (!first && !parse_consume(parser, A3_CS("comma"), TOK_COMMA))
+            return NULL;
+        first = false;
+
+        Token name = lex_next(parser->lexer);
+        if (name.type != TOK_IDENT) {
+            parse_error(parser, name, "Expected an identifier.");
+            return NULL;
+        }
+
+        Expr* init = NULL;
+        Token next = lex_peek(parser->lexer);
+        if (next.type == TOK_EQ) {
+            lex_next(parser->lexer);
+
+            init = parse_expr(parser, 0);
+            if (!init)
+                return NULL;
+        }
+
+        Member* member = member_new(name.lexeme.text, type);
+        member->init   = init;
+
+        A3_SLL_ENQUEUE(&type->members, member, link);
+    }
+
+    if (!parse_consume(parser, A3_CS("closing brace"), TOK_RBRACE))
+        return NULL;
+
+    return type;
+}
+
 static PType* parse_aggregate_decl(Parser* parser) {
     assert(parser);
 
     Token s = lex_next(parser->lexer);
-    if (s.type != TOK_STRUCT && s.type != TOK_UNION) {
+    if (s.type != TOK_STRUCT && s.type != TOK_UNION && s.type != TOK_ENUM) {
         parse_error(parser, s, "Expected an aggregate declaration.");
         return NULL;
     }
@@ -747,11 +786,17 @@ static PType* parse_aggregate_decl(Parser* parser) {
     }
 
     PType* ret = ptype_aggregate_new(name.text.ptr ? parse_span_merge(s.lexeme, name) : s.lexeme,
-                                     s.type == TOK_STRUCT ? PTY_STRUCT : PTY_UNION, name);
+                                     s.type == TOK_STRUCT  ? PTY_STRUCT
+                                     : s.type == TOK_UNION ? PTY_UNION
+                                                           : PTY_ENUM,
+                                     name);
 
     if (lex_peek(parser->lexer).type != TOK_LBRACE)
         return ret;
     lex_next(parser->lexer);
+
+    if (ret->type == PTY_ENUM)
+        return parse_enum_decl(parser, ret);
 
     while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_RBRACE) {
         Items items;
@@ -1195,7 +1240,7 @@ static bool parse_decl(Parser* parser, Items* items) {
     if (!base)
         return false;
     assert(base->type == PTY_BUILTIN || base->type == PTY_STRUCT || base->type == PTY_UNION ||
-           base->type == PTY_DEFINED);
+           base->type == PTY_DEFINED || base->type == PTY_ENUM);
 
     bool first = true;
     while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_SEMI) {
@@ -1231,7 +1276,8 @@ static bool parse_decl(Parser* parser, Items* items) {
         }
     }
 
-    if (first && (base->type == PTY_STRUCT || base->type == PTY_UNION) && base->name.text.ptr) {
+    if (first && (base->type == PTY_STRUCT || base->type == PTY_UNION || base->type == PTY_ENUM) &&
+        (base->name.text.ptr || base->type == PTY_ENUM)) {
         Item* decl = vertex_decl_new(base->name, A3_CS_NULL, base);
         A3_SLL_ENQUEUE(items, decl, link);
     }

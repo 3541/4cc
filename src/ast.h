@@ -187,6 +187,9 @@ typedef struct Member {
     size_t offset;
 
     union {
+        Expr* init; // PTY_ENUM
+
+        // PTY_STRUCT and PTY_UNION.
         PType*      ptype;
         Type const* type;
     };
@@ -197,6 +200,7 @@ typedef enum PTypeType {
     PTY_BUILTIN,
     PTY_DEFINED,
     PTY_DUMMY,
+    PTY_ENUM,
     PTY_FN,
     PTY_PTR,
     PTY_STRUCT,
@@ -252,9 +256,9 @@ typedef struct PType {
             A3CString        defined_name; // PTY_DEFINED
         };
 
-        // PTY_STRUCT
+        // PTY_STRUCT and PTY_UNION.
         struct {
-            Span name; // PTY_DEFINED
+            Span name;
             A3_SLL(, Member) members;
         };
 

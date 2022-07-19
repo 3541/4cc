@@ -36,8 +36,10 @@ typedef enum TypeType {
     TY_U32,
     TY_U64,
     TY_USIZE,
+    TY_ENUM_CONSTANT,
 
     TY_ARRAY,
+    TY_ENUM,
     TY_FN,
     TY_PTR,
     TY_STRUCT,
@@ -97,6 +99,8 @@ typedef struct Obj {
             Scope* scope;
             A3_SLL(, Item) params;
         };
+
+        uint32_t value; // TY_ENUM_CONSTANT
     };
 } Obj;
 

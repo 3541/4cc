@@ -219,6 +219,12 @@ tests = {
   'std': [
     'assert',
     'stdio'
+  ],
+  'enum': [
+    'simple',
+    'named',
+    'size',
+    'explicit'
   ]
 }
 

@@ -59,7 +59,7 @@ typedef struct Registry {
     size_t    lit_count;
 } Registry;
 
-static Type const* BUILTIN_TYPES[11] = {
+static Type const* BUILTIN_TYPES[12] = {
     [TY_VOID] = &(Type) { .type = TY_VOID, .size = 0, .align = 0 },
     [TY_I8]   = &(Type) { .type = TY_I8, .size = 1, .align = 1, .is_signed = true },
     [TY_I16]  = &(Type) { .type = TY_I16, .size = 2, .align = 2, .is_signed = true },
@@ -76,6 +76,9 @@ static Type const* BUILTIN_TYPES[11] = {
                            .size      = sizeof(size_t),
                            .align     = alignof(size_t),
                            .is_signed = false },
+
+    [TY_ENUM_CONSTANT] =
+        &(Type) { .type = TY_ENUM_CONSTANT, .size = 4, .align = 4, .is_signed = false },
 };
 
 static Type const* type_from_ptype(Registry*, PType*);
@@ -105,6 +108,13 @@ static Obj* obj_new(A3CString name, Type const* type, Expr* init, size_t stack_o
 static Obj* obj_fn_new(A3CString name, Type const* type, bool defined) {
     Obj* ret     = obj_new(name, type, NULL, 0, OBJ_GLOBAL);
     ret->defined = defined;
+
+    return ret;
+}
+
+static Obj* obj_enum_const_new(A3CString name, uint32_t value) {
+    Obj* ret   = obj_new(name, BUILTIN_TYPES[TY_ENUM_CONSTANT], NULL, 0, OBJ_LOCAL);
+    ret->value = value;
 
     return ret;
 }
@@ -249,6 +259,8 @@ A3String type_name(Type const* type) {
         return a3_string_clone(A3_CS("__u64"));
     case TY_USIZE:
         return a3_string_clone(A3_CS("__usize"));
+    case TY_ENUM_CONSTANT:
+        return a3_string_clone(A3_CS("<enum constant>"));
     case TY_PTR: {
         A3String base = type_name(type->parent);
         A3String ret  = a3_string_alloc(base.len + 1);
@@ -305,6 +317,14 @@ A3String type_name(Type const* type) {
             return a3_string_clone(A3_CS("union <anonymous>"));
         A3Buffer* buf = a3_buf_new(24, 512);
         a3_buf_write_fmt(buf, "union " A3_S_F, A3_S_FORMAT(type->name));
+
+        return A3_CS_MUT(a3_buf_read_ptr(buf));
+    }
+    case TY_ENUM: {
+        if (!type->name.ptr)
+            return a3_string_clone(A3_CS("enum <anonymous>"));
+        A3Buffer* buf = a3_buf_new(24, 512);
+        a3_buf_write_fmt(buf, "enum " A3_S_F, A3_S_FORMAT(type->name));
 
         return A3_CS_MUT(a3_buf_read_ptr(buf));
     }
@@ -457,9 +477,11 @@ static Type const* type_fn_from_ptype(Registry* reg, PType const* ptype) {
 static Type const* type_aggregate_from_ptype(Registry* reg, PType* ptype) {
     assert(reg);
     assert(ptype);
-    assert(ptype->type == PTY_STRUCT || ptype->type == PTY_UNION);
+    assert(ptype->type == PTY_STRUCT || ptype->type == PTY_UNION || ptype->type == PTY_ENUM);
 
-    TypeType type = ptype->type == PTY_STRUCT ? TY_STRUCT : TY_UNION;
+    TypeType type = ptype->type == PTY_STRUCT  ? TY_STRUCT
+                    : ptype->type == PTY_UNION ? TY_UNION
+                                               : TY_ENUM;
 
     Type* ret        = NULL;
     bool  found_prev = false;
@@ -501,9 +523,26 @@ static Type const* type_aggregate_from_ptype(Registry* reg, PType* ptype) {
     while (!A3_SLL_IS_EMPTY(&ptype->members)) {
         Member* member = A3_SLL_HEAD(&ptype->members);
         A3_SLL_DEQUEUE(&ptype->members, link);
+        A3_SLL_ENQUEUE(&ret->members, member, link);
 
-        member->type = type_from_ptype(reg, member->ptype);
+        if (type == TY_ENUM) {
+            if (member->init) {
+                EvalResult res = eval(reg->src, member->init);
+                if (!res.ok)
+                    return NULL;
+                if (res.value < 0 || res.value > UINT32_MAX) {
+                    error_at(reg->src, ptype->span, "Invalid enum constant value.");
+                    return NULL;
+                }
 
+                offset = (size_t)res.value;
+            }
+
+            scope_add(reg->current_scope, obj_enum_const_new(member->name, (uint32_t)offset++));
+            continue;
+        }
+
+        member->type   = type_from_ptype(reg, member->ptype);
         member->offset = 0;
         if (type == TY_STRUCT) {
             member->offset = offset = align_up(offset, member->type->align);
@@ -513,11 +552,13 @@ static Type const* type_aggregate_from_ptype(Registry* reg, PType* ptype) {
         }
 
         ret->align = MAX(ret->align, member->type->align);
-
-        A3_SLL_ENQUEUE(&ret->members, member, link);
     }
-    if (type == TY_STRUCT)
+    if (type == TY_STRUCT) {
         ret->size = offset;
+    } else if (type == TY_ENUM) {
+        ret->size  = BUILTIN_TYPES[TY_I32]->size;
+        ret->align = BUILTIN_TYPES[TY_I32]->align;
+    }
 
     if (ret->name.ptr && !found_prev)
         A3_HT_INSERT(A3CString, TypePtr)(&reg->current_scope->tags, ret->name, ret);
@@ -551,6 +592,7 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
         return type_fn_from_ptype(reg, ptype);
     case PTY_STRUCT:
     case PTY_UNION:
+    case PTY_ENUM:
         return type_aggregate_from_ptype(reg, ptype);
     case PTY_BUILTIN:
         switch (ptype->builtin_type) {
@@ -982,7 +1024,9 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
         }
     }
 
-    if (!decl->name.ptr && (type->type == TY_STRUCT || type->type == TY_UNION) && type->name.ptr)
+    if (!decl->name.ptr &&
+        (type->type == TY_STRUCT || type->type == TY_UNION || type->type == TY_ENUM) &&
+        (type->name.ptr || type->type == TY_ENUM))
         return true;
 
     if (decl->init) {

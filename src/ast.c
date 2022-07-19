@@ -119,7 +119,6 @@ Item* vertex_break_continue_new(Span span, StmtType type) {
 }
 
 Item* vertex_decl_new(Span span, A3CString name, PType* type) {
-    assert(span.text.ptr);
     assert(type);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
@@ -489,7 +488,7 @@ PType* ptype_array_new(Span span, PType* base, Expr* len) {
 
 PType* ptype_aggregate_new(Span span, PTypeType type, Span name) {
     assert(span.text.ptr);
-    assert(type == PTY_STRUCT || type == PTY_UNION);
+    assert(type == PTY_STRUCT || type == PTY_UNION || type == PTY_ENUM);
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
     *ret = (PType) { .type = type, .span = span, .attributes = { 0 }, .name = name };
