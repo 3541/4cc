@@ -38,7 +38,9 @@ tests = {
     'shl',
     'shr',
     'and',
-    'or'
+    'or',
+    'inc',
+    'dec'
   ],
   'var': [
     'simple',

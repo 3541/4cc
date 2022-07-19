@@ -217,9 +217,6 @@ static Token lex_op(Lexer* lexer) {
 
     TokenType type;
     switch (lexeme.ptr[0]) {
-    case '+':
-        type = TOK_PLUS;
-        break;
     case '*':
         type = TOK_STAR;
         break;
@@ -237,6 +234,16 @@ static Token lex_op(Lexer* lexer) {
         break;
     case '%':
         type = TOK_PERCENT;
+        break;
+    case '+':
+        if (lexeme.ptr[1] != '+') {
+            type = TOK_PLUS;
+            break;
+        }
+
+        lexeme.len++;
+        lex_consume_any(lexer, 1);
+        type = TOK_PLUS_PLUS;
         break;
     case '=':
         if (lexeme.ptr[1] != '=') {
@@ -313,14 +320,21 @@ static Token lex_op(Lexer* lexer) {
         type = TOK_PIPE_PIPE;
         break;
     case '-':
-        if (lexeme.ptr[1] != '>') {
+        switch (lexeme.ptr[1]) {
+        case '>':
+            lexeme.len++;
+            lex_consume_any(lexer, 1);
+            type = TOK_MINUS_GT;
+            break;
+        case '-':
+            lexeme.len++;
+            lex_consume_any(lexer, 1);
+            type = TOK_MINUS_MINUS;
+            break;
+        default:
             type = TOK_MINUS;
             break;
         }
-
-        lexeme.len++;
-        lex_consume_any(lexer, 1);
-        type = TOK_MINUS_GT;
         break;
     case '.':
         if (lexeme.ptr[1] != '.' || lexeme.ptr[2] != '.') {

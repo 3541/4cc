@@ -1,1 +1,1 @@
-int main(void) { return --8; }
+int main(void) { return -(-8); }

@@ -358,8 +358,9 @@ static PType* parse_anon_type(Parser* parser) {
 }
 
 static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
-    [TOK_PLUS] = 23, [TOK_MINUS] = 23, [TOK_AMP] = 23,    [TOK_STAR] = 23,
-    [TOK_BANG] = 23, [TOK_TILDE] = 23, [TOK_SIZEOF] = 23, [TOK_LPAREN] = 23,
+    [TOK_PLUS] = 23,      [TOK_MINUS] = 23,       [TOK_AMP] = 23,    [TOK_STAR] = 23,
+    [TOK_BANG] = 23,      [TOK_TILDE] = 23,       [TOK_SIZEOF] = 23, [TOK_LPAREN] = 23,
+    [TOK_PLUS_PLUS] = 23, [TOK_MINUS_MINUS] = 23,
 };
 
 static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
@@ -390,8 +391,10 @@ static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
 };
 
 static uint8_t POSTFIX_PRECEDENCE[TOK_COUNT] = {
-    [TOK_LPAREN]   = 25,
-    [TOK_LBRACKET] = 25,
+    [TOK_LPAREN]      = 25,
+    [TOK_LBRACKET]    = 25,
+    [TOK_PLUS_PLUS]   = 25,
+    [TOK_MINUS_MINUS] = 25,
 };
 
 static Expr* parse_expr(Parser* parser, uint8_t precedence) {
@@ -462,6 +465,25 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
                                   operand);
         break;
     }
+    case TOK_PLUS_PLUS:
+    case TOK_MINUS_MINUS: {
+        Token op = lex_next(parser->lexer);
+        assert(op.type == TOK_PLUS_PLUS || op.type == TOK_MINUS_MINUS);
+
+        Expr* operand = parse_expr(parser, PREFIX_PRECEDENCE[op.type]);
+        if (!operand)
+            return NULL;
+
+        Span span = parse_span_merge(op.lexeme, SPAN(operand, expr));
+        // Prefix increment/decrement is expanded like so:
+        //     x++ -> x = x + 1
+        //     x-- -> x = x - 1
+        lhs = vertex_bin_op_new(span, OP_ASSIGN, operand,
+                                vertex_bin_op_new(span, op.type == TOK_PLUS_PLUS ? OP_ADD : OP_SUB,
+                                                  operand, vertex_lit_num_new(op.lexeme, 1)));
+
+        break;
+    }
     default:
         if (!PREFIX_PRECEDENCE[tok.type]) {
             parse_error(parser, lex_next(parser->lexer),
@@ -495,6 +517,24 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
             case TOK_LBRACKET:
                 lhs = parse_index(parser, lhs);
                 break;
+            case TOK_PLUS_PLUS:
+            case TOK_MINUS_MINUS: {
+                lex_next(parser->lexer);
+
+                Span  span    = parse_span_merge(SPAN(lhs, expr), tok_op.lexeme);
+                Expr* lit_one = vertex_lit_num_new(tok_op.lexeme, 1);
+                // Suffix increment/decrement is expanded like so:
+                //     x++ -> (x = x + 1) - 1
+                //     x-- -> (x = x - 1) + 1
+                lhs = vertex_bin_op_new(
+                    span, tok_op.type == TOK_PLUS_PLUS ? OP_SUB : OP_ADD,
+                    vertex_bin_op_new(
+                        span, OP_ASSIGN, lhs,
+                        vertex_bin_op_new(span, tok_op.type == TOK_PLUS_PLUS ? OP_ADD : OP_SUB, lhs,
+                                          lit_one)),
+                    lit_one);
+                break;
+            }
             default:
                 A3_PANIC("Todo: other postfix operators.");
             }
