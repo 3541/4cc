@@ -59,23 +59,16 @@ typedef struct Registry {
     size_t    lit_count;
 } Registry;
 
-static Type const* BUILTIN_TYPES[12] = {
+static Type const* BUILTIN_TYPES[] = {
     [TY_VOID] = &(Type) { .type = TY_VOID, .size = 0, .align = 0 },
     [TY_I8]   = &(Type) { .type = TY_I8, .size = 1, .align = 1, .is_signed = true },
     [TY_I16]  = &(Type) { .type = TY_I16, .size = 2, .align = 2, .is_signed = true },
     [TY_I32]  = &(Type) { .type = TY_I32, .size = 4, .align = 4, .is_signed = true },
     [TY_I64]  = &(Type) { .type = TY_I64, .size = 8, .align = 8, .is_signed = true },
     [TY_U8]   = &(Type) { .type = TY_U8, .size = 1, .align = 1, .is_signed = false },
-    [TY_ISIZE] =
-        &(Type) {
-            .type = TY_ISIZE, .size = sizeof(size_t), .align = alignof(size_t), .is_signed = true },
-    [TY_U16]   = &(Type) { .type = TY_U16, .size = 2, .align = 2, .is_signed = false },
-    [TY_U32]   = &(Type) { .type = TY_U32, .size = 4, .align = 4, .is_signed = false },
-    [TY_U64]   = &(Type) { .type = TY_U64, .size = 8, .align = 8, .is_signed = false },
-    [TY_USIZE] = &(Type) { .type      = TY_USIZE,
-                           .size      = sizeof(size_t),
-                           .align     = alignof(size_t),
-                           .is_signed = false },
+    [TY_U16]  = &(Type) { .type = TY_U16, .size = 2, .align = 2, .is_signed = false },
+    [TY_U32]  = &(Type) { .type = TY_U32, .size = 4, .align = 4, .is_signed = false },
+    [TY_U64]  = &(Type) { .type = TY_U64, .size = 8, .align = 8, .is_signed = false },
 
     [TY_ENUM_CONSTANT] =
         &(Type) { .type = TY_ENUM_CONSTANT, .size = 4, .align = 4, .is_signed = false },
@@ -247,8 +240,6 @@ A3String type_name(Type const* type) {
         return a3_string_clone(A3_CS("__i32"));
     case TY_I64:
         return a3_string_clone(A3_CS("__i64"));
-    case TY_ISIZE:
-        return a3_string_clone(A3_CS("__isize"));
     case TY_U8:
         return a3_string_clone(A3_CS("__u8"));
     case TY_U16:
@@ -257,8 +248,6 @@ A3String type_name(Type const* type) {
         return a3_string_clone(A3_CS("__u32"));
     case TY_U64:
         return a3_string_clone(A3_CS("__u64"));
-    case TY_USIZE:
-        return a3_string_clone(A3_CS("__usize"));
     case TY_ENUM_CONSTANT:
         return a3_string_clone(A3_CS("<enum constant>"));
     case TY_PTR: {
@@ -336,10 +325,7 @@ A3String type_name(Type const* type) {
 bool type_is_scalar(Type const* type) {
     assert(type);
 
-    return type->type == TY_I8 || type->type == TY_I16 || type->type == TY_I32 ||
-           type->type == TY_I64 || type->type == TY_ISIZE || type->type == TY_U8 ||
-           type->type == TY_U16 || type->type == TY_U32 || type->type == TY_U64 ||
-           type->type == TY_USIZE;
+    return TY_I8 <= type->type && type->type <= TY_ENUM_CONSTANT;
 }
 
 static bool type_is_assignable(Type const* lhs, Type const* rhs) {
@@ -625,11 +611,10 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
         case PTY_LONG_LONG:
         case PTY_LONG_LONG | PTY_INT:
         case PTY_LONG_LONG | PTY_INT | PTY_SIGNED:
-            return BUILTIN_TYPES[TY_I64];
         case PTY_ISIZE:
         case PTY_ISIZE | PTY_SIGNED:
         case PTY_USIZE | PTY_SIGNED:
-            return BUILTIN_TYPES[TY_ISIZE];
+            return BUILTIN_TYPES[TY_I64];
         case PTY_U8:
         case PTY_U8 | PTY_UNSIGNED:
         case PTY_I8 | PTY_UNSIGNED:
@@ -654,11 +639,10 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
         case PTY_LONG | PTY_INT | PTY_UNSIGNED:
         case PTY_LONG_LONG | PTY_UNSIGNED:
         case PTY_LONG_LONG | PTY_INT | PTY_UNSIGNED:
-            return BUILTIN_TYPES[TY_U64];
         case PTY_USIZE:
         case PTY_USIZE | PTY_UNSIGNED:
         case PTY_ISIZE | PTY_UNSIGNED:
-            return BUILTIN_TYPES[TY_USIZE];
+            return BUILTIN_TYPES[TY_U64];
         default:
             error_at(reg->src, ptype->span, "Invalid declaration type.");
             return NULL;
@@ -812,7 +796,7 @@ static bool type_unary_op(AstVisitor* visitor, UnaryOp* op) {
         EXPR(op, unary_op)->res_type = op->operand->res_type;
         break;
     case OP_SIZEOF:
-        EXPR(op, unary_op)->res_type = BUILTIN_TYPES[TY_USIZE];
+        EXPR(op, unary_op)->res_type = BUILTIN_TYPES[TY_U64];
         break;
     }
 

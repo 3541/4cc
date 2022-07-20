@@ -405,24 +405,15 @@ static bool gen_cast(AstVisitor* visitor, BinOp* op) {
                        [TY_U16]           = "movzx rax, ax",
                        [TY_U32]           = "mov eax, eax",
                        [TY_ENUM_CONSTANT] = "mov eax, eax" },
-        [TY_ISIZE] = { [TY_I8]  = "movsx rax, al",
-                       [TY_I16] = "movsx rax, ax",
-                       [TY_I32] = "movsx rax, eax",
 
-                       [TY_U8]            = "movzx rax, al",
-                       [TY_U16]           = "movzx rax, ax",
-                       [TY_U32]           = "mov eax, eax",
-                       [TY_ENUM_CONSTANT] = "mov eax, eax"
-        },
-
-        [TY_U8]    = { [TY_I8 ... TY_ISIZE] = "movsx rax, al" },
+        [TY_U8]    = { [TY_I8 ... TY_I64] = "movsx rax, al" },
         [TY_U16]   = { [TY_I8]               = "movsx rax, al",
-                       [TY_I16 ... TY_ISIZE] = "movsx rax, ax",
+                       [TY_I16 ... TY_I64] = "movsx rax, ax",
 
                        [TY_U8] = "movzx rax, al" },
         [TY_U32]   = { [TY_I8]               = "movsx rax, al",
                        [TY_I16]              = "movsx rax, ax",
-                       [TY_I32 ... TY_ISIZE] = "movsx rax, eax",
+                       [TY_I32 ... TY_I64] = "movsx rax, eax",
 
                        [TY_U8]  = "movzx rax, al",
                        [TY_U16] = "movzx rax, ax" },
@@ -434,19 +425,10 @@ static bool gen_cast(AstVisitor* visitor, BinOp* op) {
                        [TY_U16]           = "movzx rax, ax",
                        [TY_U32]           = "mov eax, eax",
                        [TY_ENUM_CONSTANT] = "mov eax, eax" },
-        [TY_USIZE] = { [TY_I8]  = "movsx rax, al",
-                       [TY_I16] = "movsx rax, ax",
-                       [TY_I32] = "movsx rax, eax",
-
-                       [TY_U8]  = "movzx rax, al",
-                       [TY_U16] = "movzx rax, ax",
-                       [TY_U32] = "mov eax, eax",
-                       [TY_ENUM_CONSTANT] = "mov eax, eax" },
         [TY_ENUM_CONSTANT] = { [TY_I8]    = "movsx rax, al",
                                [TY_I16]   = "movsx rax, ax",
                                [TY_I32]   = "movsx rax, eax",
                                [TY_I64]   = "movsx rax, eax",
-                               [TY_ISIZE] = "movsx rax, eax",
 
                                [TY_U8]  = "movzx rax, al",
                                [TY_U16] = "movzx rax, ax" },
@@ -455,8 +437,8 @@ static bool gen_cast(AstVisitor* visitor, BinOp* op) {
     TypeType from = op->rhs->res_type->type;
     TypeType to   = op->lhs->res_type->type;
 
-    from = from == TY_PTR ? TY_USIZE : from;
-    to   = to == TY_PTR ? TY_USIZE : to;
+    from = from == TY_PTR ? TY_U64 : from;
+    to   = to == TY_PTR ? TY_U64 : to;
 
     char const* insn = CASTS[from][to];
     if (!insn)

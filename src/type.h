@@ -30,12 +30,10 @@ typedef enum TypeType {
     TY_I16,
     TY_I32,
     TY_I64,
-    TY_ISIZE,
     TY_U8,
     TY_U16,
     TY_U32,
     TY_U64,
-    TY_USIZE,
     TY_ENUM_CONSTANT,
 
     TY_ARRAY,
