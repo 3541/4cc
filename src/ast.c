@@ -44,14 +44,15 @@ Expr* vertex_unary_op_new(Span span, UnaryOpType type, Expr* operand) {
     return &ret->expr;
 }
 
-Expr* vertex_lit_num_new(Span span, int64_t num) {
+Expr* vertex_lit_num_new(Span span, Type const* type, int64_t num) {
     assert(span.text.ptr);
+    assert(type);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret = (Vertex) {
         .span = span,
         .type = V_EXPR,
-        .expr = { .type = EXPR_LIT, .res_type = NULL, .lit = { .type = LIT_NUM, .num = num } }
+        .expr = { .type = EXPR_LIT, .res_type = type, .lit = { .type = LIT_NUM, .num = num } }
     };
 
     return &ret->expr;

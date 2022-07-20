@@ -385,34 +385,33 @@ static bool gen_cast(AstVisitor* visitor, BinOp* op) {
 
     A3_TRYB(vertex_visit(visitor, VERTEX(op->rhs, expr)));
 
-    static char const* CASTS[][12] = {
-        [TY_I8]    = { [TY_U8 ... TY_ENUM_CONSTANT] = "movzx rax, al" },
+    static char const* CASTS[][11] = {
+        [TY_I8]    = { [TY_U8 ... TY_U64] = "movzx rax, al" },
         [TY_I16]   = { [TY_I8] = "movsx rax, al",
 
-                       [TY_U8]                       = "movzx rax, al",
-                       [TY_U16 ... TY_ENUM_CONSTANT] = "movzx rax, ax",
+                       [TY_U8]             = "movzx rax, al",
+                       [TY_U16 ... TY_U64] = "movzx rax, ax",
         },
         [TY_I32]   = { [TY_I8]  = "movsx rax, al",
                        [TY_I16] = "movsx rax, ax",
 
-                       [TY_U8 ... TY_U16]            = "movzx rax, al",
-                       [TY_U32 ... TY_ENUM_CONSTANT] = "mov eax, eax" },
+                       [TY_U8 ... TY_U16]  = "movzx rax, al",
+                       [TY_U32 ... TY_U64] = "mov eax, eax" },
         [TY_I64]   = { [TY_I8]  = "movsx rax, al",
                        [TY_I16] = "movsx rax, ax",
                        [TY_I32] = "movsx rax, eax",
 
                        [TY_U8]            = "movzx rax, al",
                        [TY_U16]           = "movzx rax, ax",
-                       [TY_U32]           = "mov eax, eax",
-                       [TY_ENUM_CONSTANT] = "mov eax, eax" },
+                       [TY_U32]           = "mov eax, eax", },
 
         [TY_U8]    = { [TY_I8 ... TY_I64] = "movsx rax, al" },
-        [TY_U16]   = { [TY_I8]               = "movsx rax, al",
+        [TY_U16]   = { [TY_I8]             = "movsx rax, al",
                        [TY_I16 ... TY_I64] = "movsx rax, ax",
 
                        [TY_U8] = "movzx rax, al" },
-        [TY_U32]   = { [TY_I8]               = "movsx rax, al",
-                       [TY_I16]              = "movsx rax, ax",
+        [TY_U32]   = { [TY_I8]             = "movsx rax, al",
+                       [TY_I16]            = "movsx rax, ax",
                        [TY_I32 ... TY_I64] = "movsx rax, eax",
 
                        [TY_U8]  = "movzx rax, al",
@@ -421,24 +420,13 @@ static bool gen_cast(AstVisitor* visitor, BinOp* op) {
                        [TY_I16] = "movsx rax, ax",
                        [TY_I32] = "movsx rax, eax",
 
-                       [TY_U8]            = "movzx rax, al",
-                       [TY_U16]           = "movzx rax, ax",
-                       [TY_U32]           = "mov eax, eax",
-                       [TY_ENUM_CONSTANT] = "mov eax, eax" },
-        [TY_ENUM_CONSTANT] = { [TY_I8]    = "movsx rax, al",
-                               [TY_I16]   = "movsx rax, ax",
-                               [TY_I32]   = "movsx rax, eax",
-                               [TY_I64]   = "movsx rax, eax",
-
-                               [TY_U8]  = "movzx rax, al",
-                               [TY_U16] = "movzx rax, ax" },
+                       [TY_U8]  = "movzx rax, al",
+                       [TY_U16] = "movzx rax, ax",
+                       [TY_U32] = "mov eax, eax" },
     };
 
-    TypeType from = op->rhs->res_type->type;
-    TypeType to   = op->lhs->res_type->type;
-
-    from = from == TY_PTR ? TY_U64 : from;
-    to   = to == TY_PTR ? TY_U64 : to;
+    TypeType from = type_to_underlying(op->rhs->res_type->type);
+    TypeType to   = type_to_underlying(op->lhs->res_type->type);
 
     char const* insn = CASTS[from][to];
     if (!insn)
@@ -620,11 +608,6 @@ static bool gen_break_continue(AstVisitor* visitor, Item* item) {
 static bool gen_var(AstVisitor* visitor, Var* var) {
     assert(visitor);
     assert(var);
-
-    if (var->obj->type->type == TY_ENUM_CONSTANT) {
-        gen_asm(visitor->ctx, "mov rax, %" PRIu32, var->obj->value);
-        return true;
-    }
 
     A3_TRYB(gen_addr(visitor, EXPR(var, var)));
     gen_load(visitor->ctx, var->obj->type);

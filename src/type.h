@@ -30,11 +30,12 @@ typedef enum TypeType {
     TY_I16,
     TY_I32,
     TY_I64,
+    TY_ISIZE = TY_I64,
     TY_U8,
     TY_U16,
     TY_U32,
     TY_U64,
-    TY_ENUM_CONSTANT,
+    TY_USIZE = TY_U64,
 
     TY_ARRAY,
     TY_ENUM,
@@ -84,6 +85,7 @@ typedef struct Obj {
     Type const* type;
     bool        is_global;
     bool        is_defined;
+    bool        is_named_literal;
 
     union {
         struct {
@@ -102,8 +104,11 @@ typedef struct Obj {
     };
 } Obj;
 
+extern Type const* BUILTIN_TYPES[];
+
 Registry*     type_registry_new(void);
 A3String      type_name(Type const*);
 bool          type_is_scalar(Type const*);
 Member const* type_struct_find_member(Type const*, A3CString name);
+TypeType      type_to_underlying(TypeType);
 bool          type(Registry*, A3CString src, Vertex*);

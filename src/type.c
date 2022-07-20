@@ -59,7 +59,7 @@ typedef struct Registry {
     size_t    lit_count;
 } Registry;
 
-static Type const* BUILTIN_TYPES[] = {
+Type const* BUILTIN_TYPES[] = {
     [TY_VOID] = &(Type) { .type = TY_VOID, .size = 0, .align = 0 },
     [TY_I8]   = &(Type) { .type = TY_I8, .size = 1, .align = 1, .is_signed = true },
     [TY_I16]  = &(Type) { .type = TY_I16, .size = 2, .align = 2, .is_signed = true },
@@ -69,9 +69,6 @@ static Type const* BUILTIN_TYPES[] = {
     [TY_U16]  = &(Type) { .type = TY_U16, .size = 2, .align = 2, .is_signed = false },
     [TY_U32]  = &(Type) { .type = TY_U32, .size = 4, .align = 4, .is_signed = false },
     [TY_U64]  = &(Type) { .type = TY_U64, .size = 8, .align = 8, .is_signed = false },
-
-    [TY_ENUM_CONSTANT] =
-        &(Type) { .type = TY_ENUM_CONSTANT, .size = 4, .align = 4, .is_signed = false },
 };
 
 static Type const* type_from_ptype(Registry*, PType*);
@@ -99,15 +96,22 @@ static Obj* obj_new(A3CString name, Type const* type, Expr* init, size_t stack_o
 #define OBJ_FN_DEFINED   true
 #define OBJ_FN_UNDEFINED false
 static Obj* obj_fn_new(A3CString name, Type const* type, bool defined) {
+    assert(name.ptr);
+    assert(type);
+
     Obj* ret        = obj_new(name, type, NULL, 0, OBJ_GLOBAL);
     ret->is_defined = defined;
 
     return ret;
 }
 
-static Obj* obj_enum_const_new(A3CString name, uint32_t value) {
-    Obj* ret   = obj_new(name, BUILTIN_TYPES[TY_ENUM_CONSTANT], NULL, 0, OBJ_LOCAL);
-    ret->value = value;
+static Obj* obj_enum_const_new(A3CString name, Type const* type, uint32_t value) {
+    assert(name.ptr);
+    assert(type);
+
+    Obj* ret              = obj_new(name, type, NULL, 0, OBJ_LOCAL);
+    ret->is_named_literal = true;
+    ret->value            = value;
 
     return ret;
 }
@@ -248,8 +252,6 @@ A3String type_name(Type const* type) {
         return a3_string_clone(A3_CS("__u32"));
     case TY_U64:
         return a3_string_clone(A3_CS("__u64"));
-    case TY_ENUM_CONSTANT:
-        return a3_string_clone(A3_CS("<enum constant>"));
     case TY_PTR: {
         A3String base = type_name(type->parent);
         A3String ret  = a3_string_alloc(base.len + 1);
@@ -325,7 +327,7 @@ A3String type_name(Type const* type) {
 bool type_is_scalar(Type const* type) {
     assert(type);
 
-    return TY_I8 <= type->type && type->type <= TY_ENUM_CONSTANT;
+    return (TY_I8 <= type->type && type->type <= TY_U64) || type->type == TY_ENUM;
 }
 
 static bool type_is_assignable(Type const* lhs, Type const* rhs) {
@@ -524,7 +526,8 @@ static Type const* type_aggregate_from_ptype(Registry* reg, PType* ptype) {
                 offset = (size_t)res.value;
             }
 
-            scope_add(reg->current_scope, obj_enum_const_new(member->name, (uint32_t)offset++));
+            scope_add(reg->current_scope,
+                      obj_enum_const_new(member->name, ret, (uint32_t)offset++));
             continue;
         }
 
@@ -837,7 +840,8 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
         Item*     global_decl =
             vertex_decl_new(span, global_name,
                             ptype_array_new(span, ptype_builtin_new(span, PTY_CHAR),
-                                            vertex_lit_num_new(span, (int64_t)(lit->str.len + 1))));
+                                            vertex_lit_num_new(span, BUILTIN_TYPES[TY_USIZE],
+                                                               (int64_t)(lit->str.len + 1))));
         global_decl->init = EXPR(lit, lit);
         A3_SLL_PUSH(&reg->current_unit->items, global_decl, link);
 
@@ -1092,7 +1096,14 @@ static bool type_var(AstVisitor* visitor, Var* var) {
         return false;
     }
 
-    EXPR(var, var)->res_type = var->obj->type;
+    if (var->obj->is_named_literal) {
+        Expr* lit       = vertex_lit_num_new(SPAN(var, expr.var), var->obj->type, var->obj->value);
+        *EXPR(var, var) = *lit;
+        free(VERTEX(lit, expr));
+    } else {
+        EXPR(var, var)->res_type = var->obj->type;
+    }
+
     return true;
 }
 
@@ -1269,4 +1280,15 @@ bool type(Registry* reg, A3CString src, Vertex* root) {
             .visit_decl      = type_decl,
         },
         root);
+}
+
+TypeType type_to_underlying(TypeType type) {
+    switch (type) {
+    case TY_ENUM:
+        return TY_U32;
+    case TY_PTR:
+        return TY_USIZE;
+    default:
+        return type;
+    }
 }
