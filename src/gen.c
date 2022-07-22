@@ -526,6 +526,9 @@ static bool gen_bin_op(AstVisitor* visitor, BinOp* op) {
     case OP_BW_OR:
         gen_asm(visitor->ctx, "or rax, rdi");
         break;
+    case OP_BW_XOR:
+        gen_asm(visitor->ctx, "xor rax, rdi");
+        break;
     case OP_AND:
     case OP_ASSIGN:
     case OP_CAST:

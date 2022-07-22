@@ -41,7 +41,8 @@ tests = {
     'or',
     'inc',
     'dec',
-    'char'
+    'char',
+    'compound_assign'
   ],
   'var': [
     'simple',

@@ -365,7 +365,10 @@ static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
 };
 
 static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
-    [TOK_EQ] = { 2, 1 },
+    [TOK_EQ]       = { 2, 1 }, [TOK_PLUS_EQ]  = { 2, 1 }, [TOK_MINUS_EQ]   = { 2, 1 },
+    [TOK_STAR_EQ]  = { 2, 1 }, [TOK_SLASH_EQ] = { 2, 1 }, [TOK_PERCENT_EQ] = { 2, 1 },
+    [TOK_LT_LT_EQ] = { 2, 1 }, [TOK_GT_GT_EQ] = { 2, 1 }, [TOK_AMP_EQ]     = { 2, 1 },
+    [TOK_HAT_EQ]   = { 2, 1 }, [TOK_PIPE_EQ]  = { 2, 1 },
 
     [TOK_QUERY] = { 4, 3 },
 
@@ -397,6 +400,61 @@ static uint8_t POSTFIX_PRECEDENCE[TOK_COUNT] = {
     [TOK_PLUS_PLUS]   = 25,
     [TOK_MINUS_MINUS] = 25,
 };
+
+static bool parse_is_compound_assign(TokenType type) {
+    switch (type) {
+    case TOK_PLUS_EQ:
+    case TOK_MINUS_EQ:
+    case TOK_STAR_EQ:
+    case TOK_SLASH_EQ:
+    case TOK_PERCENT_EQ:
+    case TOK_LT_LT_EQ:
+    case TOK_GT_GT_EQ:
+    case TOK_AMP_EQ:
+    case TOK_HAT_EQ:
+    case TOK_PIPE_EQ:
+        return true;
+    default:
+        return false;
+    }
+}
+
+static BinOpType parse_compound_assign_op(TokenType type) {
+    assert(parse_is_compound_assign(type));
+
+    switch (type) {
+    case TOK_PLUS_EQ:
+        return OP_ADD;
+    case TOK_MINUS_EQ:
+        return OP_SUB;
+    case TOK_STAR_EQ:
+        return OP_MUL;
+    case TOK_SLASH_EQ:
+        return OP_DIV;
+    case TOK_PERCENT_EQ:
+        return OP_MOD;
+    case TOK_LT_LT_EQ:
+        return OP_SHL;
+    case TOK_GT_GT_EQ:
+        return OP_SHR;
+    case TOK_AMP_EQ:
+        return OP_BW_AND;
+    case TOK_HAT_EQ:
+        return OP_BW_XOR;
+    case TOK_PIPE_EQ:
+        return OP_BW_OR;
+    default:
+        A3_UNREACHABLE();
+    }
+}
+
+static Expr* parse_compound_assign(Parser* parser, Token tok, Expr* lhs, Expr* rhs) {
+    assert(parser);
+    assert(rhs);
+
+    BinOpType op = parse_compound_assign_op(tok.type);
+    return vertex_bin_op_new(parse_span_merge(SPAN(lhs, expr), SPAN(rhs, expr)), op, lhs, rhs);
+}
 
 static Expr* parse_expr(Parser* parser, uint8_t precedence) {
     assert(parser);
@@ -594,6 +652,9 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
             }
 
             lhs = vertex_member_new(op_span, lhs, rhs->var.name);
+        } else if (parse_is_compound_assign(tok_op.type)) {
+            rhs = parse_compound_assign(parser, tok_op, lhs, rhs);
+            lhs = vertex_bin_op_new(op_span, OP_ASSIGN, lhs, rhs);
         } else {
             lhs = vertex_bin_op_new(op_span, parse_bin_op(tok_op.type), lhs, rhs);
         }

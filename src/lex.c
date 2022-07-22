@@ -211,18 +211,12 @@ static Token lex_op(Lexer* lexer) {
     assert(lexer);
 
     A3CString lexeme =
-        lex_consume_one(lexer, A3_CS("unary or binary operator"), A3_CS("+-*/=!<>&~|.?:%"));
+        lex_consume_one(lexer, A3_CS("unary or binary operator"), A3_CS("+-*/=!<>&~|.?:%^"));
     if (!a3_string_cptr(lexeme))
         return lex_recover(lexer);
 
     TokenType type;
     switch (lexeme.ptr[0]) {
-    case '*':
-        type = TOK_STAR;
-        break;
-    case '/':
-        type = TOK_SLASH;
-        break;
     case '~':
         type = TOK_TILDE;
         break;
@@ -233,17 +227,51 @@ static Token lex_op(Lexer* lexer) {
         type = TOK_COLON;
         break;
     case '%':
-        type = TOK_PERCENT;
-        break;
-    case '+':
-        if (lexeme.ptr[1] != '+') {
-            type = TOK_PLUS;
+        if (lexeme.ptr[1] != '=') {
+            type = TOK_PERCENT;
             break;
         }
 
         lexeme.len++;
         lex_consume_any(lexer, 1);
-        type = TOK_PLUS_PLUS;
+        type = TOK_PERCENT_EQ;
+        break;
+    case '/':
+        if (lexeme.ptr[1] != '=') {
+            type = TOK_SLASH;
+            break;
+        }
+
+        lexeme.len++;
+        lex_consume_any(lexer, 1);
+        type = TOK_SLASH_EQ;
+        break;
+    case '*':
+        if (lexeme.ptr[1] != '=') {
+            type = TOK_STAR;
+            break;
+        }
+
+        lexeme.len++;
+        lex_consume_any(lexer, 1);
+        type = TOK_STAR_EQ;
+        break;
+    case '+':
+        switch (lexeme.ptr[1]) {
+        case '+':
+            lexeme.len++;
+            lex_consume_any(lexer, 1);
+            type = TOK_PLUS_PLUS;
+            break;
+        case '=':
+            lexeme.len++;
+            lex_consume_any(lexer, 1);
+            type = TOK_PLUS_EQ;
+            break;
+        default:
+            type = TOK_PLUS;
+            break;
+        }
         break;
     case '=':
         if (lexeme.ptr[1] != '=') {
@@ -276,6 +304,12 @@ static Token lex_op(Lexer* lexer) {
             lexeme.len++;
             lex_consume_any(lexer, 1);
             type = TOK_LT_LT;
+
+            if (lexeme.ptr[2] == '=') {
+                lexeme.len++;
+                lex_consume_any(lexer, 1);
+                type = TOK_LT_LT_EQ;
+            }
             break;
         default:
             type = TOK_LT;
@@ -293,6 +327,12 @@ static Token lex_op(Lexer* lexer) {
             lexeme.len++;
             lex_consume_any(lexer, 1);
             type = TOK_GT_GT;
+
+            if (lexeme.ptr[2] == '=') {
+                lexeme.len++;
+                lex_consume_any(lexer, 1);
+                type = TOK_GT_GT_EQ;
+            }
             break;
         default:
             type = TOK_GT;
@@ -300,24 +340,38 @@ static Token lex_op(Lexer* lexer) {
         }
         break;
     case '&':
-        if (lexeme.ptr[1] != '&') {
+        switch (lexeme.ptr[1]) {
+        case '&':
+            lexeme.len++;
+            lex_consume_any(lexer, 1);
+            type = TOK_AMP_AMP;
+            break;
+        case '=':
+            lexeme.len++;
+            lex_consume_any(lexer, 1);
+            type = TOK_AMP_EQ;
+            break;
+        default:
             type = TOK_AMP;
             break;
         }
-
-        lexeme.len++;
-        lex_consume_any(lexer, 1);
-        type = TOK_AMP_AMP;
         break;
     case '|':
-        if (lexeme.ptr[1] != '|') {
+        switch (lexeme.ptr[1]) {
+        case '|':
+            lexeme.len++;
+            lex_consume_any(lexer, 1);
+            type = TOK_PIPE_PIPE;
+            break;
+        case '=':
+            lexeme.len++;
+            lex_consume_any(lexer, 1);
+            type = TOK_PIPE_EQ;
+            break;
+        default:
             type = TOK_PIPE;
             break;
         }
-
-        lexeme.len++;
-        lex_consume_any(lexer, 1);
-        type = TOK_PIPE_PIPE;
         break;
     case '-':
         switch (lexeme.ptr[1]) {
@@ -330,6 +384,11 @@ static Token lex_op(Lexer* lexer) {
             lexeme.len++;
             lex_consume_any(lexer, 1);
             type = TOK_MINUS_MINUS;
+            break;
+        case '=':
+            lexeme.len++;
+            lex_consume_any(lexer, 1);
+            type = TOK_MINUS_EQ;
             break;
         default:
             type = TOK_MINUS;
@@ -345,6 +404,16 @@ static Token lex_op(Lexer* lexer) {
         lexeme.len += 2;
         lex_consume_any(lexer, 2);
         type = TOK_DOT_DOT_DOT;
+        break;
+    case '^':
+        if (lexeme.ptr[1] != '=') {
+            type = TOK_HAT;
+            break;
+        }
+
+        lexeme.len++;
+        lex_consume_any(lexer, 1);
+        type = TOK_HAT_EQ;
         break;
     default:
         A3_UNREACHABLE();
@@ -609,6 +678,7 @@ Token lex_peek(Lexer* lexer) {
     case '?':
     case ':':
     case '%':
+    case '^':
         lexer->peek = lex_op(lexer);
         break;
     case '(':
