@@ -40,7 +40,8 @@ tests = {
     'and',
     'or',
     'inc',
-    'dec'
+    'dec',
+    'char'
   ],
   'var': [
     'simple',

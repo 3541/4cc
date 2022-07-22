@@ -50,6 +50,7 @@ typedef enum TokenType {
     TOK_ISIZE,
     TOK_LBRACE,
     TOK_LBRACKET,
+    TOK_LIT_CHAR,
     TOK_LIT_NUM,
     TOK_LIT_STR,
     TOK_LONG,
@@ -103,6 +104,7 @@ typedef struct Token {
     union {
         int64_t   lit_num;
         A3CString lit_str;
+        uint8_t   lit_char;
     };
 } Token;
 

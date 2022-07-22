@@ -434,6 +434,11 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
         lhs = vertex_lit_num_new(tok.lexeme, BUILTIN_TYPES[TY_ISIZE], tok.lit_num);
         break;
     }
+    case TOK_LIT_CHAR: {
+        lex_next(parser->lexer);
+        lhs = vertex_lit_num_new(tok.lexeme, BUILTIN_TYPES[TY_U8], tok.lit_char);
+        break;
+    }
     case TOK_LIT_STR:
         lhs = parse_lit_str(parser);
         break;

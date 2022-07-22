@@ -544,6 +544,36 @@ static Token lex_lit_str(Lexer* lexer) {
     return ret;
 }
 
+static Token lex_lit_char(Lexer* lexer) {
+    assert(lexer);
+    assert(lex_peek_byte(lexer) == '\'');
+
+    A3CString s   = lex_peek_str(lexer);
+    uint8_t   c   = s.ptr[1];
+    size_t    len = 3;
+
+    if (c == '\\') {
+        if (!(len = lex_escape(A3_S_CONST(a3_string_offset(A3_CS_MUT(s), 2)), &c))) {
+            lex_error(lexer, "Invalid escape sequence.");
+            return lex_recover(lexer);
+        }
+
+        len += 3;
+    }
+
+    if (s.len < len || s.ptr[len - 1] != '\'') {
+        lex_error(lexer, "Bad character literal.");
+        return lex_recover(lexer);
+    }
+    s.len = len;
+
+    lex_consume_any(lexer, s.len);
+
+    Token ret    = tok_new(lexer, TOK_LIT_CHAR, s);
+    ret.lit_char = c;
+    return ret;
+}
+
 Token lex_peek(Lexer* lexer) {
     assert(lexer);
 
@@ -597,6 +627,9 @@ Token lex_peek(Lexer* lexer) {
         break;
     case '"':
         lexer->peek = lex_lit_str(lexer);
+        break;
+    case '\'':
+        lexer->peek = lex_lit_char(lexer);
         break;
     default:
         if (is_digit(next)) {
