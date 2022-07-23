@@ -136,9 +136,9 @@ typedef struct Arg {
 } Arg;
 
 typedef struct Call {
-    A3CString name;
+    A3CString         name;
     A3_SLL(args, Arg) args;
-    Obj* obj;
+    Obj*              obj;
 } Call;
 
 typedef struct MemberAccess {
@@ -283,13 +283,16 @@ typedef struct PType {
     };
 } PType;
 
-typedef enum InitType { INIT_EXPR } InitType;
+typedef enum InitType { INIT_EXPR, INIT_LIST } InitType;
 
+typedef struct Init Init;
 typedef struct Init {
     InitType type;
+    A3_SLL_LINK(Init) link;
 
     union {
         Expr* expr;
+        A3_SLL(, Init) list;
     };
 } Init;
 
@@ -353,9 +356,7 @@ typedef struct AstVisitor AstVisitor;
 typedef bool (*AstVisitorCallback)(AstVisitor*, Vertex*);
 
 typedef struct AstVisitor {
-    void*   ctx;
-    Vertex* current;
-    Vertex* parent;
+    void* ctx;
     bool (*pre)(AstVisitor*, Vertex*);
     bool (*visit_bin_op)(AstVisitor*, BinOp*);
     bool (*visit_unary_op)(AstVisitor*, UnaryOp*);
@@ -397,6 +398,8 @@ Block* vertex_block_new(void);
 Loop*  vertex_loop_new(Span, bool cond_pos, Item* init, Expr* cond, Expr* post, Item* body);
 Unit*  vertex_unit_new(void);
 Init*  vertex_init_expr_new(Span, Expr*);
+Init*  vertex_init_list_new(void);
+void   vertex_init_lit_str_to_list(Init*);
 bool   vertex_visit(AstVisitor*, Vertex*);
 
 PType* ptype_builtin_new(Span, PTypeBuiltinType);

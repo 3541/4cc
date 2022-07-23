@@ -214,7 +214,7 @@ static bool dump_call(AstVisitor* visitor, Call* call) {
 
     dump_print(visitor->ctx, "CALL(" A3_S_F ")", A3_S_FORMAT(call->name));
 
-    A3_SLL_FOR_EACH(Arg, arg, &call->args, link) {
+    A3_SLL_FOR_EACH (Arg, arg, &call->args, link) {
         A3_TRYB(dump_child(visitor, VERTEX(arg->expr, expr)));
     }
 
@@ -303,7 +303,7 @@ static bool dump_block(AstVisitor* visitor, Block* block) {
 
     dump_print(visitor->ctx, "BLOCK");
 
-    A3_SLL_FOR_EACH(Item, item, &block->body, link) {
+    A3_SLL_FOR_EACH (Item, item, &block->body, link) {
         A3_TRYB(dump_child(visitor, VERTEX(item, item)));
     }
 
@@ -379,6 +379,10 @@ static bool dump_init(AstVisitor* visitor, Init* init) {
     switch (init->type) {
     case INIT_EXPR:
         type = "EXPR";
+        break;
+    case INIT_LIST:
+        type = "LIST";
+        break;
     }
 
     dump_print(visitor->ctx, "INIT<%s>", type);
@@ -386,6 +390,10 @@ static bool dump_init(AstVisitor* visitor, Init* init) {
     switch (init->type) {
     case INIT_EXPR:
         return dump_child(visitor, VERTEX(init->expr, expr));
+    case INIT_LIST:
+        A3_SLL_FOR_EACH (Init, elem, &init->list, link)
+            A3_TRYB(dump_child(visitor, VERTEX(elem, init)));
+        return true;
     }
 
     A3_UNREACHABLE();

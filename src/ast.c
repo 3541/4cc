@@ -17,6 +17,8 @@
 #include <a3/str.h>
 #include <a3/util.h>
 
+#include "type.h"
+
 Expr* vertex_bin_op_new(Span span, BinOpType type, Expr* lhs, Expr* rhs) {
     assert(lhs);
     assert(rhs);
@@ -238,9 +240,39 @@ Init* vertex_init_expr_new(Span span, Expr* expr) {
     assert(expr);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .type = V_INIT, .init = { .type = INIT_EXPR, .expr = expr } };
+    *ret = (Vertex) { .span = span, .type = V_INIT, .init = { .type = INIT_EXPR, .expr = expr } };
 
     return &ret->init;
+}
+
+Init* vertex_init_list_new(void) {
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .type = V_INIT, .init.type = INIT_LIST };
+    A3_SLL_INIT(&ret->init.list);
+
+    return &ret->init;
+}
+
+void vertex_init_lit_str_to_list(Init* init) {
+    assert(init);
+    assert(init->type == INIT_EXPR && init->expr->type == EXPR_LIT &&
+           init->expr->lit.type == LIT_STR);
+
+    Literal* lit = &init->expr->lit;
+
+    init->type = INIT_LIST;
+    A3_SLL_INIT(&init->list);
+
+    Span span = SPAN(init, init);
+    for (size_t i = 0; i < lit->str.len; i++) {
+        Init* init_char = vertex_init_expr_new(
+            span, vertex_lit_num_new(span, BUILTIN_TYPES[TY_U8], lit->str.ptr[i]));
+
+        A3_SLL_ENQUEUE(&init->list, init_char, link);
+    }
+
+    Init* init_null = vertex_init_expr_new(span, vertex_lit_num_new(span, BUILTIN_TYPES[TY_U8], 0));
+    A3_SLL_ENQUEUE(&init->list, init_null, link);
 }
 
 static bool visit_bin_op(AstVisitor* visitor, BinOp* op) {
@@ -309,7 +341,7 @@ static bool visit_block(AstVisitor* visitor, Block* block) {
     assert(visitor);
     assert(block);
 
-    A3_SLL_FOR_EACH(Item, stmt, &block->body, link) {
+    A3_SLL_FOR_EACH (Item, stmt, &block->body, link) {
         A3_TRYB(vertex_visit(visitor, VERTEX(stmt, item)));
     }
 
@@ -345,7 +377,7 @@ static bool visit_call(AstVisitor* visitor, Call* call) {
     assert(visitor);
     assert(call);
 
-    A3_SLL_FOR_EACH(Arg, arg, &call->args, link) {
+    A3_SLL_FOR_EACH (Arg, arg, &call->args, link) {
         A3_TRYB(vertex_visit(visitor, VERTEX(arg->expr, expr)));
     }
 
@@ -397,6 +429,10 @@ static bool visit_init(AstVisitor* visitor, Init* init) {
     switch (init->type) {
     case INIT_EXPR:
         return vertex_visit(visitor, VERTEX(init->expr, expr));
+    case INIT_LIST:
+        A3_SLL_FOR_EACH (Init, elem, &init->list, link)
+            A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
+        return true;
     }
 
     A3_UNREACHABLE();
@@ -408,16 +444,12 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
     assert(visitor);
     assert(vertex);
 
-    Vertex* old_parent = visitor->parent;
-    visitor->parent    = visitor->current;
-    visitor->current   = vertex;
-
     if (visitor->pre)
         visitor->pre(visitor, vertex);
 
     switch (vertex->type) {
     case V_UNIT:
-        A3_SLL_FOR_EACH(Item, item, &vertex->unit.items, link) {
+        A3_SLL_FOR_EACH (Item, item, &vertex->unit.items, link) {
             A3_TRYB(vertex_visit(visitor, VERTEX(item, item)));
         }
         break;
@@ -481,9 +513,6 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
         A3_TRYB(VISIT(visitor, visit_init, &vertex->init));
         break;
     }
-
-    visitor->current = visitor->parent;
-    visitor->parent  = old_parent;
 
     return true;
 }

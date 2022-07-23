@@ -235,6 +235,9 @@ tests = {
     'named',
     'size',
     'explicit'
+  ],
+  'init': [
+    'array'
   ]
 }
 

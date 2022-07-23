@@ -46,6 +46,7 @@ static Item*  parse_declarator(Parser*, PType*);
 static PType* parse_decl_suffix(Parser*, PType*);
 static PType* parse_declspec(Parser*);
 static bool   parse_decl(Parser*, Items*);
+static Init*  parse_init(Parser*);
 
 static void parse_scope_push(Parser* parser) {
     assert(parser);
@@ -1360,8 +1361,47 @@ static bool parse_fn(Parser* parser, Item* decl) {
     return true;
 }
 
+static Init* parse_init_list(Parser* parser) {
+    assert(parser);
+
+    Token open = lex_next(parser->lexer);
+    assert(open.type == TOK_LBRACE);
+
+    Init* ret = vertex_init_list_new();
+
+    bool first = true;
+    while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_RBRACE) {
+        if (!first && !parse_consume(parser, A3_CS("comma"), TOK_COMMA))
+            return false;
+        first = false;
+
+        Init* elem = parse_init(parser);
+        if (!elem)
+            return NULL;
+
+        A3_SLL_ENQUEUE(&ret->list, elem, link);
+    }
+
+    Token close = lex_next(parser->lexer);
+    if (close.type != TOK_RBRACE) {
+        parse_error(parser, close, "Expected a closing brace.");
+        return NULL;
+    }
+
+    if (A3_SLL_IS_EMPTY(&ret->list)) {
+        parse_error(parser, open, "Empty initializer list.");
+        return NULL;
+    }
+
+    SPAN(ret, init) = parse_span_merge(open.lexeme, close.lexeme);
+    return ret;
+}
+
 static Init* parse_init(Parser* parser) {
     assert(parser);
+
+    if (lex_peek(parser->lexer).type == TOK_LBRACE)
+        return parse_init_list(parser);
 
     Expr* init = parse_expr(parser, INFIX_PRECEDENCE[TOK_EQ][1]);
     if (!init)

@@ -51,6 +51,8 @@ typedef struct Param {
     Type const* type;
 } Param;
 
+#define TYPE_ARRAY_UNSIZED SIZE_MAX
+
 typedef struct Type {
     TypeType type;
     size_t   size;

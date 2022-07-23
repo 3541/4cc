@@ -43,20 +43,22 @@ A3_HT_DECLARE_METHODS(A3CString, ObjPtr)
 A3_HT_DEFINE_METHODS(A3CString, ObjPtr, a3_string_cptr, a3_string_len, a3_string_cmp)
 
 typedef struct Scope {
-    Scope* parent;
-    Obj*   fn;
-    A3_HT(A3CString, ObjPtr) idents;
+    Scope*                    parent;
+    Obj*                      fn;
+    A3_HT(A3CString, ObjPtr)  idents;
     A3_HT(A3CString, TypePtr) tags;
     A3_HT(A3CString, TypePtr) typedefs;
 } Scope;
 
 typedef struct Registry {
-    A3_HT(TypePtr, TypePtr) ptrs_to;
+    A3_HT(TypePtr, TypePtr)   ptrs_to;
     A3_HT(A3CString, TypePtr) fns;
-    Scope*    current_scope;
-    Unit*     current_unit;
-    A3CString src;
-    size_t    lit_count;
+    Scope*                    current_scope;
+    Unit*                     current_unit;
+    A3CString                 src;
+    size_t                    lit_count;
+    size_t                    init_depth;
+    Type const*               init_type;
 } Registry;
 
 Type const* BUILTIN_TYPES[] = {
@@ -221,6 +223,7 @@ Registry* type_registry_new(void) {
         .current_unit  = NULL,
         .current_scope = NULL,
         .lit_count     = 0,
+        .init_type     = NULL,
     };
 
     A3_HT_INIT(TypePtr, TypePtr)(&ret->ptrs_to, A3_HT_NO_HASH_KEY, A3_HT_ALLOW_GROWTH);
@@ -271,7 +274,7 @@ A3String type_name(Type const* type) {
         }
 
         bool first = true;
-        A3_SLL_FOR_EACH(Param, param, &type->params, link) {
+        A3_SLL_FOR_EACH (Param, param, &type->params, link) {
             if (!first)
                 a3_buf_write_str(&buf, A3_CS(", "));
             first = false;
@@ -346,7 +349,7 @@ Member const* type_struct_find_member(Type const* s, A3CString name) {
     assert(s);
     assert(s->type == TY_STRUCT || s->type == TY_UNION);
 
-    A3_SLL_FOR_EACH(Member, member, &s->members, link) {
+    A3_SLL_FOR_EACH (Member, member, &s->members, link) {
         if (a3_string_cmp(member->name, name) == 0)
             return member;
     }
@@ -435,7 +438,7 @@ static Type const* type_fn_from_ptype(Registry* reg, PType const* ptype) {
                     .is_variadic = ptype->attributes.is_variadic };
     A3_SLL_INIT(&ret->params);
 
-    A3_SLL_FOR_EACH(Item, decl, &ptype->params, link) {
+    A3_SLL_FOR_EACH (Item, decl, &ptype->params, link) {
         assert(VERTEX(decl, item)->type == V_DECL);
 
         Type const* type = type_from_ptype(reg, decl->decl_ptype);
@@ -564,7 +567,7 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
         return type_ptr_to(reg, type_from_ptype(reg, ptype->parent));
     case PTY_ARRAY: {
         if (!ptype->len)
-            return type_ptr_to(reg, type_from_ptype(reg, ptype->parent));
+            return type_array_of(type_from_ptype(reg, ptype->parent), TYPE_ARRAY_UNSIZED);
 
         EvalResult res = eval(reg->src, ptype->len);
         if (!res.ok)
@@ -854,6 +857,7 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
         lit->storage = global_decl->obj = scope_find(reg->current_scope, global_name);
         assert(lit->storage);
         global_decl->obj->init = vertex_init_expr_new(SPAN(lit, expr.lit), EXPR(lit, lit));
+        vertex_init_lit_str_to_list(global_decl->obj->init);
         break;
     }
     }
@@ -903,7 +907,7 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
             }
         }
 
-        A3_SLL_FOR_EACH(Item, param, &decl->decl_ptype->params, link) {
+        A3_SLL_FOR_EACH (Item, param, &decl->decl_ptype->params, link) {
             param->decl_type = type_from_ptype(reg, param->decl_ptype);
 
             stack_depth = align_up(stack_depth, param->decl_type->align);
@@ -927,7 +931,7 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
     if (decl->body) {
         A3_SLL_INIT(&decl->obj->params);
 
-        A3_SLL_FOR_EACH(Item, param, &decl->decl_ptype->params, link) {
+        A3_SLL_FOR_EACH (Item, param, &decl->decl_ptype->params, link) {
             A3_SLL_ENQUEUE(&decl->obj->params, param, link);
         }
 
@@ -979,19 +983,27 @@ static bool type_typedef(AstVisitor* visitor, Item* decl) {
 static bool type_init(AstVisitor* visitor, Init* init) {
     assert(visitor);
     assert(init);
-    assert(visitor->parent->type == V_DECL);
 
-    Registry*   reg    = visitor->ctx;
-    Item*       decl   = &visitor->parent->item;
-    Type const* type   = decl->decl_type;
-    bool        global = !reg->current_scope->fn;
+    Registry*   reg       = visitor->ctx;
+    bool        global    = !reg->current_scope->fn;
+    Type const* decl_type = reg->init_type;
+    assert(decl_type);
+
+    // Initializers of the form
+    //   char x[] = "abc";
+    // should be treated the same as
+    //   char x[] = { 'a', 'b', 'c', '\0' };
+    // rather than producing a global string literal.
+    if (init->type == INIT_EXPR && init->expr->type == EXPR_LIT &&
+        init->expr->lit.type == LIT_STR && decl_type->type == TY_ARRAY)
+        vertex_init_lit_str_to_list(init);
 
     switch (init->type) {
     case INIT_EXPR:
         A3_TRYB(vertex_visit(visitor, VERTEX(init->expr, expr)));
 
-        if (!type_is_assignable(type, init->expr->res_type)) {
-            type_error_mismatch(reg, VERTEX(init, init), type, init->expr->res_type);
+        if (!type_is_assignable(decl_type, init->expr->res_type)) {
+            type_error_mismatch(reg, VERTEX(init, init), decl_type, init->expr->res_type);
             return false;
         }
 
@@ -1002,12 +1014,12 @@ static bool type_init(AstVisitor* visitor, Init* init) {
                 return false;
             }
 
-            if (type->type == TY_ARRAY && type->parent->type != TY_U8) {
-                type_error(reg, VERTEX(decl, item), "Unsupported global array type (TODO).");
+            if (decl_type->type == TY_ARRAY && decl_type->parent->type != TY_U8) {
+                type_error(reg, VERTEX(init, init), "Unsupported global array type (TODO).");
                 return false;
             }
 
-            if (type->type == TY_ARRAY && init->expr->lit.type != LIT_STR) {
+            if (decl_type->type == TY_ARRAY && init->expr->lit.type != LIT_STR) {
                 type_error(reg, VERTEX(init, init),
                            "Initialization of global array with incompatible literal.");
                 return false;
@@ -1015,6 +1027,37 @@ static bool type_init(AstVisitor* visitor, Init* init) {
         }
 
         return true;
+    case INIT_LIST: {
+        if (decl_type->type != TY_ARRAY) {
+            A3String name = type_name(decl_type);
+            type_error(reg, VERTEX(init, init),
+                       "Initializer list is not assignable to type " A3_S_F ".", A3_S_FORMAT(name));
+            a3_string_free(&name);
+            return false;
+        }
+
+        size_t count_max = decl_type->len;
+        size_t count     = 0;
+        reg->init_type   = decl_type->parent;
+        A3_SLL_FOR_EACH (Init, elem, &init->list, link) {
+            A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
+
+            count++;
+            if (count > count_max) {
+                type_error(reg, VERTEX(init, init), "Initializer list is too long (%zu > %zu).",
+                           count, count_max);
+                return false;
+            }
+        }
+        reg->init_type = decl_type;
+
+        if (decl_type->len == TYPE_ARRAY_UNSIZED) {
+            ((Type*)decl_type)->len  = count;
+            ((Type*)decl_type)->size = decl_type->len * decl_type->parent->size;
+        }
+
+        return true;
+    }
     }
 
     A3_UNREACHABLE();
@@ -1065,8 +1108,14 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
         (type->name.ptr || type->type == TY_ENUM))
         return true;
 
-    if (decl->init)
+    if (decl->init) {
+        reg->init_type = type;
         A3_TRYB(vertex_visit(visitor, VERTEX(decl->init, init)));
+        reg->init_type = NULL;
+    } else if (type->type == TY_ARRAY && type->len == TYPE_ARRAY_UNSIZED) {
+        type_error(reg, VERTEX(decl, item), "Declaration of array with incomplete type.");
+        return false;
+    }
 
     if (prev && decl->init) {
         if (prev->init) {
@@ -1142,7 +1191,7 @@ static bool type_call(AstVisitor* visitor, Call* call) {
     EXPR(call, call)->res_type = call->obj->type->ret;
 
     Param* param = A3_SLL_HEAD(&call->obj->type->params);
-    A3_SLL_FOR_EACH(Arg, arg, &call->args, link) {
+    A3_SLL_FOR_EACH (Arg, arg, &call->args, link) {
         A3_TRYB(vertex_visit(visitor, VERTEX(arg->expr, expr)));
 
         if (!param) {
@@ -1232,7 +1281,7 @@ static bool type_block(AstVisitor* visitor, Block* block) {
         block->scope = reg->current_scope;
     }
 
-    A3_SLL_FOR_EACH(Item, item, &block->body, link) {
+    A3_SLL_FOR_EACH (Item, item, &block->body, link) {
         A3_TRYB(vertex_visit(visitor, VERTEX(item, item)));
     }
 

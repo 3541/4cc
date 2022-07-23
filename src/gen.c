@@ -24,6 +24,7 @@
 #include "ast.h"
 #include "config.h"
 #include "error.h"
+#include "eval.h"
 #include "type.h"
 
 typedef enum Register { REG_A, REG_DI, REG_SI, REG_D, REG_C, REG_R8, REG_R9 } Register;
@@ -69,6 +70,8 @@ typedef struct Generator {
     Config const* cfg;
     A3CString     src;
     LoopCtx       in_loop;
+    Item*         init_decl;
+    Type const*   init_decl_type;
     size_t        stack_depth;
     size_t        label;
     size_t        line;
@@ -102,6 +105,18 @@ static void gen_asm(Generator* gen, char* fmt, ...) {
 
     vfprintf(gen->cfg->asm_out, fmt, args);
     fputc('\n', gen->cfg->asm_out);
+
+    va_end(args);
+}
+
+A3_FORMAT_FN(2, 3)
+static void gen_asm_nolf(Generator* gen, char* fmt, ...) {
+    assert(gen);
+
+    va_list args;
+    va_start(args, fmt);
+
+    vfprintf(gen->cfg->asm_out, fmt, args);
 
     va_end(args);
 }
@@ -172,17 +187,22 @@ static void gen_store(Generator* gen, Type const* type) {
 
     gen_stack_pop(gen, REG_DI);
 
-    if (type->type == TY_STRUCT || type->type == TY_UNION) {
+    switch (type->type) {
+    case TY_STRUCT:
+    case TY_UNION:
         gen_asm(gen,
                 "mov rcx, %zu\n"
                 "mov rsi, rax\n"
                 "rep movsb",
                 type->size);
-
-        return;
+        break;
+    case TY_ARRAY:
+        type = BUILTIN_TYPES[TY_USIZE];
+        // fallthrough.
+    default:
+        gen_asm(gen, "mov [rdi], %s", gen_reg_for(REG_A, type));
+        break;
     }
-
-    gen_asm(gen, "mov [rdi], %s", gen_reg_for(REG_A, type));
 }
 
 static void gen_store_local(Generator* gen, Obj* obj, Register reg) {
@@ -225,14 +245,14 @@ static bool gen_lit(AstVisitor* visitor, Literal* lit) {
     return true;
 }
 
-static void gen_addr_obj(AstVisitor* visitor, Obj* obj) {
-    assert(visitor);
+static void gen_addr_obj(Generator* gen, Obj* obj) {
+    assert(gen);
     assert(obj);
 
     if (obj->is_global)
-        gen_asm(visitor->ctx, "lea rax, [rel " A3_S_F "]", A3_S_FORMAT(obj->name));
+        gen_asm(gen, "lea rax, [rel " A3_S_F "]", A3_S_FORMAT(obj->name));
     else
-        gen_asm(visitor->ctx, "lea rax, [rbp - %zu]", obj->stack_offset);
+        gen_asm(gen, "lea rax, [rbp - %zu]", obj->stack_offset);
 }
 
 static bool gen_addr(AstVisitor* visitor, Expr* lvalue) {
@@ -241,7 +261,7 @@ static bool gen_addr(AstVisitor* visitor, Expr* lvalue) {
 
     switch (lvalue->type) {
     case EXPR_VAR:
-        gen_addr_obj(visitor, lvalue->var.obj);
+        gen_addr_obj(visitor->ctx, lvalue->var.obj);
         break;
     case EXPR_MEMBER:
         A3_TRYB(gen_addr(visitor, lvalue->member.lhs));
@@ -262,6 +282,18 @@ static bool gen_addr(AstVisitor* visitor, Expr* lvalue) {
     return true;
 }
 
+// Assign an expression to an address on the top of the stack.
+static bool gen_assign_to(AstVisitor* visitor, Expr* rhs, Type const* type) {
+    assert(visitor);
+    assert(rhs);
+    assert(type);
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(rhs, expr)));
+    gen_store(visitor->ctx, type);
+
+    return true;
+}
+
 static bool gen_assign(AstVisitor* visitor, BinOp* op) {
     assert(visitor);
     assert(op);
@@ -269,10 +301,7 @@ static bool gen_assign(AstVisitor* visitor, BinOp* op) {
 
     A3_TRYB(gen_addr(visitor, op->lhs));
     gen_stack_push(visitor->ctx);
-    A3_TRYB(vertex_visit(visitor, VERTEX(op->rhs, expr)));
-    gen_store(visitor->ctx, EXPR(op, bin_op)->res_type);
-
-    return true;
+    return gen_assign_to(visitor, op->rhs, EXPR(op, bin_op)->res_type);
 }
 
 static bool gen_add_sub(Generator* gen, BinOp* op) {
@@ -546,7 +575,8 @@ static bool gen_unary_op(AstVisitor* visitor, UnaryOp* op) {
     if (op->type == OP_ADDR)
         return gen_addr(visitor, op->operand);
 
-    A3_TRYB(vertex_visit(visitor, VERTEX(op->operand, expr)));
+    if (op->type != OP_SIZEOF)
+        A3_TRYB(vertex_visit(visitor, VERTEX(op->operand, expr)));
 
     switch (op->type) {
     case OP_UNARY_ADD:
@@ -566,7 +596,7 @@ static bool gen_unary_op(AstVisitor* visitor, UnaryOp* op) {
         gen_asm(visitor->ctx, "not rax");
         break;
     case OP_SIZEOF:
-        gen_asm(visitor->ctx, "mov rax, %zu\n", op->operand->res_type->size);
+        gen_asm(visitor->ctx, "mov rax, %zu", op->operand->res_type->size);
         break;
     case OP_ADDR:
         // Handled earlier.
@@ -625,7 +655,7 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
     Generator* gen = visitor->ctx;
 
     size_t args = 0;
-    A3_SLL_FOR_EACH(Arg, arg, &call->args, link) {
+    A3_SLL_FOR_EACH (Arg, arg, &call->args, link) {
         args++;
         A3_TRYB(vertex_visit(visitor, VERTEX(arg->expr, expr)));
         gen_stack_push(gen);
@@ -670,7 +700,7 @@ static bool gen_fn(AstVisitor* visitor, Item* decl) {
             A3_S_FORMAT(decl->name), decl->obj->stack_depth);
 
     size_t i = 0;
-    A3_SLL_FOR_EACH(Item, param, &decl->obj->params, link) {
+    A3_SLL_FOR_EACH (Item, param, &decl->obj->params, link) {
         gen_store_local(visitor->ctx, param->obj, ARG_REGISTERS[i++]);
         assert(i <= 6);
     }
@@ -683,6 +713,40 @@ static bool gen_fn(AstVisitor* visitor, Item* decl) {
                           "mov rsp, rbp\n"
                           "pop rbp\n"
                           "ret");
+
+    return true;
+}
+
+static bool gen_init(AstVisitor* visitor, Init* init) {
+    assert(visitor);
+    assert(init);
+
+    Generator*  gen       = visitor->ctx;
+    Item*       decl      = gen->init_decl;
+    Type const* decl_type = gen->init_decl_type;
+
+    switch (init->type) {
+    case INIT_EXPR:
+        gen_stack_push(gen);
+        A3_TRYB(vertex_visit(visitor, VERTEX(init->expr, expr)));
+        A3_TRYB(gen_assign_to(visitor, init->expr, decl_type));
+        break;
+    case INIT_LIST: {
+        size_t i = 0;
+        A3_SLL_FOR_EACH (Init, elem, &init->list, link) {
+            assert(elem->type == INIT_EXPR);
+            assert(decl_type->type == TY_ARRAY);
+
+            gen_addr_obj(gen, decl->obj);
+            gen_asm(gen, "add rax, %zu", i++ * decl_type->parent->size);
+            gen->init_decl_type = decl_type->parent;
+            A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
+            gen->init_decl_type = decl_type;
+        }
+
+        break;
+    }
+    }
 
     return true;
 }
@@ -700,10 +764,16 @@ static bool gen_decl(AstVisitor* visitor, Item* decl) {
     if (decl->obj->is_global || !decl->init)
         return true;
 
-    gen_addr_obj(visitor, decl->obj);
-    gen_stack_push(visitor->ctx);
+    Generator* gen = visitor->ctx;
+    assert(!gen->init_decl);
+    gen->init_decl      = decl;
+    gen->init_decl_type = decl->decl_type;
+
+    gen_addr_obj(gen, decl->obj);
     A3_TRYB(vertex_visit(visitor, VERTEX(decl->init, init)));
-    gen_store(visitor->ctx, decl->obj->type);
+
+    gen->init_decl      = NULL;
+    gen->init_decl_type = NULL;
 
     return true;
 }
@@ -781,7 +851,7 @@ static bool gen_data(Generator* gen, Vertex* root) {
     assert(root->type == V_UNIT);
 
     gen_asm(gen, "section .data");
-    A3_SLL_FOR_EACH(Item, decl, &root->unit.items, link) {
+    A3_SLL_FOR_EACH (Item, decl, &root->unit.items, link) {
         assert(VERTEX(decl, item)->type == V_DECL);
 
         Type const* type = decl->decl_type;
@@ -803,33 +873,58 @@ static bool gen_data(Generator* gen, Vertex* root) {
             if (decl->obj->is_defined)
                 continue;
 
-            if (decl->obj->init->type != INIT_EXPR)
-                A3_PANIC(
-                    "INTERNAL ERROR: Other kinds of initializers should not exist at this stage.");
+            switch (decl->obj->init->type) {
+            case INIT_EXPR: {
+                Expr* init = decl->obj->init->expr;
+                switch (type->type) {
+                case TY_PTR:
+                    assert(type->parent->type == TY_U8 && init->type == EXPR_LIT);
 
-            Expr* init = decl->obj->init->expr;
-            switch (type->type) {
-            case TY_ARRAY:
-                assert(type->parent->type == TY_U8 && init->type == EXPR_LIT);
+                    gen_asm(gen, "$" A3_S_F ": dq " A3_S_F, A3_S_FORMAT(decl->name),
+                            A3_S_FORMAT(init->lit.storage->name));
+                    break;
+                default:
+                    assert(type_is_scalar(type));
+                    assert(init->type == EXPR_LIT && init->lit.type == LIT_NUM);
 
-                fprintf(gen->cfg->asm_out, "$" A3_S_F ": db ", A3_S_FORMAT(decl->name));
-                for (size_t i = 0; i < init->lit.str.len; i++)
-                    fprintf(gen->cfg->asm_out, "%d,", init->lit.str.ptr[i]);
-                gen_asm(gen, "0");
-                break;
-            case TY_PTR:
-                assert(type->parent->type == TY_U8 && init->type == EXPR_LIT);
+                    gen_asm(gen, "$" A3_S_F ": %s %" PRId64, A3_S_FORMAT(decl->name),
+                            type->size == 1 ? "db" : "dq", init->lit.num);
 
-                gen_asm(gen, "$" A3_S_F ": dq " A3_S_F, A3_S_FORMAT(decl->name),
-                        A3_S_FORMAT(init->lit.storage->name));
-                break;
-            default:
-                assert(init->type == EXPR_LIT && init->lit.type == LIT_NUM);
-
-                gen_asm(gen, "$" A3_S_F ": %s %" PRId64, A3_S_FORMAT(decl->name),
-                        type->size == 1 ? "db" : "dq", init->lit.num);
+                    break;
+                }
 
                 break;
+            }
+            case INIT_LIST:
+                assert(type->type == TY_ARRAY && type->parent->size <= 8);
+
+                char* size = NULL;
+                if (type->parent->size == 1)
+                    size = "db";
+                else if (type->parent->size == 2)
+                    size = "dw";
+                else if (type->parent->size <= 4)
+                    size = "dd";
+                else
+                    size = "dq";
+
+                gen_asm_nolf(gen, "$" A3_S_F ": %s ", A3_S_FORMAT(decl->name), size);
+                bool first = true;
+                A3_SLL_FOR_EACH (Init, elem, &decl->obj->init->list, link) {
+                    if (elem->type != INIT_EXPR) {
+                        gen_error(gen, VERTEX(elem, init), "Non-expression initializer in list.");
+                        return false;
+                    }
+
+                    EvalResult res = eval(gen->src, elem->expr);
+                    if (!res.ok)
+                        return false;
+
+                    gen_asm_nolf(gen, "%s%" PRId64, !first ? "," : "", res.value);
+                    first = false;
+                }
+
+                gen_asm_nolf(gen, "\n");
             }
 
             decl->obj->is_defined = true;
@@ -847,12 +942,14 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
     assert(root);
     assert(root->type == V_UNIT);
 
-    Generator gen = { .cfg         = cfg,
-                      .src         = src,
-                      .stack_depth = 0,
-                      .label       = 0,
-                      .line        = 0,
-                      .in_loop     = { .in_loop = false } };
+    Generator gen = { .cfg            = cfg,
+                      .src            = src,
+                      .init_decl      = NULL,
+                      .init_decl_type = NULL,
+                      .stack_depth    = 0,
+                      .label          = 0,
+                      .line           = 0,
+                      .in_loop        = { .in_loop = false } };
 
     A3_TRYB(gen_data(&gen, root));
 
@@ -877,6 +974,7 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
             .visit_ret            = gen_ret,
             .visit_if             = gen_if,
             .visit_decl           = gen_decl,
+            .visit_init           = gen_init,
             .visit_loop           = gen_loop,
         },
         root);
