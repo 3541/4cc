@@ -276,7 +276,7 @@ extra_tests = run_command(
 ).stdout().strip().split('\n')
 
 foreach t : extra_tests
-  s = t.split(':')
+  s = t.split('\0')
   if s.length() != 2
     continue
   endif
@@ -317,7 +317,7 @@ extra_invalid = run_command(
 ).stdout().strip().split('\n')
 
 foreach t : extra_invalid
-  s = t.split(':')
+  s = t.split('\0')
   if s.length() != 2
     continue
   endif

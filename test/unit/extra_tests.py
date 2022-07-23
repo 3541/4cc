@@ -21,4 +21,4 @@ for root, _, files in os.walk(dir):
             name = name + "_"
         names.add(name)
 
-        print(name + ":" + os.path.join(root, file))
+        print(name + "\0" + os.path.join(root, file))
