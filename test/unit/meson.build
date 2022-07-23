@@ -277,6 +277,10 @@ extra_tests = run_command(
 
 foreach t : extra_tests
   s = t.split(':')
+  if s.length() != 2
+    continue
+  endif
+
   name = s[0]
   file = s[1]
 
@@ -314,6 +318,10 @@ extra_invalid = run_command(
 
 foreach t : extra_invalid
   s = t.split(':')
+  if s.length() != 2
+    continue
+  endif
+
   name = s[0]
   file = s[1]
 
