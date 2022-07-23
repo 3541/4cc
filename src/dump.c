@@ -371,6 +371,26 @@ static bool dump_decl(AstVisitor* visitor, Item* decl) {
     return true;
 }
 
+static bool dump_init(AstVisitor* visitor, Init* init) {
+    assert(visitor);
+    assert(init);
+
+    char const* type = NULL;
+    switch (init->type) {
+    case INIT_EXPR:
+        type = "EXPR";
+    }
+
+    dump_print(visitor->ctx, "INIT<%s>", type);
+
+    switch (init->type) {
+    case INIT_EXPR:
+        return dump_child(visitor, VERTEX(init->expr, expr));
+    }
+
+    A3_UNREACHABLE();
+}
+
 bool dump(Vertex* root) {
     assert(root);
 
@@ -393,6 +413,7 @@ bool dump(Vertex* root) {
             .visit_if        = dump_if,
             .visit_block     = dump_block,
             .visit_loop      = dump_loop,
+            .visit_init      = dump_init,
         },
         root);
 

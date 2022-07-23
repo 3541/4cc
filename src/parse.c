@@ -1360,6 +1360,16 @@ static bool parse_fn(Parser* parser, Item* decl) {
     return true;
 }
 
+static Init* parse_init(Parser* parser) {
+    assert(parser);
+
+    Expr* init = parse_expr(parser, INFIX_PRECEDENCE[TOK_EQ][1]);
+    if (!init)
+        return NULL;
+
+    return vertex_init_expr_new(SPAN(init, expr), init);
+}
+
 static bool parse_decl(Parser* parser, Items* items) {
     assert(parser);
     assert(items);
@@ -1396,11 +1406,9 @@ static bool parse_decl(Parser* parser, Items* items) {
         if (lex_peek(parser->lexer).type == TOK_EQ) {
             lex_next(parser->lexer);
 
-            Expr* init = parse_expr(parser, INFIX_PRECEDENCE[TOK_EQ][1]);
-            if (!init)
+            decl->init = parse_init(parser);
+            if (!decl->init)
                 return false;
-
-            decl->init = init;
         }
     }
 

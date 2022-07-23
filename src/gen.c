@@ -702,7 +702,7 @@ static bool gen_decl(AstVisitor* visitor, Item* decl) {
 
     gen_addr_obj(visitor, decl->obj);
     gen_stack_push(visitor->ctx);
-    A3_TRYB(vertex_visit(visitor, VERTEX(decl->init, expr)));
+    A3_TRYB(vertex_visit(visitor, VERTEX(decl->init, init)));
     gen_store(visitor->ctx, decl->obj->type);
 
     return true;
@@ -803,7 +803,11 @@ static bool gen_data(Generator* gen, Vertex* root) {
             if (decl->obj->is_defined)
                 continue;
 
-            Expr* init = decl->obj->init;
+            if (decl->obj->init->type != INIT_EXPR)
+                A3_PANIC(
+                    "INTERNAL ERROR: Other kinds of initializers should not exist at this stage.");
+
+            Expr* init = decl->obj->init->expr;
             switch (type->type) {
             case TY_ARRAY:
                 assert(type->parent->type == TY_U8 && init->type == EXPR_LIT);

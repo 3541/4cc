@@ -75,7 +75,7 @@ static Type const* type_from_ptype(Registry*, PType*);
 
 #define OBJ_GLOBAL true
 #define OBJ_LOCAL  false
-static Obj* obj_new(A3CString name, Type const* type, Expr* init, size_t stack_offset,
+static Obj* obj_new(A3CString name, Type const* type, Init* init, size_t stack_offset,
                     bool global) {
     assert(name.ptr);
     assert(type);
@@ -334,7 +334,7 @@ static bool type_is_assignable(Type const* lhs, Type const* rhs) {
     assert(lhs);
     assert(rhs);
 
-    return lhs == rhs || (type_is_scalar(lhs) && type_is_scalar(rhs) && rhs->size <= lhs->size) ||
+    return lhs == rhs || (type_is_scalar(lhs) && type_is_scalar(rhs)) ||
            (lhs->type == TY_PTR && rhs->type == TY_ARRAY && lhs->parent == rhs->parent) ||
            (lhs->type == TY_ARRAY && rhs->type == TY_ARRAY && lhs->parent == rhs->parent &&
             lhs->len == rhs->len) ||
@@ -843,7 +843,6 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
                             ptype_array_new(span, ptype_builtin_new(span, PTY_CHAR),
                                             vertex_lit_num_new(span, BUILTIN_TYPES[TY_USIZE],
                                                                (int64_t)(lit->str.len + 1))));
-        global_decl->init = EXPR(lit, lit);
         A3_SLL_PUSH(&reg->current_unit->items, global_decl, link);
 
         Scope* current = reg->current_scope;
@@ -854,8 +853,7 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
 
         lit->storage = global_decl->obj = scope_find(reg->current_scope, global_name);
         assert(lit->storage);
-        global_decl->init = EXPR(lit, lit);
-
+        global_decl->obj->init = vertex_init_expr_new(SPAN(lit, expr.lit), EXPR(lit, lit));
         break;
     }
     }
@@ -978,6 +976,50 @@ static bool type_typedef(AstVisitor* visitor, Item* decl) {
     return true;
 }
 
+static bool type_init(AstVisitor* visitor, Init* init) {
+    assert(visitor);
+    assert(init);
+    assert(visitor->parent->type == V_DECL);
+
+    Registry*   reg    = visitor->ctx;
+    Item*       decl   = &visitor->parent->item;
+    Type const* type   = decl->decl_type;
+    bool        global = !reg->current_scope->fn;
+
+    switch (init->type) {
+    case INIT_EXPR:
+        A3_TRYB(vertex_visit(visitor, VERTEX(init->expr, expr)));
+
+        if (!type_is_assignable(type, init->expr->res_type)) {
+            type_error_mismatch(reg, VERTEX(init, init), type, init->expr->res_type);
+            return false;
+        }
+
+        if (global) {
+            if (init->expr->type != EXPR_LIT) {
+                type_error(reg, VERTEX(init, init),
+                           "Initialization of global variable with non-literal value.");
+                return false;
+            }
+
+            if (type->type == TY_ARRAY && type->parent->type != TY_U8) {
+                type_error(reg, VERTEX(decl, item), "Unsupported global array type (TODO).");
+                return false;
+            }
+
+            if (type->type == TY_ARRAY && init->expr->lit.type != LIT_STR) {
+                type_error(reg, VERTEX(init, init),
+                           "Initialization of global array with incompatible literal.");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    A3_UNREACHABLE();
+}
+
 static bool type_decl(AstVisitor* visitor, Item* decl) {
     assert(visitor);
     assert(decl);
@@ -998,6 +1040,7 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
     Type const* type = type_from_ptype(reg, decl->decl_ptype);
     if (!type)
         return false;
+    decl->decl_type = type;
 
     if (type->type == TY_VOID) {
         type_error(reg, VERTEX(decl, item), "Cannot declare object of type void.");
@@ -1022,35 +1065,8 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
         (type->name.ptr || type->type == TY_ENUM))
         return true;
 
-    if (decl->init) {
-        if (global) {
-            if (decl->init->type != EXPR_LIT) {
-                type_error(reg, VERTEX(decl->init, expr),
-                           "Initialization of global variable with non-literal value.");
-                return false;
-            }
-
-            if (type->type == TY_ARRAY) {
-                if (decl->init->lit.type != LIT_STR) {
-                    type_error(reg, VERTEX(decl->init, expr),
-                               "Initialization of global variable with incompatible literal.");
-                    return false;
-                }
-
-                decl->init->res_type =
-                    type_array_of(BUILTIN_TYPES[TY_U8], decl->init->lit.str.len + 1);
-            } else {
-                A3_TRYB(vertex_visit(visitor, VERTEX(decl->init, expr)));
-            }
-
-            if (!type_is_assignable(type, decl->init->res_type)) {
-                type_error_mismatch(reg, VERTEX(decl->init, expr), type, decl->init->res_type);
-                return false;
-            }
-        } else {
-            A3_TRYB(vertex_visit(visitor, VERTEX(decl->init, expr)));
-        }
-    }
+    if (decl->init)
+        A3_TRYB(vertex_visit(visitor, VERTEX(decl->init, init)));
 
     if (prev && decl->init) {
         if (prev->init) {
@@ -1061,8 +1077,6 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
         prev->init = decl->init;
         decl->init = NULL;
     }
-
-    decl->decl_type = type;
 
     if (!global) {
         reg->current_scope->fn->stack_depth =
@@ -1279,6 +1293,7 @@ bool type(Registry* reg, A3CString src, Vertex* root) {
             .visit_block     = type_block,
             .visit_loop      = type_loop,
             .visit_decl      = type_decl,
+            .visit_init      = type_init,
         },
         root);
 }

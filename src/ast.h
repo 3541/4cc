@@ -33,6 +33,7 @@ typedef struct Member Member;
 typedef enum VertexType {
     V_DECL,
     V_EXPR,
+    V_INIT,
     V_STMT,
     V_UNIT,
 } VertexType;
@@ -282,6 +283,16 @@ typedef struct PType {
     };
 } PType;
 
+typedef enum InitType { INIT_EXPR } InitType;
+
+typedef struct Init {
+    InitType type;
+
+    union {
+        Expr* expr;
+    };
+} Init;
+
 typedef struct Item {
     A3_SLL_LINK(Item) link;
 
@@ -310,7 +321,7 @@ typedef struct Item {
 
             union {
                 Block* body; // TY_FN.
-                Expr*  init;
+                Init*  init;
             };
         };
     };
@@ -328,6 +339,7 @@ typedef struct Vertex {
         Expr expr;
         Item item;
         Unit unit;
+        Init init;
     };
 } Vertex;
 
@@ -341,7 +353,9 @@ typedef struct AstVisitor AstVisitor;
 typedef bool (*AstVisitorCallback)(AstVisitor*, Vertex*);
 
 typedef struct AstVisitor {
-    void* ctx;
+    void*   ctx;
+    Vertex* current;
+    Vertex* parent;
     bool (*pre)(AstVisitor*, Vertex*);
     bool (*visit_bin_op)(AstVisitor*, BinOp*);
     bool (*visit_unary_op)(AstVisitor*, UnaryOp*);
@@ -358,6 +372,7 @@ typedef struct AstVisitor {
     bool (*visit_if)(AstVisitor*, If*);
     bool (*visit_block)(AstVisitor*, Block*);
     bool (*visit_loop)(AstVisitor*, Loop*);
+    bool (*visit_init)(AstVisitor*, Init*);
 } AstVisitor;
 
 #define LOOP_COND_PRE  true
@@ -381,6 +396,7 @@ If*    vertex_if_new(Span, Expr* cond, Item* body_true, Item* body_false);
 Block* vertex_block_new(void);
 Loop*  vertex_loop_new(Span, bool cond_pos, Item* init, Expr* cond, Expr* post, Item* body);
 Unit*  vertex_unit_new(void);
+Init*  vertex_init_expr_new(Span, Expr*);
 bool   vertex_visit(AstVisitor*, Vertex*);
 
 PType* ptype_builtin_new(Span, PTypeBuiltinType);

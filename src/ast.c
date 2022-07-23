@@ -233,6 +233,16 @@ Unit* vertex_unit_new(void) {
     return &ret->unit;
 }
 
+Init* vertex_init_expr_new(Span span, Expr* expr) {
+    assert(span.text.ptr);
+    assert(expr);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .type = V_INIT, .init = { .type = INIT_EXPR, .expr = expr } };
+
+    return &ret->init;
+}
+
 static bool visit_bin_op(AstVisitor* visitor, BinOp* op) {
     assert(visitor);
     assert(op);
@@ -380,11 +390,27 @@ static bool visit_break_continue(AstVisitor* visitor, Item* item) {
     return true;
 }
 
+static bool visit_init(AstVisitor* visitor, Init* init) {
+    assert(visitor);
+    assert(init);
+
+    switch (init->type) {
+    case INIT_EXPR:
+        return vertex_visit(visitor, VERTEX(init->expr, expr));
+    }
+
+    A3_UNREACHABLE();
+}
+
 #define VISIT(VISITOR, NAME, VERTEX) ((((VISITOR)->NAME) ?: NAME)((VISITOR), (VERTEX)))
 
 bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
     assert(visitor);
     assert(vertex);
+
+    Vertex* old_parent = visitor->parent;
+    visitor->parent    = visitor->current;
+    visitor->current   = vertex;
 
     if (visitor->pre)
         visitor->pre(visitor, vertex);
@@ -394,51 +420,72 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
         A3_SLL_FOR_EACH(Item, item, &vertex->unit.items, link) {
             A3_TRYB(vertex_visit(visitor, VERTEX(item, item)));
         }
-        return true;
+        break;
     case V_EXPR:
         switch (vertex->expr.type) {
         case EXPR_BIN_OP:
-            return VISIT(visitor, visit_bin_op, &vertex->expr.bin_op);
+            A3_TRYB(VISIT(visitor, visit_bin_op, &vertex->expr.bin_op));
+            break;
         case EXPR_UNARY_OP:
-            return VISIT(visitor, visit_unary_op, &vertex->expr.unary_op);
+            A3_TRYB(VISIT(visitor, visit_unary_op, &vertex->expr.unary_op));
+            break;
         case EXPR_LIT:
-            return VISIT(visitor, visit_lit, &vertex->expr.lit);
+            A3_TRYB(VISIT(visitor, visit_lit, &vertex->expr.lit));
+            break;
         case EXPR_VAR:
-            return VISIT(visitor, visit_var, &vertex->expr.var);
+            A3_TRYB(VISIT(visitor, visit_var, &vertex->expr.var));
+            break;
         case EXPR_CALL:
-            return VISIT(visitor, visit_call, &vertex->expr.call);
+            A3_TRYB(VISIT(visitor, visit_call, &vertex->expr.call));
+            break;
         case EXPR_MEMBER:
-            return VISIT(visitor, visit_member, &vertex->expr.member);
+            A3_TRYB(VISIT(visitor, visit_member, &vertex->expr.member));
+            break;
         case EXPR_COND:
-            return VISIT(visitor, visit_expr_cond, &vertex->expr.cond);
+            A3_TRYB(VISIT(visitor, visit_expr_cond, &vertex->expr.cond));
+            break;
         case EXPR_TYPE:
-            return VISIT(visitor, visit_expr_type, &vertex->expr);
+            A3_TRYB(VISIT(visitor, visit_expr_type, &vertex->expr));
+            break;
         }
         break;
     case V_STMT:
         switch (vertex->item.type) {
         case STMT_EXPR_STMT:
-            return VISIT(visitor, visit_expr_stmt, &vertex->item);
+            A3_TRYB(VISIT(visitor, visit_expr_stmt, &vertex->item));
+            break;
         case STMT_RET:
-            return VISIT(visitor, visit_ret, &vertex->item);
+            A3_TRYB(VISIT(visitor, visit_ret, &vertex->item));
+            break;
         case STMT_IF:
-            return VISIT(visitor, visit_if, &vertex->item.if_stmt);
+            A3_TRYB(VISIT(visitor, visit_if, &vertex->item.if_stmt));
+            break;
         case STMT_BLOCK:
-            return VISIT(visitor, visit_block, &vertex->item.block);
+            A3_TRYB(VISIT(visitor, visit_block, &vertex->item.block));
+            break;
         case STMT_EMPTY:
-            return true;
+            break;
         case STMT_BREAK:
         case STMT_CONTINUE:
-            return VISIT(visitor, visit_break_continue, &vertex->item);
+            A3_TRYB(VISIT(visitor, visit_break_continue, &vertex->item));
+            break;
         case STMT_LOOP:
-            return VISIT(visitor, visit_loop, &vertex->item.loop);
+            A3_TRYB(VISIT(visitor, visit_loop, &vertex->item.loop));
+            break;
         }
         break;
     case V_DECL:
-        return VISIT(visitor, visit_decl, &vertex->item);
+        A3_TRYB(VISIT(visitor, visit_decl, &vertex->item));
+        break;
+    case V_INIT:
+        A3_TRYB(VISIT(visitor, visit_init, &vertex->init));
+        break;
     }
 
-    A3_UNREACHABLE();
+    visitor->current = visitor->parent;
+    visitor->parent  = old_parent;
+
+    return true;
 }
 
 PType* ptype_builtin_new(Span span, PTypeBuiltinType type) {
