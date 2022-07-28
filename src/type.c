@@ -333,6 +333,12 @@ bool type_is_scalar(Type const* type) {
     return (TY_I8 <= type->type && type->type <= TY_U64) || type->type == TY_ENUM;
 }
 
+bool type_is_scalar_value(Type const* type) {
+    assert(type);
+
+    return type_is_scalar(type) || type->type == TY_PTR;
+}
+
 static bool type_is_assignable(Type const* lhs, Type const* rhs) {
     assert(lhs);
     assert(rhs);
@@ -734,7 +740,7 @@ static bool type_bin_op(AstVisitor* visitor, BinOp* op) {
         break;
     case OP_OR:
     case OP_AND:
-        if (!type_is_scalar(op->lhs->res_type) || !type_is_scalar(op->rhs->res_type)) {
+        if (!type_is_scalar_value(op->lhs->res_type) || !type_is_scalar_value(op->rhs->res_type)) {
             type_error(visitor->ctx, VERTEX(op, expr.bin_op),
                        "Non-scalar operand(s) not compatible with this operation.");
             return false;

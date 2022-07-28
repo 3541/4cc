@@ -111,6 +111,7 @@ extern Type const* BUILTIN_TYPES[];
 Registry*     type_registry_new(void);
 A3String      type_name(Type const*);
 bool          type_is_scalar(Type const*);
+bool          type_is_scalar_value(Type const*);
 Member const* type_struct_find_member(Type const*, A3CString name);
 TypeType      type_to_underlying(TypeType);
 bool          type(Registry*, A3CString src, Vertex*);
