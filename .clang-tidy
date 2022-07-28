@@ -5,4 +5,3 @@ CheckOptions:
     value: 3
   - key: bugprone-reserved-identifier.AllowedIdentifiers
     value: '_GNU_SOURCE;_DARWIN_C_SOURCE'
-TypenameMacros: ['A3_HT', 'A3_SLL', 'A3_LL']
