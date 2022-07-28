@@ -228,7 +228,8 @@ tests = {
   'std': [
     'assert',
     'ctype',
-    'stdio'
+    'stdio',
+    'string'
   ],
   'enum': [
     'simple',
