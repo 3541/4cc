@@ -295,7 +295,10 @@ A3String type_name(Type const* type) {
         A3Buffer buf = { .data = type_name(type->parent) };
         buf.tail     = buf.data.len;
         a3_buf_init(&buf, buf.data.len, 512);
-        a3_buf_write_fmt(&buf, "[%zu]", type->len);
+        if (type->len == TYPE_ARRAY_UNSIZED)
+            a3_buf_write_str(&buf, A3_CS("[]"));
+        else
+            a3_buf_write_fmt(&buf, "[%zu]", type->len);
         return A3_CS_MUT(a3_buf_read_ptr(&buf));
     }
     case TY_STRUCT: {
