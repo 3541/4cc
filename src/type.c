@@ -1000,6 +1000,8 @@ static bool type_init(AstVisitor* visitor, Init* init) {
     // should be treated the same as
     //   char x[] = { 'a', 'b', 'c', '\0' };
     // rather than producing a global string literal.
+    //
+    // TODO: This check can probably be moved into the parser.
     if (init->type == INIT_EXPR && init->expr->type == EXPR_LIT &&
         init->expr->lit.type == LIT_STR && decl_type->type == TY_ARRAY)
         vertex_init_lit_str_to_list(init);
