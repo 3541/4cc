@@ -225,6 +225,8 @@ static void config_init(Config* cfg) {
     cfg->preprocess_out_path = path_for(cfg, A3_CS(".pre"), cfg->output_preprocessed);
     cfg->asm_out_path        = path_for(cfg, A3_CS(".asm"), cfg->output_asm);
     cfg->obj_out_path        = path_for(cfg, A3_CS(".o"), cfg->output_obj);
+    if (!cfg->out_path.ptr)
+        cfg->out_path = A3_CS("a.out");
 
     if (a3_string_cmp(cfg->asm_out_path, A3_CS("-")) == 0)
         cfg->asm_out = stdout;
@@ -299,6 +301,10 @@ int main(int argc, char const* argv[]) {
         goto done;
 
     assemble(cfg.asm_out_path, cfg.obj_out_path);
+    if (cfg.output_obj)
+        goto done;
+
+    link(cfg.obj_out_path, cfg.out_path);
 
 done:
     cleanup(&cfg);

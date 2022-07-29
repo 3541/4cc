@@ -14,3 +14,4 @@
 
 void preprocess(A3CString src, A3CString dst, A3Vec* args);
 void assemble(A3CString src, A3CString dst);
+void link(A3CString src, A3CString dst);
