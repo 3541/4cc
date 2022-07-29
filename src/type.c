@@ -459,6 +459,8 @@ static Type const* type_fn_from_ptype(Registry* reg, PType const* ptype) {
         Type const* type = type_from_ptype(reg, decl->decl_ptype);
         if (type->type == TY_VOID)
             break;
+        if (type->type == TY_ARRAY)
+            type = type_ptr_to(reg, type->parent);
 
         Param* param = param_new(type);
 
@@ -931,6 +933,8 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
 
         A3_SLL_FOR_EACH (Item, param, &decl->decl_ptype->params, link) {
             param->decl_type = type_from_ptype(reg, param->decl_ptype);
+            if (param->decl_type->type == TY_ARRAY)
+                param->decl_type = type_ptr_to(reg, param->decl_type->parent);
 
             stack_depth = align_up(stack_depth, param->decl_type->align);
             stack_depth += param->decl_type->size;

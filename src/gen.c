@@ -208,7 +208,7 @@ static void gen_store(Generator* gen, Type const* type) {
 static void gen_store_local(Generator* gen, Obj* obj, Register reg) {
     assert(gen);
     assert(obj);
-    assert(type_is_scalar(obj->type));
+    assert(type_is_scalar_value(obj->type));
 
     gen_asm(gen, "mov [rbp - %zu], %s", obj->stack_offset, gen_reg_for(reg, obj->type));
 }
