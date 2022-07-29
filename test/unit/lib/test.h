@@ -10,6 +10,8 @@ int sub3(int, int, int);
 
 int puts(char const*);
 
+extern int array[];
+
 void test_assert_eq(size_t, size_t, char*, int);
 
 size_t variadic_sum(size_t c, ...);

@@ -809,6 +809,13 @@ static bool type_unary_op(AstVisitor* visitor, UnaryOp* op) {
         EXPR(op, unary_op)->res_type = op->operand->res_type;
         break;
     case OP_SIZEOF:
+        if (op->operand->res_type->type == TY_ARRAY &&
+            op->operand->res_type->size == TYPE_ARRAY_UNSIZED) {
+            type_error(visitor->ctx, VERTEX(op, expr.unary_op),
+                       "Operand of sizeof cannot be an incomplete type.");
+            return false;
+        }
+
         EXPR(op, unary_op)->res_type = BUILTIN_TYPES[TY_U64];
         break;
     }
@@ -1117,10 +1124,17 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
         return true;
 
     if (decl->init) {
+        if (decl->attributes.is_extern) {
+            type_error(reg, VERTEX(decl, item),
+                       "extern-qualified declaration cannot have an initializer.");
+            return false;
+        }
+
         reg->init_type = type;
         A3_TRYB(vertex_visit(visitor, VERTEX(decl->init, init)));
         reg->init_type = NULL;
-    } else if (type->type == TY_ARRAY && type->len == TYPE_ARRAY_UNSIZED) {
+    } else if (type->type == TY_ARRAY && type->len == TYPE_ARRAY_UNSIZED &&
+               !decl->attributes.is_extern) {
         type_error(reg, VERTEX(decl, item), "Declaration of array with incomplete type.");
         return false;
     }

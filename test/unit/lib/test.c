@@ -10,7 +10,8 @@ int sum2(int a, int b) { return a + b; }
 int sum6(int a1, int a2, int a3, int a4, int a5, int a6) { return a1 + a2 + a3 + a4 + a5 + a6; }
 int sub3(int a, int b, int c) { return a + b - c; }
 
-int GLOBAL = 28;
+int GLOBAL    = 28;
+int array[42] = { 1, 2, 3, 4, 5, 6, 7 };
 
 int return_43(void) { return 43; }
 

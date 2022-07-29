@@ -214,7 +214,8 @@ tests = {
     'extern',
     'extern_fn',
     'const',
-    'const_eval'
+    'const_eval',
+    'extern_unsized_array'
   ],
   'typedef': [
     'simple',
