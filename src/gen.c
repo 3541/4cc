@@ -77,6 +77,8 @@ typedef struct Generator {
     size_t        line;
 } Generator;
 
+static bool gen_data_decl(Generator*, Item*);
+
 static size_t gen_label(Generator* gen) {
     assert(gen);
 
@@ -249,8 +251,9 @@ static void gen_addr_obj(Generator* gen, Obj* obj) {
     assert(gen);
     assert(obj);
 
-    if (obj->is_global)
-        gen_asm(gen, "lea rax, [rel " A3_S_F "]", A3_S_FORMAT(obj->name));
+    if (obj->is_global || obj->is_static)
+        gen_asm(gen, "lea rax, [rel $%s" A3_S_F "]", !obj->is_global ? "." : "",
+                A3_S_FORMAT(obj->name));
     else
         gen_asm(gen, "lea rax, [rbp - %zu]", obj->stack_offset);
 }
@@ -766,6 +769,10 @@ static bool gen_decl(AstVisitor* visitor, Item* decl) {
 
     Generator* gen = visitor->ctx;
     assert(!gen->init_decl);
+
+    if (decl->attributes.is_static)
+        return gen_data_decl(gen, decl);
+
     gen->init_decl      = decl;
     gen->init_decl_type = decl->decl_type;
 
@@ -844,6 +851,97 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
     return true;
 }
 
+static bool gen_data_decl(Generator* gen, Item* decl) {
+    assert(gen);
+    assert(decl);
+    assert(VERTEX(decl, item)->type == V_DECL);
+    assert(decl->obj->is_global || decl->attributes.is_static);
+
+    if (decl->obj->is_defined)
+        return true;
+
+    if (decl->attributes.is_extern) {
+        gen_asm(gen, "extern $" A3_S_F, A3_S_FORMAT(decl->name));
+        return true;
+    }
+
+    Type const* type = decl->decl_type;
+
+    if (decl->obj->is_global && !decl->attributes.is_static)
+        gen_asm(gen, "global $" A3_S_F, A3_S_FORMAT(decl->name));
+    if (!decl->obj->is_global)
+        gen_asm(gen, "section .data");
+    if (type->align != 1)
+        gen_asm(gen, "align %zu, db 0", type->align);
+
+    char* prefix = !decl->obj->is_global ? "." : "";
+
+    if (!decl->obj->init) {
+        gen_asm(gen, "$%s" A3_S_F ": times %zu db 0", prefix, A3_S_FORMAT(decl->name), type->size);
+    } else {
+        switch (decl->obj->init->type) {
+        case INIT_EXPR: {
+            Expr* init = decl->obj->init->expr;
+            switch (type->type) {
+            case TY_PTR:
+                assert(type->parent->type == TY_U8 && init->type == EXPR_LIT);
+
+                gen_asm(gen, "$%s" A3_S_F ": dq " A3_S_F, prefix, A3_S_FORMAT(decl->name),
+                        A3_S_FORMAT(init->lit.storage->name));
+                break;
+            default:
+                assert(type_is_scalar(type));
+                assert(init->type == EXPR_LIT && init->lit.type == LIT_NUM);
+
+                gen_asm(gen, "$%s" A3_S_F ": %s %" PRId64, prefix, A3_S_FORMAT(decl->name),
+                        type->size == 1 ? "db" : "dq", init->lit.num);
+
+                break;
+            }
+
+            break;
+        case INIT_LIST:
+            assert(type->type == TY_ARRAY && type->parent->size <= 8);
+
+            char* size = NULL;
+            if (type->parent->size == 1)
+                size = "db";
+            else if (type->parent->size == 2)
+                size = "dw";
+            else if (type->parent->size <= 4)
+                size = "dd";
+            else
+                size = "dq";
+
+            gen_asm_nolf(gen, "$%s" A3_S_F ": %s ", prefix, A3_S_FORMAT(decl->name), size);
+            bool first = true;
+            A3_SLL_FOR_EACH (Init, elem, &decl->obj->init->list, link) {
+                if (elem->type != INIT_EXPR) {
+                    gen_error(gen, VERTEX(elem, init), "Non-expression initializer in list.");
+                    return false;
+                }
+
+                EvalResult res = eval(gen->src, elem->expr);
+                if (!res.ok)
+                    return false;
+
+                gen_asm_nolf(gen, "%s%" PRId64, !first ? "," : "", res.value);
+                first = false;
+            }
+
+            gen_asm_nolf(gen, "\n");
+            break;
+        }
+        }
+    }
+    decl->obj->is_defined = true;
+
+    if (!decl->obj->is_global)
+        gen_asm(gen, "section .text");
+
+    return true;
+}
+
 static bool gen_data(Generator* gen, Vertex* root) {
     assert(gen);
     assert(root);
@@ -852,85 +950,10 @@ static bool gen_data(Generator* gen, Vertex* root) {
 
     gen_asm(gen, "section .data");
     A3_SLL_FOR_EACH (Item, decl, &root->unit.items, link) {
-        assert(VERTEX(decl, item)->type == V_DECL);
-
-        Type const* type = decl->decl_type;
-
-        if (type->type == TY_FN || !decl->name.ptr || !decl->obj)
+        if (decl->decl_type->type == TY_FN || !decl->name.ptr || !decl->obj)
             continue;
 
-        if (decl->attributes.is_extern) {
-            gen_asm(gen, "extern $" A3_S_F, A3_S_FORMAT(decl->name));
-            continue;
-        }
-
-        if (!decl->attributes.is_static)
-            gen_asm(gen, "global $" A3_S_F, A3_S_FORMAT(decl->name));
-        if (type->align != 1)
-            gen_asm(gen, "align %zu, db 0", type->align);
-
-        if (decl->obj->init) {
-            if (decl->obj->is_defined)
-                continue;
-
-            switch (decl->obj->init->type) {
-            case INIT_EXPR: {
-                Expr* init = decl->obj->init->expr;
-                switch (type->type) {
-                case TY_PTR:
-                    assert(type->parent->type == TY_U8 && init->type == EXPR_LIT);
-
-                    gen_asm(gen, "$" A3_S_F ": dq " A3_S_F, A3_S_FORMAT(decl->name),
-                            A3_S_FORMAT(init->lit.storage->name));
-                    break;
-                default:
-                    assert(type_is_scalar(type));
-                    assert(init->type == EXPR_LIT && init->lit.type == LIT_NUM);
-
-                    gen_asm(gen, "$" A3_S_F ": %s %" PRId64, A3_S_FORMAT(decl->name),
-                            type->size == 1 ? "db" : "dq", init->lit.num);
-
-                    break;
-                }
-
-                break;
-            }
-            case INIT_LIST:
-                assert(type->type == TY_ARRAY && type->parent->size <= 8);
-
-                char* size = NULL;
-                if (type->parent->size == 1)
-                    size = "db";
-                else if (type->parent->size == 2)
-                    size = "dw";
-                else if (type->parent->size <= 4)
-                    size = "dd";
-                else
-                    size = "dq";
-
-                gen_asm_nolf(gen, "$" A3_S_F ": %s ", A3_S_FORMAT(decl->name), size);
-                bool first = true;
-                A3_SLL_FOR_EACH (Init, elem, &decl->obj->init->list, link) {
-                    if (elem->type != INIT_EXPR) {
-                        gen_error(gen, VERTEX(elem, init), "Non-expression initializer in list.");
-                        return false;
-                    }
-
-                    EvalResult res = eval(gen->src, elem->expr);
-                    if (!res.ok)
-                        return false;
-
-                    gen_asm_nolf(gen, "%s%" PRId64, !first ? "," : "", res.value);
-                    first = false;
-                }
-
-                gen_asm_nolf(gen, "\n");
-            }
-
-            decl->obj->is_defined = true;
-        } else {
-            gen_asm(gen, "$" A3_S_F ": times %zu db 0", A3_S_FORMAT(decl->name), type->size);
-        }
+        A3_TRYB(gen_data_decl(gen, decl));
     }
 
     return true;

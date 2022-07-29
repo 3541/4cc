@@ -77,19 +77,21 @@ static Type const* type_from_ptype(Registry*, PType*);
 
 #define OBJ_GLOBAL true
 #define OBJ_LOCAL  false
-static Obj* obj_new(A3CString name, Type const* type, Init* init, size_t stack_offset,
-                    bool global) {
+static Obj* obj_new(A3CString name, Type const* type, Init* init, DeclAttributes attrs,
+                    size_t stack_offset, bool global) {
     assert(name.ptr);
     assert(type);
 
     A3_UNWRAPNI(Obj*, ret, calloc(1, sizeof(*ret)));
     *ret = (Obj) {
-        .name         = name,
-        .type         = type,
-        .init         = init,
-        .stack_offset = stack_offset,
-        .is_global    = global,
-        .is_defined   = false,
+        .name             = name,
+        .type             = type,
+        .init             = init,
+        .stack_offset     = !attrs.is_static ? stack_offset : 0,
+        .is_global        = global,
+        .is_static        = attrs.is_static,
+        .is_defined       = false,
+        .is_named_literal = false,
     };
 
     return ret;
@@ -97,11 +99,11 @@ static Obj* obj_new(A3CString name, Type const* type, Init* init, size_t stack_o
 
 #define OBJ_FN_DEFINED   true
 #define OBJ_FN_UNDEFINED false
-static Obj* obj_fn_new(A3CString name, Type const* type, bool defined) {
+static Obj* obj_fn_new(A3CString name, Type const* type, DeclAttributes attrs, bool defined) {
     assert(name.ptr);
     assert(type);
 
-    Obj* ret        = obj_new(name, type, NULL, 0, OBJ_GLOBAL);
+    Obj* ret        = obj_new(name, type, NULL, attrs, 0, OBJ_GLOBAL);
     ret->is_defined = defined;
 
     return ret;
@@ -111,7 +113,7 @@ static Obj* obj_enum_const_new(A3CString name, Type const* type, uint32_t value)
     assert(name.ptr);
     assert(type);
 
-    Obj* ret              = obj_new(name, type, NULL, 0, OBJ_LOCAL);
+    Obj* ret              = obj_new(name, type, NULL, (DeclAttributes) {}, 0, OBJ_LOCAL);
     ret->is_named_literal = true;
     ret->value            = value;
 
@@ -936,10 +938,13 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
             if (param->decl_type->type == TY_ARRAY)
                 param->decl_type = type_ptr_to(reg, param->decl_type->parent);
 
-            stack_depth = align_up(stack_depth, param->decl_type->align);
-            stack_depth += param->decl_type->size;
+            if (!param->attributes.is_static) {
+                stack_depth = align_up(stack_depth, param->decl_type->align);
+                stack_depth += param->decl_type->size;
+            }
 
-            param->obj = obj_new(param->name, param->decl_type, NULL, stack_depth, OBJ_LOCAL);
+            param->obj = obj_new(param->name, param->decl_type, NULL, param->attributes,
+                                 stack_depth, OBJ_LOCAL);
             scope_add(reg->current_scope, param->obj);
         }
 
@@ -950,7 +955,8 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
         decl->obj             = prev;
         decl->obj->is_defined = decl->obj->is_defined || decl->body;
     } else {
-        decl->obj = obj_fn_new(decl->name, fn_type, decl->body ? OBJ_FN_DEFINED : OBJ_FN_UNDEFINED);
+        decl->obj = obj_fn_new(decl->name, fn_type, decl->attributes,
+                               decl->body ? OBJ_FN_DEFINED : OBJ_FN_UNDEFINED);
         scope_add(reg->current_scope, decl->obj);
     }
 
@@ -1170,7 +1176,7 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
     if (prev) {
         decl->obj = prev;
     } else {
-        decl->obj = obj_new(decl->name, type, decl->init,
+        decl->obj = obj_new(decl->name, type, decl->init, decl->attributes,
                             !global ? reg->current_scope->fn->stack_depth : 0, global);
         scope_add(reg->current_scope, decl->obj);
     }

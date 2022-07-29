@@ -53,7 +53,8 @@ tests = {
     'long_ident',
     'mixed_ident',
     'mutate',
-    'align'
+    'align',
+    'static'
   ],
   'return': [
     'early',

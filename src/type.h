@@ -86,6 +86,7 @@ typedef struct Obj {
     A3CString   name;
     Type const* type;
     bool        is_global;
+    bool        is_static;
     bool        is_defined;
     bool        is_named_literal;
 
