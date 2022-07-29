@@ -22,4 +22,4 @@ if [ "$(python3 --version | cut -d'.' -f2)" -lt 6 ]; then
     exit
 fi
 
-ASAN_OPTIONS=detect_leaks=0 meson test -C "$dir"
+ASAN_OPTIONS=detect_leaks=0 meson test -C "$dir" -v
