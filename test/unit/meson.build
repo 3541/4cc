@@ -42,7 +42,8 @@ tests = {
     'inc',
     'dec',
     'char',
-    'compound_assign'
+    'compound_assign',
+    'null_assign'
   ],
   'var': [
     'simple',

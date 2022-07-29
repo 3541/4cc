@@ -351,6 +351,12 @@ static bool type_is_assignable(Type const* lhs, Type const* rhs) {
             (lhs->parent->type == TY_VOID || rhs->parent->type == TY_VOID));
 }
 
+static bool type_expr_is_assignable(Type const* lhs, Expr const* rhs) {
+    return type_is_assignable(lhs, rhs->res_type) ||
+           (lhs->type == TY_PTR && rhs->type == EXPR_LIT && rhs->lit.type == LIT_NUM &&
+            rhs->lit.num == 0);
+}
+
 Member const* type_struct_find_member(Type const* s, A3CString name) {
     assert(s);
     assert(s->type == TY_STRUCT || s->type == TY_UNION);
@@ -1017,7 +1023,7 @@ static bool type_init(AstVisitor* visitor, Init* init) {
     case INIT_EXPR:
         A3_TRYB(vertex_visit(visitor, VERTEX(init->expr, expr)));
 
-        if (!type_is_assignable(decl_type, init->expr->res_type)) {
+        if (!type_expr_is_assignable(decl_type, init->expr)) {
             type_error_mismatch(reg, VERTEX(init, init), decl_type, init->expr->res_type);
             return false;
         }
@@ -1225,7 +1231,7 @@ static bool type_call(AstVisitor* visitor, Call* call) {
             return false;
         }
 
-        if (!type_is_assignable(param->type, arg->expr->res_type)) {
+        if (!type_expr_is_assignable(param->type, arg->expr)) {
             type_error_mismatch(reg, VERTEX(arg->expr, expr), param->type, arg->expr->res_type);
             return false;
         }
