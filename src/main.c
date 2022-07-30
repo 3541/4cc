@@ -112,6 +112,9 @@ static Config arg_parse(size_t argc, char const* argv[]) {
             continue;
         }
 
+        if (strcmp(argv[i], "-ansi") == 0 || strcmp(argv[i], "-pedantic") == 0)
+            continue;
+
         switch (argv[i][1]) {
         case 'o':
             if (ret.out_path.ptr) {
@@ -161,6 +164,10 @@ static Config arg_parse(size_t argc, char const* argv[]) {
         }
         case 'C':
             A3_VEC_PUSH(&ret.preprocess_args, &A3_CS("-C"));
+            break;
+        case 'O':
+        case 'W':
+        case 'g':
             break;
         default:
             if (strcmp(argv[i], "--dump-ast") == 0) {
