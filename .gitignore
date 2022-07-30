@@ -1,3 +1,4 @@
 result
 .cache
 .envrc
+**/__pycache__

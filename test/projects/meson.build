@@ -12,6 +12,7 @@ foreach project : projects
     args: [
       dir / 'build.py',
       fcc
-    ]
+    ],
+    env: ['PYTHONPATH=' + meson.current_source_dir()]
   )
 endforeach
