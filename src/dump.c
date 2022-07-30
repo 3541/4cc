@@ -215,9 +215,11 @@ static bool dump_call(AstVisitor* visitor, Call* call) {
     dump_print(visitor->ctx, "CALL");
     A3_TRYB(dump_child(visitor, VERTEX(call->callee, expr)));
 
-    dump_print(visitor->ctx, "PARAMS");
-    A3_SLL_FOR_EACH (Arg, arg, &call->args, link)
-        A3_TRYB(dump_child(visitor, VERTEX(arg->expr, expr)));
+    if (!A3_SLL_IS_EMPTY(&call->args)) {
+        dump_print(visitor->ctx, "ARGS");
+        A3_SLL_FOR_EACH (Arg, arg, &call->args, link)
+            A3_TRYB(dump_child(visitor, VERTEX(arg->expr, expr)));
+    }
 
     return true;
 }
@@ -369,6 +371,10 @@ static bool dump_decl(AstVisitor* visitor, Item* decl) {
 
     if (type.ptr)
         a3_string_free(&type);
+
+    if (decl->init)
+        A3_TRYB(dump_child(visitor, VERTEX(decl->init, init)));
+
     return true;
 }
 
