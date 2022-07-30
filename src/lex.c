@@ -212,8 +212,10 @@ static Token lex_lit_num(Lexer* lexer) {
     lex_consume_any(lexer, (size_t)offset);
 
     bool is_signed = false;
-    if (tolower(lex_peek_byte(lexer)) == 'u') {
-        is_signed = true;
+    while (strchr("ul", tolower(lex_peek_byte(lexer)))) {
+        if (tolower(lex_peek_byte(lexer)) == 'u')
+            is_signed = true;
+
         lex_consume_any(lexer, 1);
     }
 

@@ -46,7 +46,8 @@ tests = {
     'null_assign',
     'hex',
     'octal',
-    'unsigned_literal'
+    'unsigned_literal',
+    'long_suffix'
   ],
   'var': [
     'simple',
