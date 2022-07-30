@@ -36,6 +36,7 @@ typedef struct {
     int __placeholder;
 } __va_list;
 
+typedef __va_list va_list;
 typedef __va_list __gnuc_va_list;
 
 #endif
