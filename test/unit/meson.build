@@ -43,7 +43,8 @@ tests = {
     'dec',
     'char',
     'compound_assign',
-    'null_assign'
+    'null_assign',
+    'hex'
   ],
   'var': [
     'simple',

@@ -193,7 +193,14 @@ static Token lex_lit_num(Lexer* lexer) {
     int       offset = -1;
     int64_t   num    = -1;
     A3CString s      = lex_peek_str(lexer);
-    if (sscanf(a3_string_cstr(s), "%" SCNd64 "%n", &num, &offset) < 1) {
+
+    int res = -1;
+    if (s.ptr[0] == '0' && tolower(s.ptr[1]) == 'x')
+        res = sscanf(a3_string_cstr(s), "%" SCNx64 "%n", &num, &offset);
+    else
+        res = sscanf(a3_string_cstr(s), "%" SCNd64 "%n", &num, &offset);
+
+    if (res < 1) {
         s.len = 1;
         lex_error(lexer, "Expected a numeric literal.");
         return lex_recover(lexer);
