@@ -100,6 +100,7 @@ typedef enum TokenType {
     TOK_UNSIGNED,
     TOK_USIZE,
     TOK_VOID,
+    TOK_VOLATILE,
     TOK_WHILE,
 
     TOK_EOF,

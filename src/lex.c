@@ -480,7 +480,7 @@ static Token lex_ident_or_kw(Lexer* lexer) {
         { A3_CS("typedef"), TOK_TYPEDEF },   { A3_CS("unsigned"), TOK_UNSIGNED },
         { A3_CS("signed"), TOK_SIGNED },     { A3_CS("extern"), TOK_EXTERN },
         { A3_CS("const"), TOK_CONST },       { A3_CS("enum"), TOK_ENUM },
-        { A3_CS("static"), TOK_STATIC },
+        { A3_CS("static"), TOK_STATIC },     { A3_CS("volatile"), TOK_VOLATILE },
     };
 
     A3CString lexeme = lex_consume_until(lexer, is_not_ident);

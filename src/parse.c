@@ -175,7 +175,7 @@ static bool parse_has_decl_typename(Parser* parser) {
 
     Token next = lex_peek(parser->lexer);
     return parse_has_decl_builtin(parser) || next.type == TOK_EXTERN || next.type == TOK_CONST ||
-           next.type == TOK_STATIC;
+           next.type == TOK_STATIC || next.type == TOK_VOLATILE;
 }
 
 static bool parse_has_decl_aggregate(Parser* parser) {
@@ -927,7 +927,7 @@ static PType* parse_aggregate_decl(Parser* parser) {
         if (!parse_decl(parser, &items))
             return NULL;
 
-        A3_SLL_FOR_EACH(Item, item, &items, link) {
+        A3_SLL_FOR_EACH (Item, item, &items, link) {
             assert(VERTEX(item, item)->type == V_DECL);
 
             if (item->attributes.is_typedef) {
@@ -1116,7 +1116,7 @@ static PType* parse_declspec(Parser* parser) {
     Token            next         = lex_peek(parser->lexer);
     while (parse_has_decl(parser)) {
         next = lex_peek(parser->lexer);
-        if (next.type == TOK_CONST) {
+        if (next.type == TOK_CONST || next.type == TOK_VOLATILE) {
             lex_next(parser->lexer);
             continue;
         }
@@ -1277,9 +1277,10 @@ static Item* parse_declarator(Parser* parser, PType* type) {
     assert(parser);
     assert(type);
 
-    while (lex_peek(parser->lexer).type == TOK_STAR || lex_peek(parser->lexer).type == TOK_CONST) {
+    while (lex_peek(parser->lexer).type == TOK_STAR || lex_peek(parser->lexer).type == TOK_CONST ||
+           lex_peek(parser->lexer).type == TOK_VOLATILE) {
         Token next = lex_next(parser->lexer);
-        if (next.type == TOK_CONST)
+        if (next.type == TOK_CONST || next.type == TOK_VOLATILE)
             continue;
 
         type = ptype_ptr_new(parse_span_merge(type->span, next.lexeme), type);
