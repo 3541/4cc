@@ -325,7 +325,20 @@ static Expr* parse_lit_str(Parser* parser) {
     Token tok = lex_next(parser->lexer);
     assert(tok.type == TOK_LIT_STR);
 
-    return vertex_lit_str_new(tok.lexeme, tok.lit_str);
+    if (lex_peek(parser->lexer).type != TOK_LIT_STR)
+        return vertex_lit_str_new(tok.lexeme, tok.lit_str);
+
+    A3Buffer* buf = a3_buf_new(tok.lexeme.text.len, 1024);
+    a3_buf_write_str(buf, tok.lit_str);
+
+    Span span = tok.lexeme;
+    while (lex_peek(parser->lexer).type == TOK_LIT_STR) {
+        Token next = lex_next(parser->lexer);
+        span       = parse_span_merge(span, next.lexeme);
+        a3_buf_write_str(buf, next.lit_str);
+    }
+
+    return vertex_lit_str_new(span, a3_buf_read_ptr(buf));
 }
 
 static PType* parse_anon_type(Parser* parser) {

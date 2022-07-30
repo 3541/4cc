@@ -142,7 +142,8 @@ tests = {
     'empty',
     'index',
     'arithmetic',
-    'arg'
+    'arg',
+    'concat'
   ],
   'escape': [
     'single_quote',
