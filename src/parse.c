@@ -1269,6 +1269,7 @@ static PType* parse_declarator_dummy_replace(PType* nested, PType* base) {
         nested->parent = parse_declarator_dummy_replace(nested->parent, base);
     }
 
+    nested->attributes = base->attributes;
     return nested;
 }
 
