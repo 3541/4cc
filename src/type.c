@@ -266,14 +266,11 @@ A3String type_name(Type const* type) {
         return ret;
     }
     case TY_FN: {
-        A3Buffer buf = { .data = type_name(type->ret) };
-        buf.tail     = buf.data.len;
+        A3Buffer buf = { .data.ptr = NULL };
         a3_buf_init(&buf, buf.data.len, 512);
-        a3_buf_write_str(&buf, A3_CS(" (*)("));
-        if (!A3_SLL_HEAD(&type->params)) {
-            a3_buf_write_str(&buf, A3_CS("void)"));
-            return A3_CS_MUT(a3_buf_read_ptr(&buf));
-        }
+        a3_buf_write_str(&buf, A3_CS("(("));
+        if (!A3_SLL_HEAD(&type->params))
+            a3_buf_write_str(&buf, A3_CS("void"));
 
         bool first = true;
         A3_SLL_FOR_EACH (Param, param, &type->params, link) {
@@ -289,7 +286,9 @@ A3String type_name(Type const* type) {
         if (type->is_variadic)
             a3_buf_write_str(&buf, A3_CS(", ..."));
 
-        a3_buf_write_byte(&buf, ')');
+        A3String ret_name = type_name(type->ret);
+        a3_buf_write_fmt(&buf, ") -> " A3_S_F ")", A3_S_FORMAT(ret_name));
+        a3_string_free(&ret_name);
 
         return A3_CS_MUT(a3_buf_read_ptr(&buf));
     }
@@ -350,6 +349,7 @@ static bool type_is_assignable(Type const* lhs, Type const* rhs) {
 
     return lhs == rhs || (type_is_scalar(lhs) && type_is_scalar(rhs)) ||
            (lhs->type == TY_PTR && rhs->type == TY_ARRAY && lhs->parent == rhs->parent) ||
+           (lhs->type == TY_PTR && rhs->type == TY_FN && lhs->parent == rhs) ||
            (lhs->type == TY_ARRAY && rhs->type == TY_ARRAY && lhs->parent == rhs->parent &&
             lhs->len == rhs->len) ||
            (lhs->type == TY_PTR && rhs->type == TY_PTR &&
@@ -360,6 +360,12 @@ static bool type_expr_is_assignable(Type const* lhs, Expr const* rhs) {
     return type_is_assignable(lhs, rhs->res_type) ||
            (lhs->type == TY_PTR && rhs->type == EXPR_LIT && rhs->lit.type == LIT_NUM &&
             rhs->lit.num == 0);
+}
+
+static bool type_is_callable(Type const* type) {
+    assert(type);
+
+    return type->type == TY_FN || (type->type == TY_PTR && type->parent->type == TY_FN);
 }
 
 Member const* type_struct_find_member(Type const* s, A3CString name) {
@@ -1218,25 +1224,24 @@ static bool type_call(AstVisitor* visitor, Call* call) {
 
     Registry* reg = visitor->ctx;
 
-    call->obj = scope_find(reg->current_scope, call->name);
-    if (!call->obj) {
-        type_error(reg, VERTEX(call, expr.call), "Call of undeclared function.");
-        return false;
-    }
+    A3_TRYB(vertex_visit(visitor, VERTEX(call->callee, expr)));
 
-    if (call->obj->type->type != TY_FN) {
+    if (!type_is_callable(call->callee->res_type)) {
         type_error(reg, VERTEX(call, expr.call), "Call of non-function object.");
         return false;
     }
 
-    EXPR(call, call)->res_type = call->obj->type->ret;
+    Type const* fn_type = call->callee->res_type->type == TY_FN ? call->callee->res_type
+                                                                : call->callee->res_type->parent;
 
-    Param* param = A3_SLL_HEAD(&call->obj->type->params);
+    EXPR(call, call)->res_type = fn_type->ret;
+
+    Param* param = A3_SLL_HEAD(&fn_type->params);
     A3_SLL_FOR_EACH (Arg, arg, &call->args, link) {
         A3_TRYB(vertex_visit(visitor, VERTEX(arg->expr, expr)));
 
         if (!param) {
-            if (call->obj->type->is_variadic)
+            if (fn_type->is_variadic)
                 continue;
 
             type_error(reg, VERTEX(arg->expr, expr),

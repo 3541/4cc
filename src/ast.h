@@ -136,9 +136,8 @@ typedef struct Arg {
 } Arg;
 
 typedef struct Call {
-    A3CString         name;
+    Expr*             callee;
     A3_SLL(args, Arg) args;
-    Obj*              obj;
 } Call;
 
 typedef struct MemberAccess {
@@ -384,7 +383,7 @@ Expr*  vertex_unary_op_new(Span, UnaryOpType, Expr* operand);
 Expr*  vertex_lit_num_new(Span, Type const*, int64_t);
 Expr*  vertex_lit_str_new(Span, A3CString);
 Expr*  vertex_var_new(Span, A3CString name);
-Expr*  vertex_call_new(Span, A3CString name);
+Expr*  vertex_call_new(Span, Expr* callee);
 Expr*  vertex_member_new(Span, Expr* lhs, A3CString rhs_name);
 Expr*  vertex_expr_cond_new(Span, Expr* cond, Expr* res_true, Expr* res_false);
 Expr*  vertex_expr_type_new(Span, PType*);

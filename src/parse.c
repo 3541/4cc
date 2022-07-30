@@ -270,16 +270,10 @@ static Expr* parse_call(Parser* parser, Expr* callee) {
     assert(parser);
     assert(callee);
 
-    if (callee->type != EXPR_VAR) {
-        parse_error(parser, lex_next(parser->lexer), "Call of non-function.");
-        return NULL;
-    }
-
     Token tok_left = lex_next(parser->lexer);
     assert(tok_left.type == TOK_LPAREN);
 
-    Expr* ret =
-        vertex_call_new(parse_span_merge(SPAN(callee, expr), tok_left.lexeme), callee->var.name);
+    Expr* ret = vertex_call_new(parse_span_merge(SPAN(callee, expr), tok_left.lexeme), callee);
 
     bool first = true;
     while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_RPAREN) {
@@ -1266,9 +1260,14 @@ static PType* parse_declarator_dummy_replace(PType* nested, PType* base) {
     if (nested->type == PTY_DUMMY)
         return base;
 
-    assert(nested->type == PTY_ARRAY || nested->type == PTY_PTR);
-    assert(nested->parent);
-    nested->parent = parse_declarator_dummy_replace(nested->parent, base);
+    if (nested->type == PTY_FN) {
+        assert(nested->ret);
+        nested->ret = parse_declarator_dummy_replace(nested->ret, base);
+    } else {
+        assert(nested->type == PTY_ARRAY || nested->type == PTY_PTR);
+        assert(nested->parent);
+        nested->parent = parse_declarator_dummy_replace(nested->parent, base);
+    }
 
     return nested;
 }

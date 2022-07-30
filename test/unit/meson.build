@@ -54,7 +54,9 @@ tests = {
     'mixed_ident',
     'mutate',
     'align',
-    'static'
+    'static',
+    'fn_ptr',
+    'fn_ptr_nested'
   ],
   'return': [
     'early',

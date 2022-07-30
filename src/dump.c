@@ -212,11 +212,12 @@ static bool dump_call(AstVisitor* visitor, Call* call) {
     assert(visitor);
     assert(call);
 
-    dump_print(visitor->ctx, "CALL(" A3_S_F ")", A3_S_FORMAT(call->name));
+    dump_print(visitor->ctx, "CALL");
+    A3_TRYB(dump_child(visitor, VERTEX(call->callee, expr)));
 
-    A3_SLL_FOR_EACH (Arg, arg, &call->args, link) {
+    dump_print(visitor->ctx, "PARAMS");
+    A3_SLL_FOR_EACH (Arg, arg, &call->args, link)
         A3_TRYB(dump_child(visitor, VERTEX(arg->expr, expr)));
-    }
 
     return true;
 }

@@ -153,13 +153,13 @@ Expr* vertex_var_new(Span span, A3CString name) {
     return &ret->expr;
 }
 
-Expr* vertex_call_new(Span span, A3CString name) {
+Expr* vertex_call_new(Span span, Expr* callee) {
     assert(span.text.ptr);
-    assert(name.ptr);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret =
-        (Vertex) { .span = span, .type = V_EXPR, .expr = { .type = EXPR_CALL, .call.name = name } };
+    *ret = (Vertex) { .span = span,
+                      .type = V_EXPR,
+                      .expr = { .type = EXPR_CALL, .call.callee = callee } };
     A3_SLL_INIT(&ret->expr.call.args);
 
     return &ret->expr;

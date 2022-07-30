@@ -657,6 +657,17 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
 
     Generator* gen = visitor->ctx;
 
+    bool indirect = call->callee->res_type->type != TY_FN || call->callee->type != EXPR_VAR ||
+                    !call->callee->var.obj->is_global;
+    Obj* obj = NULL;
+    if (indirect) {
+        A3_TRYB(vertex_visit(visitor, VERTEX(call->callee, expr)));
+        gen_stack_push(gen);
+    } else {
+        assert(call->callee->type == EXPR_VAR);
+        obj = call->callee->var.obj;
+    }
+
     size_t args = 0;
     A3_SLL_FOR_EACH (Arg, arg, &call->args, link) {
         args++;
@@ -672,9 +683,15 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
     if (align_stack)
         gen_asm(gen, "sub rsp, 8");
 
-    if (!call->obj->is_defined)
-        gen_asm(gen, "extern " A3_S_F, A3_S_FORMAT(call->name));
-    gen_asm(gen, "call " A3_S_F, A3_S_FORMAT(call->name));
+    if (!indirect) {
+        if (!obj->is_defined)
+            gen_asm(gen, "extern " A3_S_F, A3_S_FORMAT(obj->name));
+
+        gen_asm(gen, "call " A3_S_F, A3_S_FORMAT(obj->name));
+    } else {
+        gen_stack_pop(gen, REG_A);
+        gen_asm(gen, "call rax");
+    }
 
     if (align_stack)
         gen_asm(gen, "add rsp, 8");
@@ -731,7 +748,6 @@ static bool gen_init(AstVisitor* visitor, Init* init) {
     switch (init->type) {
     case INIT_EXPR:
         gen_stack_push(gen);
-        A3_TRYB(vertex_visit(visitor, VERTEX(init->expr, expr)));
         A3_TRYB(gen_assign_to(visitor, init->expr, decl_type));
         break;
     case INIT_LIST: {
