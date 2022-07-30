@@ -191,16 +191,16 @@ static Token lex_lit_num(Lexer* lexer) {
     assert(isdigit(lex_peek_byte(lexer)));
 
     int       offset = -1;
-    int64_t   num    = -1;
+    uintmax_t num    = 0;
     A3CString s      = lex_peek_str(lexer);
 
     int res = -1;
     if (s.ptr[0] == '0' && tolower(s.ptr[1]) == 'x')
-        res = sscanf(a3_string_cstr(s), "%" SCNx64 "%n", &num, &offset);
+        res = sscanf(a3_string_cstr(s), "%" SCNxMAX "%n", &num, &offset);
     else if (s.ptr[0] == '0')
-        res = sscanf(a3_string_cstr(s), "%" SCNo64 "%n", &num, &offset);
+        res = sscanf(a3_string_cstr(s), "%" SCNoMAX "%n", &num, &offset);
     else
-        res = sscanf(a3_string_cstr(s), "%" SCNd64 "%n", &num, &offset);
+        res = sscanf(a3_string_cstr(s), "%" SCNuMAX "%n", &num, &offset);
 
     if (res < 1) {
         s.len = 1;
@@ -211,8 +211,16 @@ static Token lex_lit_num(Lexer* lexer) {
 
     lex_consume_any(lexer, (size_t)offset);
 
-    Token ret   = tok_new(lexer, TOK_LIT_NUM, a3_cstring_new(s.ptr, (size_t)offset));
-    ret.lit_num = num;
+    bool is_signed = false;
+    if (tolower(lex_peek_byte(lexer)) == 'u') {
+        is_signed = true;
+        lex_consume_any(lexer, 1);
+    }
+
+    Token ret             = tok_new(lexer, TOK_LIT_NUM, a3_cstring_new(s.ptr, (size_t)offset));
+    ret.lit_num_is_signed = is_signed;
+    ret.lit_num           = num;
+
     return ret;
 }
 

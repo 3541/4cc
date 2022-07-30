@@ -873,11 +873,10 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
         // Synthesize global declaration for storage.
         A3CString global_name = type_lit_name(reg);
         Span      span        = SPAN(lit, expr.lit);
-        Item*     global_decl =
-            vertex_decl_new(span, global_name,
-                            ptype_array_new(span, ptype_builtin_new(span, PTY_CHAR),
-                                            vertex_lit_num_new(span, BUILTIN_TYPES[TY_USIZE],
-                                                               (int64_t)(lit->str.len + 1))));
+        Item*     global_decl = vertex_decl_new(
+                span, global_name,
+                ptype_array_new(span, ptype_builtin_new(span, PTY_CHAR),
+                                vertex_lit_num_new(span, BUILTIN_TYPES[TY_USIZE], lit->str.len + 1)));
         A3_SLL_PUSH(&reg->current_unit->items, global_decl, link);
 
         Scope* current = reg->current_scope;

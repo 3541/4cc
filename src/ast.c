@@ -46,7 +46,7 @@ Expr* vertex_unary_op_new(Span span, UnaryOpType type, Expr* operand) {
     return &ret->expr;
 }
 
-Expr* vertex_lit_num_new(Span span, Type const* type, int64_t num) {
+Expr* vertex_lit_num_new(Span span, Type const* type, uintmax_t num) {
     assert(span.text.ptr);
     assert(type);
 

@@ -45,7 +45,8 @@ tests = {
     'compound_assign',
     'null_assign',
     'hex',
-    'octal'
+    'octal',
+    'unsigned_literal'
   ],
   'var': [
     'simple',

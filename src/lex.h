@@ -114,9 +114,13 @@ typedef struct Token {
     Span      lexeme;
 
     union {
-        int64_t   lit_num;
         A3CString lit_str;
         uint8_t   lit_char;
+
+        struct {
+            uintmax_t lit_num;
+            bool      lit_num_is_signed;
+        };
     };
 } Token;
 

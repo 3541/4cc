@@ -18,7 +18,7 @@
 
 typedef struct EvalCtx {
     A3CString src;
-    int64_t   ret;
+    intmax_t  ret;
 } EvalCtx;
 
 static void eval_error(EvalCtx* ctx, Vertex* vertex) {
@@ -136,7 +136,7 @@ static bool eval_lit(AstVisitor* visitor, Literal* lit) {
         return false;
     }
 
-    ((EvalCtx*)visitor->ctx)->ret = lit->num;
+    ((EvalCtx*)visitor->ctx)->ret = (intmax_t)lit->num;
     return true;
 }
 
