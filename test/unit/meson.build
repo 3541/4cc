@@ -44,7 +44,8 @@ tests = {
     'char',
     'compound_assign',
     'null_assign',
-    'hex'
+    'hex',
+    'octal'
   ],
   'var': [
     'simple',

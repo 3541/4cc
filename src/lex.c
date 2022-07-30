@@ -197,6 +197,8 @@ static Token lex_lit_num(Lexer* lexer) {
     int res = -1;
     if (s.ptr[0] == '0' && tolower(s.ptr[1]) == 'x')
         res = sscanf(a3_string_cstr(s), "%" SCNx64 "%n", &num, &offset);
+    else if (s.ptr[0] == '0')
+        res = sscanf(a3_string_cstr(s), "%" SCNo64 "%n", &num, &offset);
     else
         res = sscanf(a3_string_cstr(s), "%" SCNd64 "%n", &num, &offset);
 
