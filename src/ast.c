@@ -578,7 +578,9 @@ PType* ptype_defined_new(Span name) {
     assert(name.text.ptr);
 
     A3_UNWRAPNI(PType*, ret, calloc(1, sizeof(*ret)));
-    *ret = (PType) { .type = PTY_DEFINED, .span = name, .name = name };
+    *ret = (PType) {
+        .type = PTY_DEFINED, .span = name, .defined_name = name.text, .builtin_type = PTY_NOTHING
+    };
 
     return ret;
 }

@@ -219,7 +219,7 @@ typedef enum PTypeBuiltin {
     PTY_SHORT     = 1 << 2,
     PTY_INT       = 1 << 3,
     PTY_LONG      = 1 << 4,
-    PTY_LONG_LONG = (1 << 5),
+    PTY_LONG_LONG = 1 << 5,
 
     PTY_I8    = 1 << 6,
     PTY_I16   = 1 << 7,
