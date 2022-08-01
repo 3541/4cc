@@ -103,7 +103,8 @@ static Obj* obj_fn_new(A3CString name, Type const* type, DeclAttributes attrs, b
     assert(name.ptr);
     assert(type);
 
-    Obj* ret        = obj_new(name, type, NULL, attrs, 0, OBJ_GLOBAL);
+    Obj* ret = obj_new(name, type, NULL, attrs, 0, OBJ_GLOBAL);
+    A3_SLL_INIT(&ret->labels);
     ret->is_defined = defined;
 
     return ret;
@@ -202,6 +203,19 @@ static Type const* scope_find_typedef(Scope* scope, A3CString name) {
         return scope_find_typedef(scope->parent, name);
 
     return ret;
+}
+
+static Label* fn_find_label(Obj* fn, A3CString name) {
+    assert(fn);
+    assert(fn->type->type == TY_FN);
+    assert(name.ptr);
+
+    A3_SLL_FOR_EACH (Label, label, &fn->labels, link) {
+        if (a3_string_cmp(name, label->name) == 0)
+            return label;
+    }
+
+    return NULL;
 }
 
 static void reg_scope_push(Registry* reg) {
@@ -628,6 +642,7 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
         case PTY_SHORT | PTY_INT | PTY_SIGNED:
             return BUILTIN_TYPES[TY_I16];
         case PTY_I32:
+        case PTY_SIGNED:
         case PTY_I32 | PTY_SIGNED:
         case PTY_U32 | PTY_SIGNED:
         case PTY_INT:
@@ -659,6 +674,7 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
         case PTY_SHORT | PTY_INT | PTY_UNSIGNED:
             return BUILTIN_TYPES[TY_U16];
         case PTY_U32:
+        case PTY_UNSIGNED:
         case PTY_U32 | PTY_UNSIGNED:
         case PTY_I32 | PTY_UNSIGNED:
         case PTY_INT | PTY_UNSIGNED:
@@ -968,13 +984,18 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
     if (decl->body) {
         A3_SLL_INIT(&decl->obj->params);
 
-        A3_SLL_FOR_EACH (Item, param, &decl->decl_ptype->params, link) {
+        A3_SLL_FOR_EACH (Item, param, &decl->decl_ptype->params, link)
             A3_SLL_ENQUEUE(&decl->obj->params, param, link);
-        }
 
         fn_scope->fn           = decl->obj;
         decl->obj->scope       = fn_scope;
         decl->obj->stack_depth = stack_depth;
+
+        while (!A3_SLL_IS_EMPTY(&decl->labels)) {
+            Label* label = A3_SLL_HEAD(&decl->labels);
+            A3_SLL_DEQUEUE(&decl->labels, link);
+            A3_SLL_ENQUEUE(&decl->obj->labels, label, link);
+        }
 
         reg->current_scope = fn_scope;
         decl->body->scope  = fn_scope;
@@ -1365,6 +1386,28 @@ static bool type_loop(AstVisitor* visitor, Loop* loop) {
     return true;
 }
 
+static bool type_goto(AstVisitor* visitor, Goto* jmp) {
+    assert(visitor);
+    assert(jmp);
+
+    Registry* reg = visitor->ctx;
+
+    if (!reg->current_scope->fn) {
+        type_error(reg, VERTEX(jmp, item.jmp),
+                   "goto statement cannot appear outside a function body.");
+        return false;
+    }
+
+    jmp->target = fn_find_label(reg->current_scope->fn, jmp->label);
+    if (!jmp->target) {
+        type_error(reg, VERTEX(jmp, item.jmp),
+                   "goto statement references a label which does not exist.");
+        return false;
+    }
+
+    return true;
+}
+
 bool type(Registry* reg, A3CString src, Vertex* root) {
     assert(reg);
     assert(src.ptr);
@@ -1388,6 +1431,7 @@ bool type(Registry* reg, A3CString src, Vertex* root) {
             .visit_loop      = type_loop,
             .visit_decl      = type_decl,
             .visit_init      = type_init,
+            .visit_goto      = type_goto,
         },
         root);
 }

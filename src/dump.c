@@ -406,6 +406,22 @@ static bool dump_init(AstVisitor* visitor, Init* init) {
     A3_UNREACHABLE();
 }
 
+static bool dump_goto(AstVisitor* visitor, Goto* jmp) {
+    assert(visitor);
+    assert(jmp);
+
+    dump_print(visitor->ctx, "GOTO(" A3_S_F ")", A3_S_FORMAT(jmp->label));
+    return true;
+}
+
+static bool dump_label(AstVisitor* visitor, Label* label) {
+    assert(visitor);
+    assert(label);
+
+    dump_print(visitor->ctx, "LABEL(" A3_S_F ")", A3_S_FORMAT(label->name));
+    return dump_child(visitor, VERTEX(label->stmt, item));
+}
+
 bool dump(Vertex* root) {
     assert(root);
 
@@ -429,6 +445,8 @@ bool dump(Vertex* root) {
             .visit_block     = dump_block,
             .visit_loop      = dump_loop,
             .visit_init      = dump_init,
+            .visit_goto      = dump_goto,
+            .visit_label     = dump_label,
         },
         root);
 

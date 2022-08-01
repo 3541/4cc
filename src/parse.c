@@ -35,6 +35,7 @@ typedef struct Parser {
     Lexer*      lexer;
     Unit*       current_unit;
     PTypeScope* current_scope;
+    Item*       current_fn;
     size_t      error_depth;
     bool        status;
 } Parser;
@@ -100,6 +101,7 @@ Parser* parse_new(A3CString src, Lexer* lexer) {
                       .lexer         = lexer,
                       .current_unit  = NULL,
                       .current_scope = NULL,
+                      .current_fn    = NULL,
                       .error_depth   = 0,
                       .status        = true };
     parse_scope_push(ret);
@@ -826,6 +828,67 @@ static Item* parse_loop(Parser* parser) {
                 loop);
 }
 
+static Item* parse_goto(Parser* parser) {
+    assert(parser);
+
+    Token goto_tok = lex_next(parser->lexer);
+    assert(goto_tok.type == TOK_GOTO);
+
+    Token label = lex_next(parser->lexer);
+    if (label.type != TOK_IDENT) {
+        parse_error(parser, label, "Operand of a goto statement must be an identifier.");
+        return NULL;
+    }
+
+    if (!parse_consume(parser, A3_CS("semicolon"), TOK_SEMI))
+        return NULL;
+
+    return vertex_goto_new(parse_span_merge(goto_tok.lexeme, label.lexeme), label.lexeme.text);
+}
+
+static bool parse_label_add(Parser* parser, Label* label) {
+    assert(parser);
+    assert(label);
+
+    A3_SLL_FOR_EACH (Label, other, &parser->current_fn->labels, link) {
+        if (a3_string_cmp(label->name, other->name) == 0) {
+            error_at(parser->src, SPAN(label, item.label),
+                     "Multiple identical labels in the same function.");
+            return false;
+        }
+    }
+
+    A3_SLL_ENQUEUE(&parser->current_fn->labels, label, link);
+    return true;
+}
+
+static Item* parse_label(Parser* parser) {
+    assert(parser);
+
+    Token ident = lex_next(parser->lexer);
+    assert(ident.type == TOK_IDENT);
+
+    Token colon = lex_next(parser->lexer);
+    assert(colon.type == TOK_COLON);
+
+    if (!parser->current_fn) {
+        parse_error(parser, colon, "Label cannot appear outside of a function body.");
+        return NULL;
+    }
+
+    Item* stmt = parse_stmt(parser);
+    if (!stmt)
+        return NULL;
+
+    Item* ret =
+        vertex_label_new(parse_span_merge(ident.lexeme, SPAN(stmt, item)), ident.lexeme.text, stmt);
+
+    if (!parse_label_add(parser, &ret->label))
+        return NULL;
+
+    return ret;
+}
+
 static Item* parse_stmt(Parser* parser) {
     assert(parser);
 
@@ -855,6 +918,13 @@ static Item* parse_stmt(Parser* parser) {
 
         return ret;
     }
+    case TOK_GOTO:
+        return parse_goto(parser);
+    case TOK_IDENT:
+        if (lex_peek_n(parser->lexer, 2).type == TOK_COLON)
+            return parse_label(parser);
+
+        // fallthrough
     default:
         return parse_expr_stmt(parser);
     }
@@ -1360,9 +1430,12 @@ static bool parse_fn(Parser* parser, Item* decl) {
     assert(decl->decl_ptype->type == PTY_FN);
 
     Block* body = NULL;
+    A3_SLL_INIT(&decl->labels);
 
     if (lex_peek(parser->lexer).type == TOK_LBRACE) {
-        body = parse_block(parser);
+        parser->current_fn = decl;
+        body               = parse_block(parser);
+        parser->current_fn = NULL;
         if (!body)
             return false;
 

@@ -61,7 +61,8 @@ src = files([
   'main.c',
   'parse.c',
   'subprocess.c',
-  'type.c'
+  'type.c',
+  'util.c'
 ])
 
 fcc = executable(

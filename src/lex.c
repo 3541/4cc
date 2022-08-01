@@ -17,17 +17,23 @@
 #include <stdio.h>
 
 #include <a3/buffer.h>
+#include <a3/sll.h>
 #include <a3/str.h>
 #include <a3/util.h>
 
 #include "error.h"
 
+typedef struct Peek Peek;
+typedef struct Peek {
+    A3_SLL_LINK(Peek) link;
+    Token tok;
+} Peek;
+
 typedef struct Lexer {
-    Token    peek;
-    bool     peeking;
-    A3Buffer src;
-    size_t   current_line;
-    size_t   error_depth;
+    A3_SLL(peek, Peek) peek;
+    A3Buffer           src;
+    size_t             current_line;
+    size_t             error_depth;
 } Lexer;
 
 // Report a lexer error.
@@ -48,11 +54,11 @@ static void lex_error(Lexer const* lexer, char* fmt, ...) {
 Lexer* lex_new(A3CString src) {
     A3_UNWRAPNI(Lexer*, ret, calloc(1, sizeof(*ret)));
 
-    *ret = (Lexer) { .peeking      = false,
-                     .src          = { .data = A3_CS_MUT(src), .tail = a3_string_len(src) },
+    *ret = (Lexer) { .src          = { .data = A3_CS_MUT(src), .tail = a3_string_len(src) },
                      .current_line = 1,
                      .error_depth  = 0 };
     a3_buf_init(&ret->src, a3_string_len(src), a3_string_len(src));
+    A3_SLL_INIT(&ret->peek);
     return ret;
 }
 
@@ -500,6 +506,7 @@ static Token lex_ident_or_kw(Lexer* lexer) {
         { A3_CS("signed"), TOK_SIGNED },     { A3_CS("extern"), TOK_EXTERN },
         { A3_CS("const"), TOK_CONST },       { A3_CS("enum"), TOK_ENUM },
         { A3_CS("static"), TOK_STATIC },     { A3_CS("volatile"), TOK_VOLATILE },
+        { A3_CS("goto"), TOK_GOTO },
     };
 
     A3CString lexeme = lex_consume_until(lexer, is_not_ident);
@@ -662,84 +669,113 @@ static Token lex_lit_char(Lexer* lexer) {
     return ret;
 }
 
-Token lex_peek(Lexer* lexer) {
+static void lex_tok_enqueue(Lexer* lexer, Token tok) {
     assert(lexer);
 
-    if (lexer->peeking)
-        return lexer->peek;
+    A3_UNWRAPNI(Peek*, peek, calloc(1, sizeof(*peek)));
+    peek->tok = tok;
+
+    A3_SLL_ENQUEUE(&lexer->peek, peek, link);
+}
+
+Token lex_peek_n(Lexer* lexer, size_t n) {
+    assert(lexer);
+    assert(n > 0);
 
     if (lexer->error_depth >= LEX_ERRORS_MAX)
         return tok_new(lexer, TOK_EOF, A3_CS_NULL);
 
-    lexer->peeking = true;
+    Peek*  ret = A3_SLL_HEAD(&lexer->peek);
+    size_t i   = 1;
+    for (; i < n && ret && ret->tok.type != TOK_EOF; i++)
+        ret = A3_SLL_NEXT(ret, link);
+
+    if (ret)
+        return ret->tok;
 
     lex_consume_space(lexer);
 
+    Token tok;
+    for (; i <= n && !lex_is_eof(lexer) && lexer->error_depth <= LEX_ERRORS_MAX; i++) {
+        uint8_t next = lex_peek_byte(lexer);
+
+        switch (next) {
+        case '+':
+        case '-':
+        case '*':
+        case '/':
+        case '<':
+        case '>':
+        case '=':
+        case '!':
+        case '&':
+        case '~':
+        case '|':
+        case '.':
+        case '?':
+        case ':':
+        case '%':
+        case '^':
+            tok = lex_op(lexer);
+            break;
+        case '(':
+        case ')':
+        case '{':
+        case '}':
+        case '[':
+        case ']':
+            tok = lex_paren(lexer);
+            break;
+        case ';':
+            tok = lex_semi(lexer);
+            break;
+        case ',':
+            tok = tok_new(lexer, TOK_COMMA, lex_consume_one(lexer, A3_CS("comma"), A3_CS(",")));
+            break;
+        case '"':
+            tok = lex_lit_str(lexer);
+            break;
+        case '\'':
+            tok = lex_lit_char(lexer);
+            break;
+        default:
+            if (is_digit(next)) {
+                tok = lex_lit_num(lexer);
+                break;
+            }
+            if (is_ident_first(next)) {
+                tok = lex_ident_or_kw(lexer);
+                break;
+            }
+
+            lex_error(lexer,
+                      "Expected a numeric literal, binary operator, keyword, or identifier.");
+            return lex_recover(lexer);
+        }
+
+        lex_tok_enqueue(lexer, tok);
+    }
+
+    if (lexer->error_depth >= LEX_ERRORS_MAX)
+        return tok_new(lexer, TOK_EOF, A3_CS_NULL);
+
     if (lex_is_eof(lexer)) {
-        lexer->peek = tok_new(lexer, TOK_EOF, A3_CS_NULL);
-        return lexer->peek;
+        lex_tok_enqueue(lexer, tok_new(lexer, TOK_EOF, A3_CS_NULL));
+        tok = A3_SLL_HEAD(&lexer->peek)->tok;
     }
 
-    uint8_t next = lex_peek_byte(lexer);
-    switch (next) {
-    case '+':
-    case '-':
-    case '*':
-    case '/':
-    case '<':
-    case '>':
-    case '=':
-    case '!':
-    case '&':
-    case '~':
-    case '|':
-    case '.':
-    case '?':
-    case ':':
-    case '%':
-    case '^':
-        lexer->peek = lex_op(lexer);
-        break;
-    case '(':
-    case ')':
-    case '{':
-    case '}':
-    case '[':
-    case ']':
-        lexer->peek = lex_paren(lexer);
-        break;
-    case ';':
-        lexer->peek = lex_semi(lexer);
-        break;
-    case ',':
-        lexer->peek = tok_new(lexer, TOK_COMMA, lex_consume_one(lexer, A3_CS("comma"), A3_CS(",")));
-        break;
-    case '"':
-        lexer->peek = lex_lit_str(lexer);
-        break;
-    case '\'':
-        lexer->peek = lex_lit_char(lexer);
-        break;
-    default:
-        if (is_digit(next)) {
-            lexer->peek = lex_lit_num(lexer);
-            break;
-        }
-        if (is_ident_first(next)) {
-            lexer->peek = lex_ident_or_kw(lexer);
-            break;
-        }
+    return tok;
+}
 
-        lex_error(lexer, "Expected a numeric literal, binary operator, keyword, or identifier.");
-        return lex_recover(lexer);
-    }
+Token lex_peek(Lexer* lexer) {
+    assert(lexer);
 
-    return lexer->peek;
+    return lex_peek_n(lexer, 1);
 }
 
 Token lex_next(Lexer* lexer) {
-    Token ret      = lex_peek(lexer);
-    lexer->peeking = false;
+    Token ret = lex_peek(lexer);
+    A3_SLL_DEQUEUE(&lexer->peek, link);
 
     return ret;
 }

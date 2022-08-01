@@ -67,7 +67,9 @@ typedef enum StmtType {
     STMT_CONTINUE,
     STMT_EMPTY,
     STMT_EXPR_STMT,
+    STMT_GOTO,
     STMT_IF,
+    STMT_LABELED,
     STMT_LOOP,
     STMT_RET,
 } StmtType;
@@ -295,6 +297,20 @@ typedef struct Init {
     };
 } Init;
 
+typedef struct Label Label;
+typedef struct Label {
+    Item*     stmt;
+    A3CString name;
+    size_t    label;
+
+    A3_SLL_LINK(Label) link;
+} Label;
+
+typedef struct Goto {
+    A3CString label;
+    Label*    target;
+} Goto;
+
 typedef struct Item {
     A3_SLL_LINK(Item) link;
 
@@ -307,6 +323,8 @@ typedef struct Item {
                 Block block;   // STMT_BLOCK
                 If    if_stmt; // STMT_IF
                 Loop  loop;    // STMT_LOOP
+                Label label;   // STMT_LABELED
+                Goto  jmp;     // STMT_GOTO
             };
         };
 
@@ -322,8 +340,13 @@ typedef struct Item {
             };
 
             union {
-                Block* body; // TY_FN.
-                Init*  init;
+                Init* init;
+
+                // TY_FN.
+                struct {
+                    Block* body;
+                    A3_SLL(, Label) labels;
+                };
             };
         };
     };
@@ -373,6 +396,8 @@ typedef struct AstVisitor {
     bool (*visit_block)(AstVisitor*, Block*);
     bool (*visit_loop)(AstVisitor*, Loop*);
     bool (*visit_init)(AstVisitor*, Init*);
+    bool (*visit_goto)(AstVisitor*, Goto*);
+    bool (*visit_label)(AstVisitor*, Label*);
 } AstVisitor;
 
 #define LOOP_COND_PRE  true
@@ -398,6 +423,8 @@ Loop*  vertex_loop_new(Span, bool cond_pos, Item* init, Expr* cond, Expr* post, 
 Unit*  vertex_unit_new(void);
 Init*  vertex_init_expr_new(Span, Expr*);
 Init*  vertex_init_list_new(void);
+Item*  vertex_goto_new(Span, A3CString label);
+Item*  vertex_label_new(Span, A3CString label, Item*);
 void   vertex_init_lit_str_to_list(Init*);
 bool   vertex_visit(AstVisitor*, Vertex*);
 

@@ -38,6 +38,7 @@ typedef enum TokenType {
     TOK_EQ_EQ,
     TOK_EXTERN,
     TOK_FOR,
+    TOK_GOTO,
     TOK_GT,
     TOK_GT_EQ,
     TOK_GT_GT,
@@ -130,5 +131,6 @@ Lexer* lex_new(A3CString src);
 void   lex_free(Lexer*);
 bool   lex_is_eof(Lexer const*);
 bool   lex_failed(Lexer const*);
+Token  lex_peek_n(Lexer*, size_t);
 Token  lex_peek(Lexer*);
 Token  lex_next(Lexer*);

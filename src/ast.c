@@ -18,6 +18,7 @@
 #include <a3/util.h>
 
 #include "type.h"
+#include "util.h"
 
 Expr* vertex_bin_op_new(Span span, BinOpType type, Expr* lhs, Expr* rhs) {
     assert(lhs);
@@ -253,6 +254,32 @@ Init* vertex_init_list_new(void) {
     return &ret->init;
 }
 
+Item* vertex_goto_new(Span span, A3CString label) {
+    assert(span.text.ptr);
+    assert(label.ptr);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .span = span,
+                      .type = V_STMT,
+                      .item = { .type = STMT_GOTO, .jmp = { .label = label, .target = NULL } } };
+
+    return &ret->item;
+}
+
+Item* vertex_label_new(Span span, A3CString label, Item* stmt) {
+    assert(span.text.ptr);
+    assert(label.ptr);
+    assert(stmt);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .span = span,
+                      .type = V_STMT,
+                      .item = { .type  = STMT_LABELED,
+                                .label = { .name = label, .stmt = stmt, .label = util_ident() } } };
+
+    return &ret->item;
+}
+
 void vertex_init_lit_str_to_list(Init* init) {
     assert(init);
     assert(init->type == INIT_EXPR && init->expr->type == EXPR_LIT &&
@@ -438,6 +465,22 @@ static bool visit_init(AstVisitor* visitor, Init* init) {
     A3_UNREACHABLE();
 }
 
+static bool visit_goto(AstVisitor* visitor, Goto* jmp) {
+    assert(visitor);
+    assert(jmp);
+    (void)visitor;
+    (void)jmp;
+
+    return true;
+}
+
+static bool visit_label(AstVisitor* visitor, Label* label) {
+    assert(visitor);
+    assert(label);
+
+    return vertex_visit(visitor, VERTEX(label->stmt, item));
+}
+
 #define VISIT(VISITOR, NAME, VERTEX) ((((VISITOR)->NAME) ?: NAME)((VISITOR), (VERTEX)))
 
 bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
@@ -503,6 +546,12 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
             break;
         case STMT_LOOP:
             A3_TRYB(VISIT(visitor, visit_loop, &vertex->item.loop));
+            break;
+        case STMT_GOTO:
+            A3_TRYB(VISIT(visitor, visit_goto, &vertex->item.jmp));
+            break;
+        case STMT_LABELED:
+            A3_TRYB(VISIT(visitor, visit_label, &vertex->item.label));
             break;
         }
         break;

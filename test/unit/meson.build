@@ -249,6 +249,10 @@ tests = {
   ],
   'init': [
     'array'
+  ],
+  'goto': [
+    'simple',
+    'loop'
   ]
 }
 

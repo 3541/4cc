@@ -26,6 +26,7 @@
 #include "error.h"
 #include "eval.h"
 #include "type.h"
+#include "util.h"
 
 typedef enum Register { REG_A, REG_DI, REG_SI, REG_D, REG_C, REG_R8, REG_R9 } Register;
 
@@ -78,12 +79,6 @@ typedef struct Generator {
 } Generator;
 
 static bool gen_data_decl(Generator*, Item*);
-
-static size_t gen_label(Generator* gen) {
-    assert(gen);
-
-    return gen->label++;
-}
 
 A3_FORMAT_FN(3, 4)
 static void gen_error(Generator* gen, Vertex* vertex, char* fmt, ...) {
@@ -354,7 +349,7 @@ static bool gen_bool_op(AstVisitor* visitor, BinOp* op) {
 
     A3_TRYB(vertex_visit(visitor, VERTEX(op->lhs, expr)));
 
-    size_t label = gen_label(visitor->ctx);
+    size_t label = util_ident();
     gen_asm(visitor->ctx,
             "test rax, rax\n"
             "setnz al\n"
@@ -389,7 +384,7 @@ static bool gen_expr_cond(AstVisitor* visitor, CondExpr* expr) {
 
     A3_TRYB(vertex_visit(visitor, VERTEX(expr->cond, expr)));
 
-    size_t label = gen_label(visitor->ctx);
+    size_t label = util_ident();
     gen_asm(visitor->ctx,
             "test rax, rax\n"
             "jz .false%zu",
@@ -805,7 +800,7 @@ static bool gen_if(AstVisitor* visitor, If* if_stmt) {
     assert(visitor);
     assert(if_stmt);
 
-    size_t label = gen_label(visitor->ctx);
+    size_t label = util_ident();
 
     A3_TRYB(vertex_visit(visitor, VERTEX(if_stmt->cond, expr)));
     gen_asm(visitor->ctx,
@@ -830,7 +825,7 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
     assert(loop);
 
     Generator* gen   = visitor->ctx;
-    size_t     label = gen_label(gen);
+    size_t     label = util_ident();
 
     if (loop->init)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->init, item)));
@@ -958,6 +953,23 @@ static bool gen_data_decl(Generator* gen, Item* decl) {
     return true;
 }
 
+static bool gen_label(AstVisitor* visitor, Label* label) {
+    assert(visitor);
+    assert(label);
+
+    gen_asm(visitor->ctx, "$.label_" A3_S_F "%zu:", A3_S_FORMAT(label->name), label->label);
+
+    return vertex_visit(visitor, VERTEX(label->stmt, item));
+}
+
+static bool gen_goto(AstVisitor* visitor, Goto* jmp) {
+    assert(visitor);
+    assert(jmp);
+
+    gen_asm(visitor->ctx, "jmp $.label_" A3_S_F "%zu", A3_S_FORMAT(jmp->label), jmp->target->label);
+    return true;
+}
+
 static bool gen_data(Generator* gen, Vertex* root) {
     assert(gen);
     assert(root);
@@ -1015,6 +1027,8 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
             .visit_decl           = gen_decl,
             .visit_init           = gen_init,
             .visit_loop           = gen_loop,
+            .visit_label          = gen_label,
+            .visit_goto           = gen_goto,
         },
         root);
     assert(!gen.stack_depth);

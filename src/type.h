@@ -19,6 +19,7 @@ typedef struct Vertex Vertex;
 typedef struct Item   Item;
 typedef struct Member Member;
 typedef struct Init   Init;
+typedef struct Label  Label;
 
 typedef struct Type     Type;
 typedef struct Registry Registry;
@@ -100,7 +101,8 @@ typedef struct Obj {
         struct {
             size_t stack_depth;
             Scope* scope;
-            A3_SLL(, Item) params;
+            A3_SLL(, Item)  params;
+            A3_SLL(, Label) labels;
         };
 
         uint32_t value; // TY_ENUM_CONSTANT
