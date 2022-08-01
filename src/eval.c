@@ -34,10 +34,14 @@ static bool eval_bin_op(AstVisitor* visitor, BinOp* op) {
 
     EvalCtx* ctx = visitor->ctx;
 
-    if (op->type == OP_ASSIGN || op->type == OP_OR || op->type == OP_AND || op->type == OP_CAST) {
+    if (op->type == OP_ASSIGN || op->type == OP_OR || op->type == OP_AND) {
         eval_error(ctx, VERTEX(op, expr.bin_op));
         return false;
     }
+
+    // TODO: Once a concept of type is implemented here, this will not be a no-op.
+    if (op->type == OP_CAST)
+        return vertex_visit(visitor, VERTEX(op->rhs, expr));
 
     A3_TRYB(vertex_visit(visitor, VERTEX(op->lhs, expr)));
     int64_t lhs = ctx->ret;
