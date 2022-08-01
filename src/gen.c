@@ -63,7 +63,8 @@ static char const* gen_reg_for(Register reg, Type const* type) {
 }
 
 typedef struct LoopCtx {
-    size_t label;
+    size_t break_label;
+    size_t continue_label;
     bool   in_loop;
 } LoopCtx;
 
@@ -137,9 +138,18 @@ static void gen_stack_pop(Generator* gen, Register reg) {
 static LoopCtx gen_loop_push(Generator* gen, size_t label) {
     assert(gen);
 
-    LoopCtx ret          = gen->in_loop;
-    gen->in_loop.in_loop = true;
-    gen->in_loop.label   = label;
+    LoopCtx ret              = gen->in_loop;
+    gen->in_loop.in_loop     = true;
+    gen->in_loop.break_label = gen->in_loop.continue_label = label;
+    return ret;
+}
+
+static LoopCtx gen_switch_push(Generator* gen, size_t label) {
+    assert(gen);
+
+    LoopCtx ret              = gen->in_loop;
+    gen->in_loop.in_loop     = true;
+    gen->in_loop.break_label = label;
     return ret;
 }
 
@@ -629,9 +639,9 @@ static bool gen_break_continue(AstVisitor* visitor, Item* item) {
     }
 
     if (item->type == STMT_BREAK)
-        gen_asm(gen, "jmp .end_loop%zu", gen->in_loop.label);
+        gen_asm(gen, "jmp .end_%zu", gen->in_loop.break_label);
     else
-        gen_asm(gen, "jmp .post%zu", gen->in_loop.label);
+        gen_asm(gen, "jmp .post_%zu", gen->in_loop.continue_label);
 
     return true;
 }
@@ -835,7 +845,7 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->cond, expr)));
         gen_asm(gen,
                 "test rax, rax\n"
-                "jz .end_loop%zu",
+                "jz .end_%zu",
                 label);
     }
 
@@ -843,20 +853,20 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
     A3_TRYB(vertex_visit(visitor, VERTEX(loop->body, item)));
     gen_loop_pop(gen, old);
 
-    gen_asm(gen, ".post%zu:", label);
+    gen_asm(gen, ".post_%zu:", label);
     if (loop->post)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->post, expr)));
     if (loop->cond && !loop->cond_first) {
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->cond, expr)));
         gen_asm(gen,
                 "test rax, rax\n"
-                "jz .end_loop%zu",
+                "jz .end_%zu",
                 label);
     }
 
     gen_asm(gen,
             "jmp .begin%zu\n"
-            ".end_loop%zu:",
+            ".end_%zu:",
             label, label);
 
     return true;
@@ -957,7 +967,12 @@ static bool gen_label(AstVisitor* visitor, Label* label) {
     assert(visitor);
     assert(label);
 
-    gen_asm(visitor->ctx, "$.label_" A3_S_F "%zu:", A3_S_FORMAT(label->name), label->label);
+    if (!label->is_switch_label)
+        gen_asm(visitor->ctx, "$.label_" A3_S_F "%zu:", A3_S_FORMAT(label->name), label->label);
+    else if (label->expr)
+        gen_asm(visitor->ctx, "$.switch_label_%zu:", label->label);
+    else
+        gen_asm(visitor->ctx, "$.switch_default_%zu:", label->label);
 
     return vertex_visit(visitor, VERTEX(label->stmt, item));
 }
@@ -967,6 +982,37 @@ static bool gen_goto(AstVisitor* visitor, Goto* jmp) {
     assert(jmp);
 
     gen_asm(visitor->ctx, "jmp $.label_" A3_S_F "%zu", A3_S_FORMAT(jmp->label), jmp->target->label);
+    return true;
+}
+
+static bool gen_switch(AstVisitor* visitor, Switch* switch_stmt) {
+    assert(visitor);
+    assert(switch_stmt);
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(switch_stmt->cond, expr)));
+
+    A3_SLL_FOR_EACH (Label, case_label, &switch_stmt->cases, link) {
+        gen_asm(visitor->ctx,
+                "cmp rax, %" PRIdMAX "\n"
+                "je $.switch_label_%zu",
+                case_label->value, case_label->label);
+    }
+
+    size_t ident = util_ident();
+
+    if (switch_stmt->default_case)
+        gen_asm(visitor->ctx, "jmp $.switch_default_%zu", switch_stmt->default_case->label);
+    else
+        gen_asm(visitor->ctx, "jmp $.end_%zu", ident);
+
+    LoopCtx old = gen_switch_push(visitor->ctx, ident);
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(switch_stmt->body, item)));
+
+    gen_loop_pop(visitor->ctx, old);
+
+    gen_asm(visitor->ctx, ".end_%zu:", ident);
+
     return true;
 }
 
@@ -1029,6 +1075,7 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
             .visit_loop           = gen_loop,
             .visit_label          = gen_label,
             .visit_goto           = gen_goto,
+            .visit_switch         = gen_switch,
         },
         root);
     assert(!gen.stack_depth);

@@ -72,6 +72,7 @@ typedef enum StmtType {
     STMT_LABELED,
     STMT_LOOP,
     STMT_RET,
+    STMT_SWITCH,
 } StmtType;
 
 typedef enum UnaryOpType {
@@ -299,17 +300,33 @@ typedef struct Init {
 
 typedef struct Label Label;
 typedef struct Label {
-    Item*     stmt;
-    A3CString name;
-    size_t    label;
-
+    Item*  stmt;
+    size_t label;
     A3_SLL_LINK(Label) link;
+    bool is_switch_label;
+
+    union {
+        A3CString name; // Regular label.
+
+        // Case label.
+        struct {
+            Expr*    expr;
+            intmax_t value;
+        };
+    };
 } Label;
 
 typedef struct Goto {
     A3CString label;
     Label*    target;
 } Goto;
+
+typedef struct Switch {
+    Expr*                cond;
+    A3_SLL(cases, Label) cases;
+    Label*               default_case;
+    Item*                body;
+} Switch;
 
 typedef struct Item {
     A3_SLL_LINK(Item) link;
@@ -319,12 +336,13 @@ typedef struct Item {
         struct {
             StmtType type;
             union {
-                Expr* expr;    // STMT_EXPR_STMT and STMT_RET.
-                Block block;   // STMT_BLOCK
-                If    if_stmt; // STMT_IF
-                Loop  loop;    // STMT_LOOP
-                Label label;   // STMT_LABELED
-                Goto  jmp;     // STMT_GOTO
+                Expr*  expr;        // STMT_EXPR_STMT and STMT_RET.
+                Block  block;       // STMT_BLOCK
+                If     if_stmt;     // STMT_IF
+                Loop   loop;        // STMT_LOOP
+                Label  label;       // STMT_LABELED
+                Goto   jmp;         // STMT_GOTO
+                Switch switch_stmt; // STMT_SWITCH
             };
         };
 
@@ -397,36 +415,39 @@ typedef struct AstVisitor {
     bool (*visit_loop)(AstVisitor*, Loop*);
     bool (*visit_init)(AstVisitor*, Init*);
     bool (*visit_goto)(AstVisitor*, Goto*);
+    bool (*visit_switch)(AstVisitor*, Switch*);
     bool (*visit_label)(AstVisitor*, Label*);
 } AstVisitor;
 
 #define LOOP_COND_PRE  true
 #define LOOP_COND_POST false
 
-Expr*  vertex_bin_op_new(Span, BinOpType, Expr* lhs, Expr* rhs);
-Expr*  vertex_unary_op_new(Span, UnaryOpType, Expr* operand);
-Expr*  vertex_lit_num_new(Span, Type const*, uintmax_t);
-Expr*  vertex_lit_str_new(Span, A3CString);
-Expr*  vertex_var_new(Span, A3CString name);
-Expr*  vertex_call_new(Span, Expr* callee);
-Expr*  vertex_member_new(Span, Expr* lhs, A3CString rhs_name);
-Expr*  vertex_expr_cond_new(Span, Expr* cond, Expr* res_true, Expr* res_false);
-Expr*  vertex_expr_type_new(Span, PType*);
-Item*  vertex_expr_stmt_new(Span, Expr* expr);
-Item*  vertex_ret_new(Span, Expr* expr);
-Item*  vertex_empty_new(Span);
-Item*  vertex_break_continue_new(Span, StmtType);
-Item*  vertex_decl_new(Span, A3CString name, PType*);
-If*    vertex_if_new(Span, Expr* cond, Item* body_true, Item* body_false);
-Block* vertex_block_new(void);
-Loop*  vertex_loop_new(Span, bool cond_pos, Item* init, Expr* cond, Expr* post, Item* body);
-Unit*  vertex_unit_new(void);
-Init*  vertex_init_expr_new(Span, Expr*);
-Init*  vertex_init_list_new(void);
-Item*  vertex_goto_new(Span, A3CString label);
-Item*  vertex_label_new(Span, A3CString label, Item*);
-void   vertex_init_lit_str_to_list(Init*);
-bool   vertex_visit(AstVisitor*, Vertex*);
+Expr*   vertex_bin_op_new(Span, BinOpType, Expr* lhs, Expr* rhs);
+Expr*   vertex_unary_op_new(Span, UnaryOpType, Expr* operand);
+Expr*   vertex_lit_num_new(Span, Type const*, uintmax_t);
+Expr*   vertex_lit_str_new(Span, A3CString);
+Expr*   vertex_var_new(Span, A3CString name);
+Expr*   vertex_call_new(Span, Expr* callee);
+Expr*   vertex_member_new(Span, Expr* lhs, A3CString rhs_name);
+Expr*   vertex_expr_cond_new(Span, Expr* cond, Expr* res_true, Expr* res_false);
+Expr*   vertex_expr_type_new(Span, PType*);
+Item*   vertex_expr_stmt_new(Span, Expr* expr);
+Item*   vertex_ret_new(Span, Expr* expr);
+Item*   vertex_empty_new(Span);
+Item*   vertex_break_continue_new(Span, StmtType);
+Item*   vertex_decl_new(Span, A3CString name, PType*);
+If*     vertex_if_new(Span, Expr* cond, Item* body_true, Item* body_false);
+Block*  vertex_block_new(void);
+Loop*   vertex_loop_new(Span, bool cond_pos, Item* init, Expr* cond, Expr* post, Item* body);
+Unit*   vertex_unit_new(void);
+Init*   vertex_init_expr_new(Span, Expr*);
+Init*   vertex_init_list_new(void);
+Item*   vertex_goto_new(Span, A3CString label);
+Item*   vertex_label_new(Span, A3CString label, Item*);
+Item*   vertex_case_label_new(Span, Expr*, Item*);
+Switch* vertex_switch_new(Span, Expr*);
+void    vertex_init_lit_str_to_list(Init*);
+bool    vertex_visit(AstVisitor*, Vertex*);
 
 PType* ptype_builtin_new(Span, PTypeBuiltinType);
 PType* ptype_ptr_new(Span, PType*);

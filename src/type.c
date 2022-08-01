@@ -22,7 +22,7 @@
 #include "ast.h"
 #include "error.h"
 #include "eval.h"
-#include "stdlib.h"
+#include "util.h"
 
 static int8_t key_eq(Type const* lhs, Type const* rhs) { return lhs == rhs ? 0 : 1; }
 #define KEY_BYTES(K) ((uint8_t const*)(K))
@@ -1408,6 +1408,36 @@ static bool type_goto(AstVisitor* visitor, Goto* jmp) {
     return true;
 }
 
+static bool type_switch(AstVisitor* visitor, Switch* switch_stmt) {
+    assert(visitor);
+    assert(switch_stmt);
+
+    Registry* reg = visitor->ctx;
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(switch_stmt->cond, expr)));
+    if (!type_is_scalar(switch_stmt->cond->res_type)) {
+        type_error(reg, VERTEX(switch_stmt->cond, expr), "Invalid type for switch condition.");
+        return false;
+    }
+
+    A3_SLL_FOR_EACH (Label, label, &switch_stmt->cases, link) {
+        if (!label->expr)
+            continue;
+
+        EvalResult res = eval(reg->src, label->expr);
+        if (!res.ok)
+            return false;
+
+        label->value = res.value;
+        label->label = util_ident();
+    }
+
+    if (switch_stmt->default_case)
+        switch_stmt->default_case->label = util_ident();
+
+    return vertex_visit(visitor, VERTEX(switch_stmt->body, item));
+}
+
 bool type(Registry* reg, A3CString src, Vertex* root) {
     assert(reg);
     assert(src.ptr);
@@ -1432,6 +1462,7 @@ bool type(Registry* reg, A3CString src, Vertex* root) {
             .visit_decl      = type_decl,
             .visit_init      = type_init,
             .visit_goto      = type_goto,
+            .visit_switch    = type_switch,
         },
         root);
 }

@@ -36,6 +36,7 @@ typedef struct Parser {
     Unit*       current_unit;
     PTypeScope* current_scope;
     Item*       current_fn;
+    Switch*     current_switch;
     size_t      error_depth;
     bool        status;
 } Parser;
@@ -889,6 +890,77 @@ static Item* parse_label(Parser* parser) {
     return ret;
 }
 
+static Item* parse_switch(Parser* parser) {
+    assert(parser);
+
+    Token switch_tok = lex_next(parser->lexer);
+    assert(switch_tok.type == TOK_SWITCH);
+
+    if (!parse_consume(parser, A3_CS("opening parenthesis"), TOK_LPAREN))
+        return NULL;
+
+    Expr* cond = parse_expr(parser, 0);
+    if (!cond)
+        return NULL;
+
+    Token close = lex_next(parser->lexer);
+    if (close.type != TOK_RPAREN) {
+        parse_error(parser, close, "Expected a closing parenthesis.");
+        return NULL;
+    }
+
+    Switch* ret = vertex_switch_new(parse_span_merge(switch_tok.lexeme, close.lexeme), cond);
+    parser->current_switch = ret;
+    ret->body              = parse_stmt(parser);
+    parser->current_switch = NULL;
+
+    if (!ret->body)
+        return NULL;
+
+    return ITEM(ret, switch_stmt);
+}
+
+static Item* parse_switch_label(Parser* parser) {
+    assert(parser);
+
+    Token label = lex_next(parser->lexer);
+    assert(label.type == TOK_CASE || label.type == TOK_DEFAULT);
+
+    if (!parser->current_switch) {
+        parse_error(parser, label, "Switch label outside switch statement.");
+        return NULL;
+    }
+
+    Expr* expr = NULL;
+    if (label.type == TOK_CASE) {
+        expr = parse_expr(parser, 0);
+        if (!expr)
+            return NULL;
+    }
+
+    if (!parse_consume(parser, A3_CS("colon"), TOK_COLON))
+        return NULL;
+
+    Item* stmt = parse_stmt(parser);
+    if (!stmt)
+        return NULL;
+
+    Item* ret = vertex_case_label_new(parse_span_merge(label.lexeme, SPAN(stmt, item)), expr, stmt);
+
+    if (label.type == TOK_DEFAULT) {
+        if (parser->current_switch->default_case) {
+            parse_error(parser, label, "Switch has multiple default labels.");
+            return NULL;
+        }
+
+        parser->current_switch->default_case = &ret->label;
+    } else {
+        A3_SLL_ENQUEUE(&parser->current_switch->cases, &ret->label, link);
+    }
+
+    return ret;
+}
+
 static Item* parse_stmt(Parser* parser) {
     assert(parser);
 
@@ -904,6 +976,8 @@ static Item* parse_stmt(Parser* parser) {
     }
     case TOK_IF:
         return parse_if(parser);
+    case TOK_SWITCH:
+        return parse_switch(parser);
     case TOK_FOR:
     case TOK_WHILE:
     case TOK_DO:
@@ -920,6 +994,9 @@ static Item* parse_stmt(Parser* parser) {
     }
     case TOK_GOTO:
         return parse_goto(parser);
+    case TOK_CASE:
+    case TOK_DEFAULT:
+        return parse_switch_label(parser);
     case TOK_IDENT:
         if (lex_peek_n(parser->lexer, 2).type == TOK_COLON)
             return parse_label(parser);

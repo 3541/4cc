@@ -418,7 +418,13 @@ static bool dump_label(AstVisitor* visitor, Label* label) {
     assert(visitor);
     assert(label);
 
-    dump_print(visitor->ctx, "LABEL(" A3_S_F ")", A3_S_FORMAT(label->name));
+    if (!label->is_switch_label)
+        dump_print(visitor->ctx, "LABEL(" A3_S_F ")", A3_S_FORMAT(label->name));
+    else if (label->expr)
+        dump_print(visitor->ctx, "CASE(%" PRIdMAX ")", label->value);
+    else
+        dump_print(visitor->ctx, "DEFAULT");
+
     return dump_child(visitor, VERTEX(label->stmt, item));
 }
 

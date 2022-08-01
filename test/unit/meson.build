@@ -253,6 +253,12 @@ tests = {
   'goto': [
     'simple',
     'loop'
+  ],
+  'switch': [
+    'simple',
+    'default',
+    'fallthrough',
+    'nothing'
   ]
 }
 

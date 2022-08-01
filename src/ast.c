@@ -270,14 +270,50 @@ Item* vertex_label_new(Span span, A3CString label, Item* stmt) {
     assert(span.text.ptr);
     assert(label.ptr);
     assert(stmt);
+    assert(VERTEX(stmt, item)->type == V_STMT);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret = (Vertex) { .span = span,
                       .type = V_STMT,
                       .item = { .type  = STMT_LABELED,
-                                .label = { .name = label, .stmt = stmt, .label = util_ident() } } };
+                                .label = { .is_switch_label = false,
+                                           .name            = label,
+                                           .stmt            = stmt,
+                                           .label           = util_ident() } } };
 
     return &ret->item;
+}
+
+Item* vertex_case_label_new(Span span, Expr* expr, Item* stmt) {
+    assert(span.text.ptr);
+    assert(stmt);
+    assert(VERTEX(stmt, item)->type == V_STMT);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .span = span,
+                      .type = V_STMT,
+                      .item = { .type  = STMT_LABELED,
+                                .label = { .is_switch_label = true,
+                                           .expr            = expr,
+                                           .stmt            = stmt,
+                                           .label           = util_ident() } } };
+
+    return &ret->item;
+}
+
+Switch* vertex_switch_new(Span span, Expr* cond) {
+    assert(span.text.ptr);
+    assert(cond);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .span = span,
+                      .type = V_STMT,
+                      .item = {
+                          .type        = STMT_SWITCH,
+                          .switch_stmt = { .cond = cond, .default_case = NULL, .body = NULL } } };
+    A3_SLL_INIT(&ret->item.switch_stmt.cases);
+
+    return &ret->item.switch_stmt;
 }
 
 void vertex_init_lit_str_to_list(Init* init) {
@@ -481,6 +517,14 @@ static bool visit_label(AstVisitor* visitor, Label* label) {
     return vertex_visit(visitor, VERTEX(label->stmt, item));
 }
 
+static bool visit_switch(AstVisitor* visitor, Switch* switch_stmt) {
+    assert(visitor);
+    assert(switch_stmt);
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(switch_stmt->cond, expr)));
+    return vertex_visit(visitor, VERTEX(switch_stmt->body, item));
+}
+
 #define VISIT(VISITOR, NAME, VERTEX) ((((VISITOR)->NAME) ?: NAME)((VISITOR), (VERTEX)))
 
 bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
@@ -552,6 +596,9 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
             break;
         case STMT_LABELED:
             A3_TRYB(VISIT(visitor, visit_label, &vertex->item.label));
+            break;
+        case STMT_SWITCH:
+            A3_TRYB(VISIT(visitor, visit_switch, &vertex->item.switch_stmt));
             break;
         }
         break;
