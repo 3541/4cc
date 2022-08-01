@@ -1,2 +1,2 @@
 subdir('unit')
-subdir('projects')
+subdir('third_party')
