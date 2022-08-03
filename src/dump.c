@@ -425,7 +425,7 @@ static bool dump_label(AstVisitor* visitor, Label* label) {
     else
         dump_print(visitor->ctx, "DEFAULT");
 
-    return dump_child(visitor, VERTEX(label->stmt, item));
+    return true;
 }
 
 bool dump(Vertex* root) {

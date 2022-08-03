@@ -266,37 +266,31 @@ Item* vertex_goto_new(Span span, A3CString label) {
     return &ret->item;
 }
 
-Item* vertex_label_new(Span span, A3CString label, Item* stmt) {
+Item* vertex_label_new(Span span, A3CString label) {
     assert(span.text.ptr);
     assert(label.ptr);
-    assert(stmt);
-    assert(VERTEX(stmt, item)->type == V_STMT);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .span = span,
-                      .type = V_STMT,
-                      .item = { .type  = STMT_LABELED,
-                                .label = { .is_switch_label = false,
-                                           .name            = label,
-                                           .stmt            = stmt,
-                                           .label           = util_ident() } } };
+    *ret = (Vertex) {
+        .span = span,
+        .type = V_STMT,
+        .item = { .type  = STMT_LABELED,
+                  .label = { .is_switch_label = false, .name = label, .label = util_ident() } }
+    };
 
     return &ret->item;
 }
 
-Item* vertex_case_label_new(Span span, Expr* expr, Item* stmt) {
+Item* vertex_case_label_new(Span span, Expr* expr) {
     assert(span.text.ptr);
-    assert(stmt);
-    assert(VERTEX(stmt, item)->type == V_STMT);
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) { .span = span,
-                      .type = V_STMT,
-                      .item = { .type  = STMT_LABELED,
-                                .label = { .is_switch_label = true,
-                                           .expr            = expr,
-                                           .stmt            = stmt,
-                                           .label           = util_ident() } } };
+    *ret = (Vertex) {
+        .span = span,
+        .type = V_STMT,
+        .item = { .type  = STMT_LABELED,
+                  .label = { .is_switch_label = true, .expr = expr, .label = util_ident() } }
+    };
 
     return &ret->item;
 }
@@ -514,7 +508,7 @@ static bool visit_label(AstVisitor* visitor, Label* label) {
     assert(visitor);
     assert(label);
 
-    return vertex_visit(visitor, VERTEX(label->stmt, item));
+    return true;
 }
 
 static bool visit_switch(AstVisitor* visitor, Switch* switch_stmt) {

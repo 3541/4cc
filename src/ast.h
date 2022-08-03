@@ -300,7 +300,6 @@ typedef struct Init {
 
 typedef struct Label Label;
 typedef struct Label {
-    Item*  stmt;
     size_t label;
     A3_SLL_LINK(Label) link;
     bool is_switch_label;
@@ -443,8 +442,8 @@ Unit*   vertex_unit_new(void);
 Init*   vertex_init_expr_new(Span, Expr*);
 Init*   vertex_init_list_new(void);
 Item*   vertex_goto_new(Span, A3CString label);
-Item*   vertex_label_new(Span, A3CString label, Item*);
-Item*   vertex_case_label_new(Span, Expr*, Item*);
+Item*   vertex_label_new(Span, A3CString label);
+Item*   vertex_case_label_new(Span, Expr*);
 Switch* vertex_switch_new(Span, Expr*);
 void    vertex_init_lit_str_to_list(Init*);
 bool    vertex_visit(AstVisitor*, Vertex*);

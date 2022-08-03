@@ -974,7 +974,7 @@ static bool gen_label(AstVisitor* visitor, Label* label) {
     else
         gen_asm(visitor->ctx, "$.switch_default_%zu:", label->label);
 
-    return vertex_visit(visitor, VERTEX(label->stmt, item));
+    return true;
 }
 
 static bool gen_goto(AstVisitor* visitor, Goto* jmp) {

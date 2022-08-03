@@ -877,12 +877,7 @@ static Item* parse_label(Parser* parser) {
         return NULL;
     }
 
-    Item* stmt = parse_stmt(parser);
-    if (!stmt)
-        return NULL;
-
-    Item* ret =
-        vertex_label_new(parse_span_merge(ident.lexeme, SPAN(stmt, item)), ident.lexeme.text, stmt);
+    Item* ret = vertex_label_new(parse_span_merge(ident.lexeme, colon.lexeme), ident.lexeme.text);
 
     if (!parse_label_add(parser, &ret->label))
         return NULL;
@@ -938,14 +933,13 @@ static Item* parse_switch_label(Parser* parser) {
             return NULL;
     }
 
-    if (!parse_consume(parser, A3_CS("colon"), TOK_COLON))
+    Token colon = lex_next(parser->lexer);
+    if (colon.type != TOK_COLON) {
+        parse_error(parser, colon, "Expected a colon.");
         return NULL;
+    }
 
-    Item* stmt = parse_stmt(parser);
-    if (!stmt)
-        return NULL;
-
-    Item* ret = vertex_case_label_new(parse_span_merge(label.lexeme, SPAN(stmt, item)), expr, stmt);
+    Item* ret = vertex_case_label_new(parse_span_merge(label.lexeme, colon.lexeme), expr);
 
     if (label.type == TOK_DEFAULT) {
         if (parser->current_switch->default_case) {
