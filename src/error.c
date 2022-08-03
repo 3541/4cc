@@ -32,36 +32,67 @@ void verror_at(A3CString src, Span span, char* fmt, va_list args) {
         verror_at_eof(src, fmt, args);
         return;
     }
-
     assert(a3_string_cptr(span.text) >= a3_string_cptr(src));
 
-    A3CString line = span.text;
-    while (line.ptr > src.ptr && *line.ptr != '\n') {
-        line.ptr--;
-        line.len++;
+    size_t eol_count = 0;
+    for (size_t i = 0; i < span.text.len; i++)
+        eol_count += span.text.ptr[i] == '\n';
+
+    // Spanned area, expanded to previous and following EOL.
+    A3CString chunk = span.text;
+    while (chunk.ptr > src.ptr && *chunk.ptr != '\n') {
+        chunk.ptr--;
+        chunk.len++;
     }
-    if (*line.ptr == '\n') {
-        line.ptr++;
-        line.len--;
+    if (*chunk.ptr == '\n') {
+        chunk.ptr++;
+        chunk.len--;
     }
 
-    while (line.ptr[line.len - 1] != '\n' && line.len < src.len)
-        line.len++;
-    if (line.ptr[line.len - 1] == '\n')
-        line.len--;
+    while (chunk.ptr[chunk.len - 1] != '\n' && chunk.len < src.len)
+        chunk.len++;
+    if (chunk.ptr[chunk.len - 1] == '\n')
+        chunk.len--;
 
-    int offset = (int)(a3_string_cptr(span.text) - a3_string_cptr(line));
-    offset += fprintf(stderr, "Error (%zu): ", span.line);
-    fprintf(stderr,
-            A3_S_F "\n"
-                   "%*s",
-            A3_S_FORMAT(line), offset, "");
-    for (size_t i = 0; i < a3_string_len(span.text); i++)
-        fputc('^', stderr);
-    fputc(' ', stderr);
+    fprintf(stderr, "Error (%zu):\n", span.line);
+    do {
+        size_t offset = 0;
+        while (isspace(chunk.ptr[offset]) && chunk.ptr[offset] != '\n')
+            offset++;
 
-    vfprintf(stderr, fmt, args);
-    fputc('\n', stderr);
+        size_t    len      = 0;
+        ptrdiff_t next_eol = (uint8_t*)memchr(chunk.ptr, '\n', chunk.len) - chunk.ptr;
+        if (next_eol >= 0)
+            len = (size_t)next_eol;
+        else
+            len = chunk.len;
+
+        A3CString whitespace = { .ptr = chunk.ptr, .len = offset };
+        A3CString line       = { .ptr = chunk.ptr, .len = len };
+        fprintf(stderr, A3_S_F "\n" A3_S_F, A3_S_FORMAT(line), A3_S_FORMAT(whitespace));
+
+        if (line.ptr + line.len >= span.text.ptr) {
+            int caret_offset = line.ptr < span.text.ptr
+                                   ? (int)((size_t)(span.text.ptr - line.ptr) - whitespace.len)
+                                   : 0;
+            assert(caret_offset >= 0);
+            fprintf(stderr, "%*s", caret_offset, "");
+            for (size_t j = 0; j < len - offset - (size_t)caret_offset &&
+                               line.ptr + j + caret_offset < span.text.ptr + span.text.len - 1;
+                 j++)
+                fputc('^', stderr);
+
+            if (line.ptr + line.len >= span.text.ptr + span.text.len) {
+                fputc(' ', stderr);
+                vfprintf(stderr, fmt, args);
+            }
+
+            fputc('\n', stderr);
+        }
+
+        chunk.ptr += line.len + 1;
+        chunk.len -= line.len + 1;
+    } while (eol_count-- > 0);
 }
 
 A3_FORMAT_FN(3, 4)
