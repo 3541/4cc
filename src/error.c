@@ -113,10 +113,8 @@ void verror_at(A3CString src, Span span, char* fmt, va_list args) {
                                    : 0;
             assert(caret_offset >= 0);
             fprintf(stderr, "%*s%s", caret_offset, "", color(C_RED));
-            for (size_t j = 0; j < len - offset - (size_t)caret_offset &&
-                               line.ptr + j + caret_offset < span.text.ptr + span.text.len - 1;
-                 j++)
-                fputc('^', stderr);
+            for (size_t j = 0; j < line_in_span.len; j++)
+                fputc(!j || eol_count ? '^' : '~', stderr);
             fprintf(stderr, "%s", color(C_NONE));
 
             if (line.ptr + line.len >= span.text.ptr + span.text.len) {

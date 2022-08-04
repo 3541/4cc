@@ -585,7 +585,7 @@ static Type const* type_aggregate_from_ptype(Registry* reg, PType* ptype) {
         ret->align = MAX(ret->align, member->type->align);
     }
     if (type == TY_STRUCT) {
-        ret->size = offset;
+        ret->size = align_up(offset, ret->align);
     } else if (type == TY_ENUM) {
         ret->size  = BUILTIN_TYPES[TY_I32]->size;
         ret->align = BUILTIN_TYPES[TY_I32]->align;
@@ -1038,6 +1038,56 @@ static bool type_typedef(AstVisitor* visitor, Item* decl) {
     return true;
 }
 
+static bool type_init_list_array(AstVisitor* visitor, Init* init) {
+    Registry*   reg       = visitor->ctx;
+    Type const* decl_type = reg->init_type;
+    assert(decl_type->type == TY_ARRAY);
+
+    size_t count_max = decl_type->len;
+    size_t count     = 0;
+    reg->init_type   = decl_type->parent;
+    A3_SLL_FOR_EACH (Init, elem, &init->list, link) {
+        A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
+
+        count++;
+        if (count > count_max) {
+            type_error(reg, VERTEX(init, init), "Initializer list is too long (%zu > %zu).", count,
+                       count_max);
+            return false;
+        }
+    }
+    reg->init_type = decl_type;
+
+    if (decl_type->len == TYPE_ARRAY_UNSIZED) {
+        ((Type*)decl_type)->len  = count;
+        ((Type*)decl_type)->size = decl_type->len * decl_type->parent->size;
+    }
+
+    return true;
+}
+
+static bool type_init_list_struct(AstVisitor* visitor, Init* init) {
+    Registry*   reg       = visitor->ctx;
+    Type const* decl_type = reg->init_type;
+    assert(decl_type->type == TY_STRUCT);
+
+    Member* mem = A3_SLL_HEAD(&decl_type->members);
+    A3_SLL_FOR_EACH (Init, elem, &init->list, link) {
+        if (!mem) {
+            type_error(reg, VERTEX(elem, init), "Initializer list is too long.");
+            return false;
+        }
+
+        reg->init_type = mem->type;
+        A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
+        reg->init_type = decl_type;
+
+        mem = A3_SLL_NEXT(mem, link);
+    }
+
+    return true;
+}
+
 static bool type_init(AstVisitor* visitor, Init* init) {
     assert(visitor);
     assert(init);
@@ -1067,57 +1117,36 @@ static bool type_init(AstVisitor* visitor, Init* init) {
             return false;
         }
 
-        if (global) {
-            if (init->expr->type != EXPR_LIT) {
-                type_error(reg, VERTEX(init, init),
-                           "Initialization of global variable with non-literal value.");
+        if (global && (init->expr->type != EXPR_LIT || init->expr->lit.type != LIT_STR)) {
+            EvalResult res = eval(reg->src, init->expr);
+            if (!res.ok) {
+                type_error(
+                    reg, VERTEX(init, init),
+                    "Initialization of global variable with value not evaluable at compile time.");
                 return false;
             }
 
-            if (decl_type->type == TY_ARRAY && decl_type->parent->type != TY_U8) {
-                type_error(reg, VERTEX(init, init), "Unsupported global array type (TODO).");
-                return false;
-            }
-
-            if (decl_type->type == TY_ARRAY && init->expr->lit.type != LIT_STR) {
-                type_error(reg, VERTEX(init, init),
-                           "Initialization of global array with incompatible literal.");
-                return false;
-            }
+            Expr* lit =
+                vertex_lit_num_new(SPAN(init, init), init->expr->res_type, (uintmax_t)res.value);
+            *init->expr = *lit;
+            free(VERTEX(lit, expr));
         }
 
         return true;
-    case INIT_LIST: {
-        if (decl_type->type != TY_ARRAY) {
+    case INIT_LIST:
+        switch (decl_type->type) {
+        case TY_ARRAY:
+            return type_init_list_array(visitor, init);
+        case TY_STRUCT:
+            return type_init_list_struct(visitor, init);
+        default: {
             A3String name = type_name(decl_type);
             type_error(reg, VERTEX(init, init),
                        "Initializer list is not assignable to type " A3_S_F ".", A3_S_FORMAT(name));
             a3_string_free(&name);
             return false;
         }
-
-        size_t count_max = decl_type->len;
-        size_t count     = 0;
-        reg->init_type   = decl_type->parent;
-        A3_SLL_FOR_EACH (Init, elem, &init->list, link) {
-            A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
-
-            count++;
-            if (count > count_max) {
-                type_error(reg, VERTEX(init, init), "Initializer list is too long (%zu > %zu).",
-                           count, count_max);
-                return false;
-            }
         }
-        reg->init_type = decl_type;
-
-        if (decl_type->len == TYPE_ARRAY_UNSIZED) {
-            ((Type*)decl_type)->len  = count;
-            ((Type*)decl_type)->size = decl_type->len * decl_type->parent->size;
-        }
-
-        return true;
-    }
     }
 
     A3_UNREACHABLE();

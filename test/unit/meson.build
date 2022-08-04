@@ -248,7 +248,11 @@ tests = {
     'explicit'
   ],
   'init': [
-    'array'
+    'array',
+    'struct',
+    'struct_nested',
+    'struct_partial',
+    'struct_global'
   ],
   'goto': [
     'simple',
