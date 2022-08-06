@@ -727,6 +727,30 @@ static bool gen_fn(AstVisitor* visitor, Item* decl) {
             "sub rsp, %zu",
             A3_S_FORMAT(decl->name), decl->obj->stack_depth);
 
+    if (decl->attributes.is_variadic) {
+        assert(decl->obj->va);
+
+        size_t reg_params = 0;
+        A3_SLL_FOR_EACH (Item, param, &decl->obj->params, link)
+            reg_params++;
+
+        size_t offset = decl->obj->va->stack_offset;
+        gen_asm(visitor->ctx,
+                "mov DWORD [rbp - %zu], %zu\n"
+                "mov DWORD [rbp - %zu], 0\n"
+                "mov QWORD [rbp - %zu], 0\n"
+                "mov [rbp - %zu], rbp\n"
+                "sub QWORD [rbp - %zu], %zu",
+                offset, reg_params * 8, offset - 4, offset - 8, offset - 16, offset - 16,
+                offset - 24);
+        offset -= 24;
+
+        for (size_t i = 0; i < sizeof(ARG_REGISTERS) / sizeof(ARG_REGISTERS[0]); i++) {
+            gen_asm(visitor->ctx, "mov [rbp - %zu], %s", offset, REGISTERS_64[ARG_REGISTERS[i]]);
+            offset -= 8;
+        }
+    }
+
     size_t i = 0;
     A3_SLL_FOR_EACH (Item, param, &decl->obj->params, link) {
         gen_store_local(visitor->ctx, param->obj, ARG_REGISTERS[i++]);

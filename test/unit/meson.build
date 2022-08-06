@@ -113,7 +113,8 @@ tests = {
     'nested',
     'very_nested',
     'variadic',
-    'static'
+    'static',
+    'variadic_def'
   ],
   'fn': [
     'simple',

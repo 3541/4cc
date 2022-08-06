@@ -33,10 +33,28 @@
 #define __STDARG_H
 
 typedef struct {
-    int __placeholder;
+    unsigned gp_offset;
+    unsigned fp_offset;
+    void*    overflow_arg_area;
+    void*    reg_save_area;
 } __va_list;
 
-typedef __va_list va_list;
-typedef __va_list __gnuc_va_list;
+typedef __va_list va_list[1];
+typedef va_list   __gnuc_va_list;
+
+#define va_start(LIST, LAST_ARG)                                                                   \
+    do {                                                                                           \
+        *(LIST) = *(__va_list*)__va__;                                                             \
+    } while (0)
+
+#define va_end(LIST)
+
+static void* __va_reg(__va_list* list) {
+    void* ret = (__u8*)list->reg_save_area + list->gp_offset;
+    list->gp_offset += 8;
+    return ret;
+}
+
+#define va_arg(LIST, TY) (*(TY*)(__va_reg(LIST)))
 
 #endif

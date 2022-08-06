@@ -969,6 +969,14 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
             scope_add(reg->current_scope, param->obj);
         }
 
+        if (decl->attributes.is_variadic) {
+            stack_depth = align_up(stack_depth, 8);
+            stack_depth += 72;
+            scope_add(reg->current_scope,
+                      obj_new(A3_CS("__va__"), type_array_of(BUILTIN_TYPES[TY_U8], 72), NULL,
+                              (DeclAttributes) {}, stack_depth, OBJ_LOCAL));
+        }
+
         reg_scope_pop(reg);
     }
 
@@ -1003,6 +1011,7 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
         reg_scope_pop(reg);
 
         decl->obj->stack_depth = align_up(decl->obj->stack_depth, 16);
+        decl->obj->va          = scope_find(fn_scope, A3_CS("__va__"));
     }
 
     decl->decl_type = fn_type;
@@ -1503,6 +1512,7 @@ TypeType type_to_underlying(TypeType type) {
     case TY_ENUM:
         return TY_U32;
     case TY_PTR:
+    case TY_ARRAY:
         return TY_USIZE;
     default:
         return type;

@@ -83,6 +83,7 @@ typedef struct Type {
     };
 } Type;
 
+typedef struct Obj Obj;
 typedef struct Obj {
     A3CString   name;
     Type const* type;
@@ -101,6 +102,7 @@ typedef struct Obj {
         struct {
             size_t stack_depth;
             Scope* scope;
+            Obj*   va;
             A3_SLL(, Item)  params;
             A3_SLL(, Label) labels;
         };
