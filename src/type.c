@@ -1352,7 +1352,7 @@ static bool type_expr_cond(AstVisitor* visitor, CondExpr* expr) {
     assert(expr);
 
     A3_TRYB(vertex_visit(visitor, VERTEX(expr->cond, expr)));
-    if (!type_is_scalar(expr->cond->res_type)) {
+    if (!type_is_scalar_value(expr->cond->res_type)) {
         type_error(visitor->ctx, VERTEX(expr->cond, expr),
                    "Non-scalar type cannot be a condition.");
         return false;
