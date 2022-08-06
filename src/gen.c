@@ -909,30 +909,38 @@ static bool gen_data_expr(Generator* gen, Type const* type, Expr* expr) {
     assert(gen);
     assert(type);
     assert(expr);
-    assert(expr->type == EXPR_LIT);
 
-    switch (expr->lit.type) {
-    case LIT_STR:
+    if (expr->type == EXPR_LIT && expr->lit.type == LIT_STR) {
         assert(type->type == TY_PTR && type->parent->type == TY_U8);
 
         gen_asm(gen, "dq $" A3_S_F, A3_S_FORMAT(expr->lit.storage->name));
-        break;
-    case LIT_NUM: {
-        char* size = NULL;
-
-        if (type->size == 1)
-            size = "db";
-        else if (type->size == 2)
-            size = "dw";
-        else if (type->size <= 4)
-            size = "dd";
-        else
-            size = "dq";
-
-        gen_asm(gen, "%s %" PRIuMAX, size, expr->lit.num);
-        break;
+        return true;
     }
+
+    uintmax_t val = 0;
+    if (expr->type != EXPR_LIT) {
+        EvalResult res = eval(gen->src, expr);
+        if (!res.ok)
+            return false;
+
+        val = (uintmax_t)res.value;
+    } else {
+        assert(expr->lit.type == LIT_NUM);
+        val = expr->lit.num;
     }
+
+    char* size = NULL;
+
+    if (type->size == 1)
+        size = "db";
+    else if (type->size == 2)
+        size = "dw";
+    else if (type->size <= 4)
+        size = "dd";
+    else
+        size = "dq";
+
+    gen_asm(gen, "%s %" PRIuMAX, size, val);
 
     return true;
 }
