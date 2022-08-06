@@ -76,7 +76,7 @@ static void parse_scope_typedef_add(Parser* parser, A3CString name) {
 static bool parse_scope_typedef_find_in(PTypeScope* scope, A3CString name) {
     assert(scope);
 
-    A3_VEC_FOR_EACH(A3CString, type, &scope->typedefs) {
+    A3_VEC_FOR_EACH (A3CString, type, &scope->typedefs) {
         if (a3_string_cmp(*type, name) == 0)
             return true;
     }
@@ -1012,6 +1012,9 @@ static PType* parse_enum_decl(Parser* parser, PType* type) {
             return NULL;
         first = false;
 
+        if (lex_peek(parser->lexer).type == TOK_RBRACE)
+            break;
+
         Token name = lex_next(parser->lexer);
         if (name.type != TOK_IDENT) {
             parse_error(parser, name, "Expected an identifier.");
@@ -1533,6 +1536,9 @@ static Init* parse_init_list(Parser* parser) {
         if (!first && !parse_consume(parser, A3_CS("comma"), TOK_COMMA))
             return false;
         first = false;
+
+        if (lex_peek(parser->lexer).type == TOK_RBRACE)
+            break;
 
         Init* elem = parse_init(parser);
         if (!elem)
