@@ -682,7 +682,11 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
         A3_TRYB(vertex_visit(visitor, VERTEX(arg->expr, expr)));
         gen_stack_push(gen);
     }
-    assert(args <= 6);
+    if (args > 6) {
+        gen_error(gen, VERTEX(call, expr.call),
+                  "Calls with more than six arguments are not supported.");
+        return false;
+    }
 
     for (size_t i = 0; i < args; i++)
         gen_stack_pop(gen, ARG_REGISTERS[args - i - 1]);
