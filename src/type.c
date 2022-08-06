@@ -760,10 +760,7 @@ static bool type_bin_op(AstVisitor* visitor, BinOp* op) {
         EXPR(op, bin_op)->res_type = op->lhs->res_type;
         break;
     case OP_ASSIGN:
-        if ((!type_is_scalar(op->lhs->res_type) || !type_is_scalar(op->rhs->res_type)) &&
-            op->lhs->res_type != op->rhs->res_type &&
-            (op->lhs->res_type->type != TY_PTR || op->rhs->res_type->type != TY_ARRAY ||
-             op->lhs->res_type->parent != op->rhs->res_type->parent)) {
+        if (!type_expr_is_assignable(op->lhs->res_type, op->rhs)) {
             type_error_mismatch(visitor->ctx, VERTEX(op, expr.bin_op), op->lhs->res_type,
                                 op->rhs->res_type);
             return false;
