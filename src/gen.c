@@ -70,6 +70,8 @@ typedef struct LoopCtx {
 
 typedef struct Generator {
     Config const* cfg;
+    File*         file;
+    FILE*         out;
     A3CString     src;
     LoopCtx       in_loop;
     Type const*   init_decl_type;
@@ -101,8 +103,8 @@ static void gen_asm(Generator* gen, char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
 
-    vfprintf(gen->cfg->asm_out, fmt, args);
-    fputc('\n', gen->cfg->asm_out);
+    vfprintf(gen->out, fmt, args);
+    fputc('\n', gen->out);
 
     va_end(args);
 }
@@ -114,7 +116,7 @@ static void gen_asm_nolf(Generator* gen, char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
 
-    vfprintf(gen->cfg->asm_out, fmt, args);
+    vfprintf(gen->out, fmt, args);
 
     va_end(args);
 }
@@ -228,7 +230,7 @@ static bool gen_line(AstVisitor* visitor, Vertex* vertex) {
     if (gen->line >= vertex->span.line)
         return true;
 
-    gen_asm(gen, "%%line %zu+0 " A3_S_F, vertex->span.line, A3_S_FORMAT(gen->cfg->src_path));
+    gen_asm(gen, "%%line %zu+0 " A3_S_F, vertex->span.line, A3_S_FORMAT(gen->file->path));
     gen->line = vertex->span.line;
 
     return true;
@@ -1114,13 +1116,17 @@ static bool gen_data(Generator* gen, Vertex* root) {
     return true;
 }
 
-bool gen(Config const* cfg, A3CString src, Vertex* root) {
+bool gen(Config const* cfg, File* file, A3CString src, A3CString dst, Vertex* root) {
     assert(cfg);
+    assert(file);
     assert(src.ptr);
+    assert(dst.ptr);
     assert(root);
     assert(root->type == V_UNIT);
 
     Generator gen = { .cfg            = cfg,
+                      .file           = file,
+                      .out            = fopen(a3_string_cstr(dst), "w"),
                       .src            = src,
                       .init_decl_type = NULL,
                       .stack_depth    = 0,
@@ -1128,13 +1134,18 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
                       .line           = 0,
                       .in_loop        = { .in_loop = false } };
 
+    if (!gen.out) {
+        fprintf(stderr, "Failed to open output file " A3_S_F ".\n", A3_S_FORMAT(dst));
+        return GEN_ERR;
+    }
+
     A3_TRYB(gen_data(&gen, root));
 
     gen.line = 0;
     gen_asm(&gen,
             "\nsection .text\n"
             "%%line 0+0 " A3_S_F,
-            A3_S_FORMAT(gen.cfg->src_path));
+            A3_S_FORMAT(gen.file->path));
 
     bool ret = vertex_visit(
         &(AstVisitor) {
@@ -1160,7 +1171,7 @@ bool gen(Config const* cfg, A3CString src, Vertex* root) {
         root);
     assert(!gen.stack_depth);
 
-    fclose(cfg->asm_out);
+    fclose(gen.out);
 
     return ret;
 }

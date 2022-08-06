@@ -94,21 +94,45 @@ static void preprocess_args_init(char const* bin, A3Vec* args) {
     A3_VEC_PUSH(args, &A3_CS("-Ddouble=long"));
 }
 
+static bool string_ends_with(A3CString s, A3CString suffix) {
+    assert(s.ptr);
+    assert(suffix.ptr);
+
+    A3CString s1 = a3_cstring_new(s.ptr + s.len - suffix.len, suffix.len);
+    return a3_string_cmp(s1, suffix) == 0;
+}
+
+static FileType file_type(A3CString name) {
+    assert(name.ptr);
+
+    if (string_ends_with(name, A3_CS(".c")))
+        return FILE_SRC;
+    if (string_ends_with(name, A3_CS(".asm")))
+        return FILE_ASM;
+    if (string_ends_with(name, A3_CS(".o")))
+        return FILE_OBJ;
+
+    fprintf(stderr, "Unrecognized file type " A3_S_F ".\n", A3_S_FORMAT(name));
+    exit(-1);
+}
+
 static Config arg_parse(size_t argc, char const* argv[]) {
     if (argc < 2)
         usage(argv[0], -1);
 
     Config ret = { 0 };
     preprocess_args_init(argv[0], &ret.preprocess_args);
+    A3_VEC_INIT(File, &ret.files);
 
     for (size_t i = 1; i < argc; i++) {
         if (*argv[i] != '-') {
-            if (ret.src_path.ptr) {
-                fprintf(stderr, "Multiple source files specified.\n");
-                exit(-1);
-            }
+            A3CString path     = a3_cstring_from(argv[i]);
+            A3String  name_tmp = a3_string_clone(path);
+            A3CString name     = a3_cstring_from(basename((char*)name_tmp.ptr));
 
-            ret.src_path = a3_cstring_from(argv[i]);
+            A3_VEC_PUSH(&ret.files,
+                        (&(File) { .path = path, .name = name, .type = file_type(name) }));
+
             continue;
         }
 
@@ -184,6 +208,11 @@ static Config arg_parse(size_t argc, char const* argv[]) {
         }
     }
 
+    if ((ret.output_preprocessed || ret.output_asm || ret.output_obj) && ret.files.len > 1) {
+        fprintf(stderr, "-E, -c, and -S cannot be used with multiple source files.");
+        exit(-1);
+    }
+
     return ret;
 }
 
@@ -198,29 +227,8 @@ static A3CString make_file(A3CString path, A3CString name, A3CString ext) {
     return A3_S_CONST(ret);
 }
 
-static A3CString path_for(Config const* cfg, A3CString extension, bool is_final) {
-    assert(cfg);
-    assert(extension.ptr);
-
-    A3CString ret;
-
-    if (is_final) {
-        if (cfg->out_path.ptr)
-            ret = cfg->out_path;
-        else
-            ret = append(cfg->src_name, extension);
-    } else {
-        ret = make_file(cfg->tmp_dir, cfg->src_name, extension);
-    }
-
-    return ret;
-}
-
 static void config_init(Config* cfg) {
     assert(cfg);
-
-    A3String path_copy = a3_string_clone(cfg->src_path);
-    cfg->src_name      = a3_cstring_from(basename((char*)path_copy.ptr));
 
     A3String tmp_dir = a3_string_clone(A3_CS("/tmp/4ccXXXXXX"));
     if (!mkdtemp((char*)tmp_dir.ptr)) {
@@ -229,68 +237,136 @@ static void config_init(Config* cfg) {
     }
     cfg->tmp_dir = A3_S_CONST(tmp_dir);
 
-    cfg->preprocess_out_path = path_for(cfg, A3_CS(".pre"), cfg->output_preprocessed);
-    cfg->asm_out_path        = path_for(cfg, A3_CS(".asm"), cfg->output_asm);
-    cfg->obj_out_path        = path_for(cfg, A3_CS(".o"), cfg->output_obj);
-    if (!cfg->out_path.ptr)
-        cfg->out_path = A3_CS("a.out");
+    if (!cfg->out_path.ptr) {
+        A3CString name = A3_VEC_AT(File, &cfg->files, 0)->name;
 
-    if (a3_string_cmp(cfg->asm_out_path, A3_CS("-")) == 0)
-        cfg->asm_out = stdout;
-    else
-        cfg->asm_out = fopen(a3_string_cstr(cfg->asm_out_path), "w");
-    if (!cfg->asm_out) {
-        fprintf(stderr, "Failed to open output \"" A3_S_F "\".\n", A3_S_FORMAT(cfg->asm_out_path));
+        if (cfg->output_preprocessed)
+            cfg->out_path = append(name, A3_CS(".pre.c"));
+        else if (cfg->output_asm)
+            cfg->out_path = append(name, A3_CS(".asm"));
+        else if (cfg->output_obj)
+            cfg->out_path = append(name, A3_CS(".o"));
+        else
+            cfg->out_path = A3_CS("a.out");
+    } else if (a3_string_cmp(cfg->out_path, A3_CS("-")) == 0 &&
+               (!cfg->output_preprocessed && !cfg->output_asm)) {
+        fprintf(stderr, "Output to stdout requires either -E or -S.");
         exit(-1);
     }
 }
 
-static void compile(Config const* cfg) {
+static void file_process(Config* cfg, File* file) {
     assert(cfg);
 
-    A3CString src = file_read(cfg->preprocess_out_path);
-    if (!src.ptr) {
-        fprintf(stderr, "Failed to read preprocessed source.\n");
-        exit(-1);
+    A3CString as = A3_CS_NULL;
+    if (file->type == FILE_SRC) {
+        A3CString preprocessed = make_file(cfg->tmp_dir, file->name, A3_CS(".pre.c"));
+        preprocess(file->path, preprocessed, &cfg->preprocess_args);
+
+        if (cfg->output_preprocessed) {
+            file->out = preprocessed;
+            return;
+        }
+
+        A3CString src = file_read(preprocessed);
+        remove(a3_string_cstr(preprocessed));
+        if (!src.ptr) {
+            fprintf(stderr, "Failed to read preprocessed source.\n");
+            exit(-1);
+        }
+
+        Lexer*  lexer  = lex_new(src);
+        Parser* parser = parse_new(src, lexer);
+
+        Vertex* root = parse(parser);
+        if (!root) {
+            fprintf(stderr, "Parsing failed.\n");
+            exit(-1);
+        }
+
+        Registry* reg = type_registry_new();
+        if (!type(reg, src, root)) {
+            fprintf(stderr, "Typechecking failed.\n");
+            exit(-1);
+        }
+
+        if (cfg->dump_ast)
+            dump(root);
+
+        as = make_file(cfg->tmp_dir, file->name, A3_CS(".asm"));
+        if (!gen(cfg, file, src, as, root)) {
+            fprintf(stderr, "Codegen failed.\n");
+            exit(-1);
+        }
+
+        if (cfg->output_asm) {
+            file->out = as;
+            return;
+        }
+    } else if (file->type == FILE_ASM) {
+        as = file->path;
     }
 
-    Lexer*  lexer  = lex_new(src);
-    Parser* parser = parse_new(src, lexer);
+    A3CString obj = A3_CS_NULL;
+    if (file->type == FILE_SRC || file->type == FILE_ASM) {
+        obj = make_file(cfg->tmp_dir, file->name, A3_CS(".o"));
+        assemble(as, obj);
 
-    Vertex* root = parse(parser);
-    if (!root) {
-        fprintf(stderr, "Parsing failed.\n");
-        exit(-1);
+        if (file->type != FILE_ASM)
+            remove(a3_string_cstr(as));
+    } else {
+        obj = file->path;
     }
 
-    Registry* reg = type_registry_new();
-    if (!type(reg, src, root)) {
-        fprintf(stderr, "Typechecking failed.\n");
-        exit(-1);
-    }
-
-    if (cfg->dump_ast)
-        dump(root);
-
-    if (!gen(cfg, src, root)) {
-        fprintf(stderr, "Codegen failed.\n");
-        exit(-1);
-    }
+    file->out = obj;
 }
 
-static void cleanup(Config const* cfg) {
+static void cleanup(Config* cfg) {
     assert(cfg);
 
     if (cfg->keep_tmp)
         return;
 
-    if (!cfg->output_preprocessed)
-        remove(a3_string_cstr(cfg->preprocess_out_path));
-    if (!cfg->output_asm)
-        remove(a3_string_cstr(cfg->asm_out_path));
-    if (!cfg->output_obj)
-        remove(a3_string_cstr(cfg->obj_out_path));
+    if (!cfg->output_asm && !cfg->output_preprocessed && !cfg->output_obj) {
+        A3_VEC_FOR_EACH (File, file, &cfg->files) {
+            if (file->type != FILE_OBJ)
+                remove(a3_string_cstr(file->out));
+        }
+    }
+
     remove(a3_string_cstr(cfg->tmp_dir));
+}
+
+static void copy_to(A3CString from, A3CString to) {
+    uint8_t buf[8192] = {};
+
+    FILE* in  = fopen(a3_string_cstr(from), "r");
+    FILE* out = a3_string_cmp(to, A3_CS("-")) == 0 ? stdout : fopen(a3_string_cstr(to), "w");
+
+    if (!in || !out) {
+        fprintf(stderr, "Failed to open one of " A3_S_F " or " A3_S_F ".\n", A3_S_FORMAT(from),
+                A3_S_FORMAT(to));
+        exit(-1);
+    }
+
+    size_t n = 0;
+    while ((n = fread(buf, 1, sizeof(buf), in)) && !ferror(in) && !ferror(out)) {
+        while (n > 0 && !ferror(out))
+            n -= fwrite(buf, 1, n, out);
+    }
+
+    if (ferror(in) || ferror(out) || n) {
+        fprintf(stderr, "Failed to copy from " A3_S_F " to " A3_S_F ".\n", A3_S_FORMAT(from),
+                A3_S_FORMAT(to));
+        exit(-1);
+    }
+}
+
+static void move_to(A3CString from, A3CString to) {
+    if (a3_string_cmp(to, A3_CS("-")) == 0 ||
+        rename(a3_string_cstr(from), a3_string_cstr(to)) != 0) {
+        copy_to(from, to);
+    }
 }
 
 int main(int argc, char const* argv[]) {
@@ -299,19 +375,21 @@ int main(int argc, char const* argv[]) {
     Config cfg = arg_parse((size_t)argc, argv);
     config_init(&cfg);
 
-    preprocess(cfg.src_path, cfg.preprocess_out_path, &cfg.preprocess_args);
-    if (cfg.output_preprocessed)
-        goto done;
+    A3_VEC_FOR_EACH (File, file, &cfg.files)
+        file_process(&cfg, file);
 
-    compile(&cfg);
-    if (cfg.output_asm)
+    A3CString out = A3_VEC_AT(File, &cfg.files, 0)->out;
+    if (cfg.output_preprocessed || cfg.output_asm || cfg.output_obj) {
+        move_to(out, cfg.out_path);
         goto done;
+    }
 
-    assemble(cfg.asm_out_path, cfg.obj_out_path);
-    if (cfg.output_obj)
-        goto done;
+    A3Vec objs;
+    A3_VEC_INIT(A3CString, &objs);
 
-    link(cfg.obj_out_path, cfg.out_path);
+    A3_VEC_FOR_EACH (File, file, &cfg.files)
+        A3_VEC_PUSH(&objs, &file->out);
+    link(&objs, cfg.out_path);
 
 done:
     cleanup(&cfg);

@@ -68,7 +68,8 @@ void preprocess(A3CString src, A3CString dst, A3Vec* args) {
     A3_VEC_PUSH(&final_args, &(char*) { "cc" });
     A3_VEC_PUSH(&final_args, &(char*) { "-E" });
     A3_VEC_PUSH(&final_args, &(char*) { "-P" });
-    A3_VEC_FOR_EACH(A3CString, arg, args) { A3_VEC_PUSH(&final_args, arg); }
+    A3_VEC_FOR_EACH (A3CString, arg, args)
+        A3_VEC_PUSH(&final_args, arg);
 
     if (a3_string_cmp(dst, A3_CS("-")) != 0) {
         A3_VEC_PUSH(&final_args, &(char*) { "-o" });
@@ -89,10 +90,22 @@ void assemble(A3CString src, A3CString dst) {
         (char* const[]) { "nasm", "-felf64", "-o", cstring_clone(dst), cstring_clone(src), NULL });
 }
 
-void link(A3CString src, A3CString dst) {
-    assert(src.ptr);
+void link(A3Vec* srcs, A3CString dst) {
+    assert(srcs);
     assert(dst.ptr);
 
-    subprocess_run(
-        (char* const[]) { "cc", "-static", "-o", cstring_clone(dst), cstring_clone(src), NULL });
+    A3Vec final_args;
+    A3_VEC_INIT(char*, &final_args);
+
+    A3_VEC_PUSH(&final_args, &(char*) { "cc" });
+    A3_VEC_PUSH(&final_args, &(char*) { "-static" });
+    A3_VEC_PUSH(&final_args, &(char*) { "-o" });
+    A3_VEC_PUSH(&final_args, &(char*) { cstring_clone(dst) });
+
+    A3_VEC_FOR_EACH (A3CString, src, srcs)
+        A3_VEC_PUSH(&final_args, &(char*) { (char*)src->ptr });
+
+    A3_VEC_PUSH(&final_args, &(char*) { NULL });
+
+    subprocess_run(final_args.buf);
 }

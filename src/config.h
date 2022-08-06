@@ -15,16 +15,24 @@
 #include <a3/str.h>
 #include <a3/vec.h>
 
+typedef enum FileType {
+    FILE_SRC,
+    FILE_OBJ,
+    FILE_ASM,
+} FileType;
+
+typedef struct File {
+    A3CString path;
+    A3CString name;
+    A3CString out;
+    FileType  type;
+} File;
+
 typedef struct Config {
-    A3CString src_path;
-    A3CString src_name;
+    A3Vec     files;
     A3CString out_path;
     A3CString tmp_dir;
-    A3CString preprocess_out_path;
     A3Vec     preprocess_args;
-    A3CString asm_out_path;
-    A3CString obj_out_path;
-    FILE*     asm_out;
     bool      dump_ast;
     bool      keep_tmp;
     bool      output_preprocessed;
