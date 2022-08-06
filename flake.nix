@@ -81,6 +81,7 @@
             gdb
             rr
             clang-tools
+            valgrind
             (let unwrapped = include-what-you-use;
             in stdenv.mkDerivation {
               pname = "include-what-you-use";

@@ -464,7 +464,8 @@ static Expr* parse_compound_assign(Parser* parser, Token tok, Expr* lhs, Expr* r
     assert(rhs);
 
     BinOpType op = parse_compound_assign_op(tok.type);
-    return vertex_bin_op_new(parse_span_merge(SPAN(lhs, expr), SPAN(rhs, expr)), op, lhs, rhs);
+    rhs = vertex_bin_op_new(parse_span_merge(SPAN(lhs, expr), SPAN(rhs, expr)), op, lhs, rhs);
+    return vertex_bin_op_new(SPAN(rhs, expr), OP_ASSIGN, lhs, rhs);
 }
 
 static Expr* parse_expr(Parser* parser, uint8_t precedence) {
@@ -665,8 +666,7 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
 
             lhs = vertex_member_new(op_span, lhs, rhs->var.name);
         } else if (parse_is_compound_assign(tok_op.type)) {
-            rhs = parse_compound_assign(parser, tok_op, lhs, rhs);
-            lhs = vertex_bin_op_new(op_span, OP_ASSIGN, lhs, rhs);
+            lhs = parse_compound_assign(parser, tok_op, lhs, rhs);
         } else {
             lhs = vertex_bin_op_new(op_span, parse_bin_op(tok_op.type), lhs, rhs);
         }

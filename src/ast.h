@@ -144,11 +144,9 @@ typedef struct Call {
 } Call;
 
 typedef struct MemberAccess {
-    Expr* lhs;
-    union {
-        A3CString     name;
-        Member const* rhs;
-    };
+    Expr*         lhs;
+    A3CString     name;
+    Member const* rhs;
 } MemberAccess;
 
 typedef struct CondExpr {

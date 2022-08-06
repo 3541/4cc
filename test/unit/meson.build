@@ -263,6 +263,9 @@ tests = {
     'default',
     'fallthrough',
     'nothing'
+  ],
+  'bug': [
+    'field_name_corruption'
   ]
 }
 

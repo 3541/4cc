@@ -382,7 +382,7 @@ static bool type_is_callable(Type const* type) {
     return type->type == TY_FN || (type->type == TY_PTR && type->parent->type == TY_FN);
 }
 
-Member const* type_struct_find_member(Type const* s, A3CString name) {
+Member const* type_struct_member_find(Type const* s, A3CString name) {
     assert(s);
     assert(s->type == TY_STRUCT || s->type == TY_UNION);
 
@@ -1318,14 +1318,16 @@ static bool type_member(AstVisitor* visitor, MemberAccess* member) {
     assert(member);
 
     A3_TRYB(vertex_visit(visitor, VERTEX(member->lhs, expr)));
-    Member const* mem = type_struct_find_member(member->lhs->res_type, member->name);
-    if (!mem) {
-        type_error(visitor->ctx, VERTEX(member, expr.member), "No member of this name exists.");
-        return false;
+    if (!member->rhs) {
+        member->rhs = type_struct_member_find(member->lhs->res_type, member->name);
+        if (!member->rhs) {
+            type_error(visitor->ctx, VERTEX(member, expr.member),
+                       "No member named " A3_S_F " exists.", A3_S_FORMAT(member->name));
+            return false;
+        }
     }
 
-    member->rhs                    = mem;
-    EXPR(member, member)->res_type = mem->type;
+    EXPR(member, member)->res_type = member->rhs->type;
 
     return true;
 }
