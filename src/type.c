@@ -751,6 +751,12 @@ static bool type_bin_op(AstVisitor* visitor, BinOp* op) {
 
         // fallthrough
     case OP_SUB:
+        if ((op->lhs->res_type->type == TY_PTR || op->lhs->res_type->type == TY_ARRAY) &&
+            (op->rhs->res_type->type == TY_PTR || op->rhs->res_type->type == TY_ARRAY)) {
+            EXPR(op, bin_op)->res_type = BUILTIN_TYPES[TY_ISIZE];
+            break;
+        }
+
         EXPR(op, bin_op)->res_type = op->lhs->res_type;
         break;
     case OP_ASSIGN:
