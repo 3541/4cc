@@ -103,7 +103,8 @@ tests = {
     'add_lhs',
     'sub_lhs',
     'diff',
-    'void'
+    'void',
+    'void_array'
   ],
   'call': [
     'simple',

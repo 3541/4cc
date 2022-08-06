@@ -366,7 +366,7 @@ static bool type_is_assignable(Type const* lhs, Type const* rhs) {
            (lhs->type == TY_PTR && rhs->type == TY_FN && lhs->parent == rhs) ||
            (lhs->type == TY_ARRAY && rhs->type == TY_ARRAY && lhs->parent == rhs->parent &&
             lhs->len == rhs->len) ||
-           (lhs->type == TY_PTR && rhs->type == TY_PTR &&
+           (lhs->type == TY_PTR && (rhs->type == TY_PTR || rhs->type == TY_ARRAY) &&
             (lhs->parent->type == TY_VOID || rhs->parent->type == TY_VOID));
 }
 
