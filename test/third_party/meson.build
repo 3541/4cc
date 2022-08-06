@@ -1,6 +1,6 @@
 python = find_program('python3')
 
-projects = ['getopt', 'utf-7']
+projects = ['bencode-c', 'getopt', 'utf-7']
 
 foreach project : projects
   dir = meson.current_source_dir() / project
