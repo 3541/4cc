@@ -769,6 +769,31 @@ static bool gen_fn(AstVisitor* visitor, Item* decl) {
     return true;
 }
 
+static void gen_zero_fill(Generator* gen, size_t n) {
+    switch (n) {
+    case 1:
+        gen_asm(gen, "mov BYTE [rax], 0");
+        break;
+    case 2:
+        gen_asm(gen, "mov WORD [rax], 0");
+        break;
+    case 4:
+        gen_asm(gen, "mov DWORD [rax], 0");
+        break;
+    case 8:
+        gen_asm(gen, "mov QWORD [rax], 0");
+        break;
+    default:
+        gen_asm(gen,
+                "mov rdi, rax\n"
+                "mov al, 0\n"
+                "mov rcx, %zu\n"
+                "rep stosb",
+                n);
+        break;
+    }
+}
+
 static bool gen_init(AstVisitor* visitor, Init* init) {
     assert(visitor);
     assert(init);
@@ -798,6 +823,13 @@ static bool gen_init(AstVisitor* visitor, Init* init) {
                 gen->init_decl_type = decl_type;
             }
 
+            if (i < decl_type->len) {
+                gen_asm(gen, "mov rax, [rsp]");
+                if (i)
+                    gen_asm(gen, "add rax, %zu", i * decl_type->parent->size);
+                gen_zero_fill(gen, (decl_type->len - i) * decl_type->parent->size);
+            }
+
             break;
         }
         case TY_STRUCT: {
@@ -815,11 +847,7 @@ static bool gen_init(AstVisitor* visitor, Init* init) {
 
                     elem = A3_SLL_NEXT(elem, link);
                 } else {
-                    gen_asm(gen,
-                            "mov rdi, rax\n"
-                            "mov al, 0\n"
-                            "mov rcx, %zu",
-                            mem->type->size);
+                    gen_zero_fill(gen, mem->type->size);
                 }
             }
 
