@@ -1364,7 +1364,7 @@ static bool type_expr_cond(AstVisitor* visitor, CondExpr* expr) {
 
     Type const* res_true  = (expr->res_true ?: expr->cond)->res_type;
     Type const* res_false = expr->res_false->res_type;
-    if (!type_is_assignable(res_true, res_false)) {
+    if (!type_expr_is_assignable(res_true, expr->res_false)) {
         type_error_mismatch(visitor->ctx, VERTEX(expr, expr.cond), res_true, res_false);
         return false;
     }
