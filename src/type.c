@@ -549,6 +549,9 @@ static Type const* type_aggregate_from_ptype(Registry* reg, PType* ptype) {
     ret->name = ptype->name.text;
     A3_SLL_INIT(&ret->members);
 
+    if (type == TY_ENUM)
+        ret->is_signed = true;
+
     size_t offset = 0;
     while (!A3_SLL_IS_EMPTY(&ptype->members)) {
         Member* member = A3_SLL_HEAD(&ptype->members);
