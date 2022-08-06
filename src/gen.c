@@ -1221,7 +1221,8 @@ bool gen(Config const* cfg, File* file, A3CString src, A3CString dst, Vertex* ro
             .visit_switch         = gen_switch,
         },
         root);
-    assert(!gen.stack_depth);
+    if (ret)
+        assert(!gen.stack_depth);
 
     fclose(gen.out);
 
