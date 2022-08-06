@@ -1470,6 +1470,7 @@ static bool type_switch(AstVisitor* visitor, Switch* switch_stmt) {
         if (!label->expr)
             continue;
 
+        A3_TRYB(vertex_visit(visitor, VERTEX(label->expr, expr)));
         EvalResult res = eval(reg->src, label->expr);
         if (!res.ok)
             return false;
