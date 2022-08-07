@@ -931,7 +931,7 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
     if (loop->init)
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->init, item)));
 
-    gen_asm(gen, ".begin%zu:", label);
+    gen_asm(gen, ".begin_%zu:", label);
     if (loop->cond && loop->cond_first) {
         A3_TRYB(vertex_visit(visitor, VERTEX(loop->cond, expr)));
         gen_asm(gen,
@@ -956,7 +956,7 @@ static bool gen_loop(AstVisitor* visitor, Loop* loop) {
     }
 
     gen_asm(gen,
-            "jmp .begin%zu\n"
+            "jmp .begin_%zu\n"
             ".end_%zu:",
             label, label);
 
