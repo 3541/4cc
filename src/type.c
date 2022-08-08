@@ -56,7 +56,6 @@ typedef struct Registry {
     Scope*                    current_scope;
     Unit*                     current_unit;
     A3CString                 src;
-    size_t                    lit_count;
     size_t                    init_depth;
     Type const*               init_type;
 } Registry;
@@ -238,7 +237,6 @@ Registry* type_registry_new(void) {
         .src           = A3_CS_NULL,
         .current_unit  = NULL,
         .current_scope = NULL,
-        .lit_count     = 0,
         .init_type     = NULL,
     };
 
@@ -870,7 +868,7 @@ static A3CString type_lit_name(Registry* reg) {
 
     A3Buffer* buf = a3_buf_new(32, 128);
 
-    if (!a3_buf_write_fmt(buf, "__4cc_lit%zu", reg->lit_count++))
+    if (!a3_buf_write_fmt(buf, "__4cc_lit%zu", util_ident()))
         return A3_CS_NULL;
 
     return a3_buf_read_ptr(buf);
