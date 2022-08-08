@@ -12,6 +12,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <a3/ll.h>
 #include <a3/sll.h>
 #include <a3/str.h>
 #include <a3/util.h>
@@ -135,12 +136,13 @@ typedef struct Var {
 typedef struct Arg Arg;
 typedef struct Arg {
     Expr* expr;
-    A3_SLL_LINK(Arg) link;
+    A3_LL_LINK(Arg) link;
 } Arg;
 
 typedef struct Call {
-    Expr*             callee;
-    A3_SLL(args, Arg) args;
+    Expr*            callee;
+    size_t           arg_count;
+    A3_LL(args, Arg) args;
 } Call;
 
 typedef struct MemberAccess {

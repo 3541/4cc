@@ -676,20 +676,19 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
         obj = call->callee->var.obj;
     }
 
-    size_t args = 0;
-    A3_SLL_FOR_EACH (Arg, arg, &call->args, link) {
-        args++;
-        A3_TRYB(vertex_visit(visitor, VERTEX(arg->expr, expr)));
-        gen_stack_push(gen);
-    }
-    if (args > 6) {
+    if (call->arg_count > 6) {
         gen_error(gen, VERTEX(call, expr.call),
                   "Calls with more than six arguments are not supported.");
         return false;
     }
 
-    for (size_t i = 0; i < args; i++)
-        gen_stack_pop(gen, ARG_REGISTERS[args - i - 1]);
+    A3_LL_FOR_EACH_REV (Arg, arg, &call->args, link) {
+        A3_TRYB(vertex_visit(visitor, VERTEX(arg->expr, expr)));
+        gen_stack_push(gen);
+    }
+
+    for (size_t i = 0; i < call->arg_count; i++)
+        gen_stack_pop(gen, ARG_REGISTERS[i]);
 
     bool align_stack = gen->stack_depth % 2 != 0;
     if (align_stack)
@@ -758,7 +757,7 @@ static bool gen_fn(AstVisitor* visitor, Item* decl) {
     size_t i = 0;
     A3_SLL_FOR_EACH (Item, param, &decl->obj->params, link) {
         gen_store_local(visitor->ctx, param->obj, ARG_REGISTERS[i++]);
-        assert(i <= 6);
+        assert(i < 6);
     }
 
     A3_TRYB(vertex_visit(visitor, VERTEX(decl->body, item.block)));

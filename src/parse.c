@@ -289,7 +289,8 @@ static Expr* parse_call(Parser* parser, Expr* callee) {
             return NULL;
 
         Arg* arg = arg_new(expr);
-        A3_SLL_ENQUEUE(&ret->call.args, arg, link);
+        A3_LL_ENQUEUE(&ret->call.args, arg, link);
+        ret->call.arg_count++;
     }
 
     Token tok_right = lex_next(parser->lexer);

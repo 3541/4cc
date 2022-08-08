@@ -1301,7 +1301,7 @@ static bool type_call(AstVisitor* visitor, Call* call) {
     EXPR(call, call)->res_type = fn_type->ret;
 
     Param* param = A3_SLL_HEAD(&fn_type->params);
-    A3_SLL_FOR_EACH (Arg, arg, &call->args, link) {
+    A3_LL_FOR_EACH (Arg, arg, &call->args, link) {
         A3_TRYB(vertex_visit(visitor, VERTEX(arg->expr, expr)));
 
         if (!param) {

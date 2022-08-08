@@ -217,7 +217,7 @@ static bool dump_call(AstVisitor* visitor, Call* call) {
 
     if (!A3_SLL_IS_EMPTY(&call->args)) {
         dump_print(visitor->ctx, "ARGS");
-        A3_SLL_FOR_EACH (Arg, arg, &call->args, link)
+        A3_LL_FOR_EACH (Arg, arg, &call->args, link)
             A3_TRYB(dump_child(visitor, VERTEX(arg->expr, expr)));
     }
 

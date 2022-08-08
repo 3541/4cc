@@ -13,6 +13,7 @@
 #include <stdint.h>
 
 #include <a3/ht.h>
+#include <a3/ll.h>
 #include <a3/sll.h>
 #include <a3/str.h>
 #include <a3/util.h>
@@ -160,8 +161,8 @@ Expr* vertex_call_new(Span span, Expr* callee) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret = (Vertex) { .span = span,
                       .type = V_EXPR,
-                      .expr = { .type = EXPR_CALL, .call.callee = callee } };
-    A3_SLL_INIT(&ret->expr.call.args);
+                      .expr = { .type = EXPR_CALL, .call = { .callee = callee, .arg_count = 0 } } };
+    A3_LL_INIT(&ret->expr.call.args, link);
 
     return &ret->expr;
 }
