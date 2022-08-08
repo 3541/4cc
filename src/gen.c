@@ -819,9 +819,6 @@ static bool gen_init(AstVisitor* visitor, Init* init) {
         case TY_ARRAY: {
             size_t i = 0;
             A3_SLL_FOR_EACH (Init, elem, &init->list, link) {
-                assert(elem->type == INIT_EXPR);
-                assert(decl_type->type == TY_ARRAY);
-
                 gen_asm(gen, "mov rax, [rsp]");
                 if (i)
                     gen_asm(gen, "add rax, %zu", i * decl_type->parent->size);
