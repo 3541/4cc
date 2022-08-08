@@ -709,6 +709,10 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
         gen->stack_depth -= call->arg_count - 6;
     }
 
+    Type const* ret = EXPR(call, call)->res_type;
+    if (type_is_scalar(ret) && ret->is_signed && ret->size < 8)
+        gen_asm(gen, "movsx rax, %s", gen_reg_for(REG_A, ret));
+
     return true;
 }
 
