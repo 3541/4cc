@@ -136,7 +136,8 @@ static Config arg_parse(size_t argc, char const* argv[]) {
             continue;
         }
 
-        if (strcmp(argv[i], "-ansi") == 0 || strcmp(argv[i], "-pedantic") == 0)
+        if (strcmp(argv[i], "-ansi") == 0 || strcmp(argv[i], "-pedantic") == 0 ||
+            strcmp(argv[i], "-no-pie") == 0)
             continue;
 
         switch (argv[i][1]) {
