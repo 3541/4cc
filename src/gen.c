@@ -28,25 +28,25 @@
 #include "type.h"
 #include "util.h"
 
-typedef enum Register { REG_A, REG_DI, REG_SI, REG_D, REG_C, REG_R8, REG_R9 } Register;
+typedef enum Register { REG_A, REG_DI, REG_SI, REG_D, REG_C, REG_R8, REG_R9, REG_R10 } Register;
 
 static Register const ARG_REGISTERS[] = { REG_DI, REG_SI, REG_D, REG_C, REG_R8, REG_R9 };
 
 static char const* const REGISTERS_8[] = {
     [REG_A] = "al",   [REG_C] = "cl",   [REG_D] = "dl",   [REG_DI] = "dil",
-    [REG_SI] = "sil", [REG_R8] = "r8b", [REG_R9] = "r9b",
+    [REG_SI] = "sil", [REG_R8] = "r8b", [REG_R9] = "r9b", [REG_R10] = "r10b",
 };
 static char const* const REGISTERS_16[] = {
     [REG_A] = "ax",  [REG_C] = "cx",   [REG_D] = "dx",   [REG_DI] = "di",
-    [REG_SI] = "si", [REG_R8] = "r8w", [REG_R9] = "r9w",
+    [REG_SI] = "si", [REG_R8] = "r8w", [REG_R9] = "r9w", [REG_R10] = "r10w",
 };
 static char const* const REGISTERS_32[] = {
     [REG_A] = "eax",  [REG_C] = "ecx",  [REG_D] = "edx",  [REG_DI] = "edi",
-    [REG_SI] = "esi", [REG_R8] = "r8d", [REG_R9] = "r9d",
+    [REG_SI] = "esi", [REG_R8] = "r8d", [REG_R9] = "r9d", [REG_R10] = "r10d",
 };
 static char const* const REGISTERS_64[] = {
     [REG_A] = "rax",  [REG_C] = "rcx", [REG_D] = "rdx", [REG_DI] = "rdi",
-    [REG_SI] = "rsi", [REG_R8] = "r8", [REG_R9] = "r9",
+    [REG_SI] = "rsi", [REG_R8] = "r8", [REG_R9] = "r9", [REG_R10] = "r10",
 };
 
 static char const* gen_reg_for(Register reg, Type const* type) {
@@ -665,21 +665,11 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
 
     Generator* gen = visitor->ctx;
 
-    bool indirect = call->callee->res_type->type != TY_FN || call->callee->type != EXPR_VAR ||
-                    !call->callee->var.obj->is_global;
-    Obj* obj = NULL;
-    if (indirect) {
-        A3_TRYB(vertex_visit(visitor, VERTEX(call->callee, expr)));
-        gen_stack_push(gen);
-    } else {
-        assert(call->callee->type == EXPR_VAR);
-        obj = call->callee->var.obj;
-    }
-
-    if (call->arg_count > 6) {
-        gen_error(gen, VERTEX(call, expr.call),
-                  "Calls with more than six arguments are not supported.");
-        return false;
+    bool align_stack =
+        (gen->stack_depth + (call->arg_count > 6 ? call->arg_count - 6 : 0)) % 2 != 0;
+    if (align_stack) {
+        gen_asm(gen, "sub rsp, 8");
+        gen->stack_depth++;
     }
 
     A3_LL_FOR_EACH_REV (Arg, arg, &call->args, link) {
@@ -687,12 +677,19 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
         gen_stack_push(gen);
     }
 
-    for (size_t i = 0; i < call->arg_count; i++)
-        gen_stack_pop(gen, ARG_REGISTERS[i]);
+    bool indirect = call->callee->res_type->type != TY_FN || call->callee->type != EXPR_VAR ||
+                    !call->callee->var.obj->is_global;
+    Obj* obj = NULL;
+    if (indirect) {
+        A3_TRYB(vertex_visit(visitor, VERTEX(call->callee, expr)));
+        gen_asm(visitor->ctx, "mov r10, rax");
+    } else {
+        assert(call->callee->type == EXPR_VAR);
+        obj = call->callee->var.obj;
+    }
 
-    bool align_stack = gen->stack_depth % 2 != 0;
-    if (align_stack)
-        gen_asm(gen, "sub rsp, 8");
+    for (size_t i = 0; i < MIN(call->arg_count, 6); i++)
+        gen_stack_pop(gen, ARG_REGISTERS[i]);
 
     if (!indirect) {
         if (!obj->is_defined)
@@ -700,12 +697,17 @@ static bool gen_call(AstVisitor* visitor, Call* call) {
 
         gen_asm(gen, "call " A3_S_F, A3_S_FORMAT(obj->name));
     } else {
-        gen_stack_pop(gen, REG_A);
-        gen_asm(gen, "call rax");
+        gen_asm(gen, "call r10");
     }
 
-    if (align_stack)
+    if (align_stack) {
         gen_asm(gen, "add rsp, 8");
+        gen->stack_depth--;
+    }
+    if (call->arg_count > 6) {
+        gen_asm(gen, "add rsp, %zu", (call->arg_count - 6) * 8);
+        gen->stack_depth -= call->arg_count - 6;
+    }
 
     return true;
 }
@@ -736,16 +738,19 @@ static bool gen_fn(AstVisitor* visitor, Item* decl) {
         size_t reg_params = 0;
         A3_SLL_FOR_EACH (Item, param, &decl->obj->params, link)
             reg_params++;
+        reg_params = MIN(6, reg_params);
 
-        size_t offset = decl->obj->va->stack_offset;
+        ssize_t offset = decl->obj->va->stack_offset;
+        assert(offset >= 0);
         gen_asm(visitor->ctx,
-                "mov DWORD [rbp - %zu], %zu\n"
-                "mov DWORD [rbp - %zu], 0\n"
-                "mov QWORD [rbp - %zu], 0\n"
-                "mov [rbp - %zu], rbp\n"
-                "sub QWORD [rbp - %zu], %zu",
-                offset, reg_params * 8, offset - 4, offset - 8, offset - 16, offset - 16,
-                offset - 24);
+                "mov DWORD [rbp - %zd], %zu\n" // .gp_offset
+                "mov DWORD [rbp - %zd], 0\n"   // .fp_offset
+                "mov QWORD [rbp - %zd], rbp\n" // .overflow_arg_area
+                "add QWORD [rbp - %zd], 16\n"  // .overflow_arg_area
+                "mov [rbp - %zd], rbp\n"       // .reg_save_area
+                "sub QWORD [rbp - %zd], %zd",  // .reg_save_area
+                offset, reg_params * 8, offset - 4, offset - 8, offset - 8, offset - 16,
+                offset - 16, offset - 24);
         offset -= 24;
 
         for (size_t i = 0; i < sizeof(ARG_REGISTERS) / sizeof(ARG_REGISTERS[0]); i++) {
@@ -757,11 +762,12 @@ static bool gen_fn(AstVisitor* visitor, Item* decl) {
     size_t i = 0;
     A3_SLL_FOR_EACH (Item, param, &decl->obj->params, link) {
         gen_store_local(visitor->ctx, param->obj, ARG_REGISTERS[i++]);
-        assert(i < 6);
+
+        if (i >= 6)
+            break;
     }
 
     A3_TRYB(vertex_visit(visitor, VERTEX(decl->body, item.block)));
-    assert(!((Generator*)visitor->ctx)->stack_depth);
 
     gen_asm(visitor->ctx, "mov rax, 0\n"
                           ".ret:\n"

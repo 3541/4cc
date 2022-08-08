@@ -78,7 +78,7 @@ static Type const* type_from_ptype(Registry*, PType*);
 #define OBJ_GLOBAL true
 #define OBJ_LOCAL  false
 static Obj* obj_new(A3CString name, Type const* type, Init* init, DeclAttributes attrs,
-                    size_t stack_offset, bool global) {
+                    ssize_t stack_offset, bool global) {
     assert(name.ptr);
     assert(type);
 
@@ -960,19 +960,27 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
             }
         }
 
+        size_t count = 0;
         A3_SLL_FOR_EACH (Item, param, &decl->decl_ptype->params, link) {
             param->decl_type = type_from_ptype(reg, param->decl_ptype);
             if (param->decl_type->type == TY_ARRAY)
                 param->decl_type = type_ptr_to(reg, param->decl_type->parent);
 
-            if (!param->attributes.is_static) {
+            ssize_t offset = -1;
+            if (count < 6) {
                 stack_depth = align_up(stack_depth, param->decl_type->align);
                 stack_depth += param->decl_type->size;
+                offset = (ssize_t)stack_depth;
+            } else {
+                // Arguments later than the sixth are already on the stack, above the base pointer.
+                offset = ((ssize_t)count - 6) * -8 - 16;
             }
 
-            param->obj = obj_new(param->name, param->decl_type, NULL, param->attributes,
-                                 stack_depth, OBJ_LOCAL);
+            param->obj =
+                obj_new(param->name, param->decl_type, NULL, param->attributes, offset, OBJ_LOCAL);
             scope_add(reg->current_scope, param->obj);
+
+            count++;
         }
 
         if (decl->attributes.is_variadic) {
@@ -980,7 +988,7 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
             stack_depth += 72;
             scope_add(reg->current_scope,
                       obj_new(A3_CS("__va__"), type_array_of(BUILTIN_TYPES[TY_U8], 72), NULL,
-                              (DeclAttributes) {}, stack_depth, OBJ_LOCAL));
+                              (DeclAttributes) {}, (ssize_t)stack_depth, OBJ_LOCAL));
         }
 
         reg_scope_pop(reg);
@@ -1247,7 +1255,7 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
         decl->obj = prev;
     } else {
         decl->obj = obj_new(decl->name, type, decl->init, decl->attributes,
-                            !global ? reg->current_scope->fn->stack_depth : 0, global);
+                            !global ? (ssize_t)reg->current_scope->fn->stack_depth : 0, global);
         scope_add(reg->current_scope, decl->obj);
     }
 

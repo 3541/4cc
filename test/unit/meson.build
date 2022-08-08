@@ -115,7 +115,10 @@ tests = {
     'very_nested',
     'variadic',
     'static',
-    'variadic_def'
+    'variadic_def',
+    'many_args',
+    'printf_many_args',
+    'variadic_many_args'
   ],
   'fn': [
     'simple',

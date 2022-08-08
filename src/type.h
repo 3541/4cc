@@ -94,8 +94,8 @@ typedef struct Obj {
 
     union {
         struct {
-            Init*  init;
-            size_t stack_offset;
+            Init*   init;
+            ssize_t stack_offset;
         };
 
         // TY_FN.

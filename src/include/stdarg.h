@@ -49,12 +49,21 @@ typedef va_list   __gnuc_va_list;
 
 #define va_end(LIST)
 
-static void* __va_reg(__va_list* list) {
-    void* ret = (__u8*)list->reg_save_area + list->gp_offset;
-    list->gp_offset += 8;
-    return ret;
+static void* __va_arg_memory(__va_list* __list, __usize __size) {
+    void* __ret               = __list->overflow_arg_area;
+    __list->overflow_arg_area = (void*)(((__usize)__ret + __size + 7) & ~7);
+    return __ret;
 }
 
-#define va_arg(LIST, TY) (*(TY*)(__va_reg(LIST)))
+static void* __va_arg_integer(__va_list* __list, __usize __size) {
+    if (__list->gp_offset >= 48)
+        return __va_arg_memory(__list, __size);
+
+    void* __ret = (__u8*)__list->reg_save_area + __list->gp_offset;
+    __list->gp_offset += 8;
+    return __ret;
+}
+
+#define va_arg(LIST, TY) (*(TY*)(__va_arg_integer((LIST), sizeof(TY))))
 
 #endif
