@@ -1524,8 +1524,9 @@ TypeType type_to_underlying(TypeType type) {
     switch (type) {
     case TY_ENUM:
         return TY_U32;
-    case TY_PTR:
     case TY_ARRAY:
+    case TY_FN:
+    case TY_PTR:
         return TY_USIZE;
     default:
         return type;
