@@ -8,13 +8,15 @@
  */
 
 #include <assert.h>
+#include <fcntl.h>
 #include <inttypes.h>
 #include <libgen.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
-#include <a3/buffer.h>
 #include <a3/log.h>
 #include <a3/str.h>
 #include <a3/vec.h>
@@ -32,27 +34,25 @@
 static A3CString file_read(A3CString path) {
     assert(path.ptr);
 
-    FILE* file = fopen(a3_string_cstr(path), "r");
-    if (!file) {
-        fputs("Failed to open file.\n", stderr);
-        return A3_CS_NULL;
+    int file = open(a3_string_cstr(path), O_RDONLY);
+    if (file < 0) {
+        perror("open");
+        exit(-1);
     }
 
-    A3Buffer buf = { .data = A3_S_NULL };
-    a3_buf_init(&buf, 1024, 1024ULL * 1024 * 1024);
-    while (!feof(file) && !ferror(file)) {
-        a3_buf_ensure_cap(&buf, 1024);
-        A3String space = a3_buf_write_ptr(&buf);
-        size_t   read  = fread(space.ptr, 1, space.len, file);
-        a3_buf_wrote(&buf, read);
+    struct stat st;
+    if (fstat(file, &st) < 0) {
+        perror("fstat");
+        exit(-1);
     }
 
-    if (ferror(file)) {
-        fputs("Error reading file.\n", stderr);
-        return A3_CS_NULL;
+    void* buf = mmap(NULL, (size_t)st.st_size, PROT_READ, MAP_PRIVATE, file, 0);
+    if (buf == MAP_FAILED) {
+        perror("mmap");
+        exit(-1);
     }
 
-    return a3_buf_read_ptr(&buf);
+    return a3_cstring_new(buf, (size_t)st.st_size);
 }
 
 static void usage(char const* name, int status) {
