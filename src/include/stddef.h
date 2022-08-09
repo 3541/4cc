@@ -33,6 +33,7 @@
 #define __STDDEF_H
 
 typedef __usize size_t;
+typedef __isize ptrdiff_t;
 typedef __u32   wchar_t;
 
 #endif
