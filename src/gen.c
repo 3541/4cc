@@ -468,6 +468,21 @@ static bool gen_cast(AstVisitor* visitor, BinOp* op) {
     TypeType from = type_to_underlying(op->rhs->res_type->type);
     TypeType to   = type_to_underlying(op->lhs->res_type->type);
 
+    if (from > sizeof(CASTS) / sizeof(CASTS[0])) {
+        A3String name = type_name(op->rhs->res_type);
+        gen_error(visitor->ctx, VERTEX(op->rhs, expr),
+                  "Cast from type " A3_S_F " is not supported.", A3_S_FORMAT(name));
+        a3_string_free(&name);
+        return false;
+    }
+    if (to > sizeof(CASTS[0]) / sizeof(CASTS[0][0])) {
+        A3String name = type_name(op->lhs->res_type);
+        gen_error(visitor->ctx, VERTEX(op->lhs, expr), "Cast to type " A3_S_F " is not supported.",
+                  A3_S_FORMAT(name));
+        a3_string_free(&name);
+        return false;
+    }
+
     char const* insn = CASTS[from][to];
     if (!insn)
         return true;
