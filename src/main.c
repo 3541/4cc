@@ -58,7 +58,10 @@ static A3CString file_read(A3CString path) {
 static void usage(char const* name, int status) {
     assert(name);
 
-    fprintf(stderr, "Usage: %s [-hcSE] [-o <FILE>] <FILE>\n", name);
+    fprintf(stderr,
+            "Usage: %s [-hcCSE] [--dump-ast] [--preserve-tmpfiles] [-I <FILE>] [-o <FILE>] "
+            "<FILES...>\n",
+            name);
     exit(status);
 }
 
