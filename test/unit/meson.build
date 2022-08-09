@@ -39,6 +39,7 @@ tests = {
     'shr',
     'and',
     'or',
+    'xor',
     'inc',
     'dec',
     'char',

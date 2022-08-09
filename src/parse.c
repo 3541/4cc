@@ -234,6 +234,8 @@ static BinOpType parse_bin_op(TokenType type) {
         return OP_BW_AND;
     case TOK_PIPE:
         return OP_BW_OR;
+    case TOK_HAT:
+        return OP_BW_XOR;
     default:
         A3_PANIC("Not a binary operator.");
     }
@@ -371,9 +373,9 @@ static PType* parse_anon_type(Parser* parser) {
 }
 
 static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
-    [TOK_PLUS] = 23,      [TOK_MINUS] = 23,       [TOK_AMP] = 23,    [TOK_STAR] = 23,
-    [TOK_BANG] = 23,      [TOK_TILDE] = 23,       [TOK_SIZEOF] = 23, [TOK_LPAREN] = 23,
-    [TOK_PLUS_PLUS] = 23, [TOK_MINUS_MINUS] = 23,
+    [TOK_PLUS] = 25,      [TOK_MINUS] = 25,       [TOK_AMP] = 25,    [TOK_STAR] = 25,
+    [TOK_BANG] = 25,      [TOK_TILDE] = 25,       [TOK_SIZEOF] = 25, [TOK_LPAREN] = 25,
+    [TOK_PLUS_PLUS] = 25, [TOK_MINUS_MINUS] = 25,
 };
 
 static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
@@ -390,27 +392,29 @@ static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
 
     [TOK_PIPE] = { 9, 10 },
 
-    [TOK_AMP] = { 11, 12 },
+    [TOK_HAT] = { 11, 12 },
 
-    [TOK_EQ_EQ] = { 13, 14 },    [TOK_BANG_EQ] = { 13, 14 },
+    [TOK_AMP] = { 13, 14 },
 
-    [TOK_GT] = { 15, 16 },      [TOK_GT_EQ] = { 15, 16 },
-    [TOK_LT] = { 15, 16 },      [TOK_LT_EQ] = { 15, 16 },
+    [TOK_EQ_EQ] = { 15, 16 },    [TOK_BANG_EQ] = { 15, 16 },
 
-    [TOK_LT_LT] = {17, 18}, [TOK_GT_GT] = { 17, 18 },
+    [TOK_GT] = { 17, 18 },      [TOK_GT_EQ] = { 17, 18 },
+    [TOK_LT] = { 17, 18 },      [TOK_LT_EQ] = { 17, 18 },
 
-    [TOK_PLUS] = { 19, 20 },    [TOK_MINUS] = { 19, 20 },
+    [TOK_LT_LT] = { 19, 20 }, [TOK_GT_GT] = { 19, 20 },
 
-    [TOK_STAR] = { 21, 22 },    [TOK_SLASH] = { 21, 22 }, [TOK_PERCENT] = { 21, 22, },
+    [TOK_PLUS] = { 21, 22 },    [TOK_MINUS] = { 21, 22 },
 
-    [TOK_DOT] = { 25, 26 },     [TOK_MINUS_GT] = { 25, 26 }
+    [TOK_STAR] = { 23, 24 },    [TOK_SLASH] = { 23, 24 }, [TOK_PERCENT] = { 23, 24, },
+
+    [TOK_DOT] = { 27, 28 },     [TOK_MINUS_GT] = { 27, 28 }
 };
 
 static uint8_t POSTFIX_PRECEDENCE[TOK_COUNT] = {
-    [TOK_LPAREN]      = 25,
-    [TOK_LBRACKET]    = 25,
-    [TOK_PLUS_PLUS]   = 25,
-    [TOK_MINUS_MINUS] = 25,
+    [TOK_LPAREN]      = 27,
+    [TOK_LBRACKET]    = 27,
+    [TOK_PLUS_PLUS]   = 27,
+    [TOK_MINUS_MINUS] = 27,
 };
 
 static bool parse_is_compound_assign(TokenType type) {
