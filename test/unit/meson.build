@@ -180,7 +180,8 @@ tests = {
     'long',
     'unsigned',
     'signed',
-    'type'
+    'type',
+    'int_lit'
   ],
   'comment': [
     'line',

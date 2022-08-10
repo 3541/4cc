@@ -209,8 +209,8 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
     assert(visitor);
     assert(vertex);
 
-    if (visitor->pre)
-        visitor->pre(visitor, vertex);
+    if (visitor->pre && !visitor->pre(visitor, vertex))
+        return true;
 
     switch (vertex->type) {
     case V_UNIT:

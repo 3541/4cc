@@ -49,7 +49,7 @@ Expr* vertex_unary_op_new(Span span, UnaryOpType type, Expr* operand) {
     return &ret->expr;
 }
 
-Expr* vertex_lit_num_new(Span span, Type const* type, uintmax_t num) {
+Expr* vertex_lit_num_new(Span span, PType* type, uintmax_t num) {
     assert(span.text.ptr);
     assert(type);
 
@@ -57,7 +57,22 @@ Expr* vertex_lit_num_new(Span span, Type const* type, uintmax_t num) {
     *ret = (Vertex) {
         .span = span,
         .type = V_EXPR,
-        .expr = { .type = EXPR_LIT, .res_type = type, .lit = { .type = LIT_NUM, .num = num } }
+        .expr = { .type = EXPR_LIT, .res_ptype = type, .lit = { .type = LIT_NUM, .num = num } }
+    };
+
+    return &ret->expr;
+}
+
+Expr* vertex_num_new(Span span, Type const* type, uintmax_t num) {
+    assert(span.text.ptr);
+    assert(type);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) {
+        .span  = span,
+        .type  = V_EXPR,
+        .typed = true,
+        .expr  = { .type = EXPR_LIT, .res_type = type, .lit = { .type = LIT_NUM, .num = num } }
     };
 
     return &ret->expr;
@@ -324,13 +339,13 @@ void vertex_init_lit_str_to_list(Init* init) {
 
     Span span = SPAN(init, init);
     for (size_t i = 0; i < lit->str.len; i++) {
-        Init* init_char = vertex_init_expr_new(
-            span, vertex_lit_num_new(span, BUILTIN_TYPES[TY_U8], lit->str.ptr[i]));
+        Init* init_char =
+            vertex_init_expr_new(span, vertex_num_new(span, BUILTIN_TYPES[TY_U8], lit->str.ptr[i]));
 
         A3_SLL_ENQUEUE(&init->list, init_char, link);
     }
 
-    Init* init_null = vertex_init_expr_new(span, vertex_lit_num_new(span, BUILTIN_TYPES[TY_U8], 0));
+    Init* init_null = vertex_init_expr_new(span, vertex_num_new(span, BUILTIN_TYPES[TY_U8], 0));
     A3_SLL_ENQUEUE(&init->list, init_null, link);
 }
 

@@ -644,6 +644,7 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
         case PTY_U16 | PTY_SIGNED:
         case PTY_SHORT:
         case PTY_SHORT | PTY_INT:
+        case PTY_SHORT | PTY_SIGNED:
         case PTY_SHORT | PTY_INT | PTY_SIGNED:
             return BUILTIN_TYPES[TY_I16];
         case PTY_I32:
@@ -658,9 +659,11 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
         case PTY_U64 | PTY_SIGNED:
         case PTY_LONG:
         case PTY_LONG | PTY_INT:
+        case PTY_LONG | PTY_SIGNED:
         case PTY_LONG | PTY_INT | PTY_SIGNED:
         case PTY_LONG_LONG:
         case PTY_LONG_LONG | PTY_INT:
+        case PTY_LONG_LONG | PTY_SIGNED:
         case PTY_LONG_LONG | PTY_INT | PTY_SIGNED:
         case PTY_ISIZE:
         case PTY_ISIZE | PTY_SIGNED:
@@ -696,7 +699,7 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
         case PTY_ISIZE | PTY_UNSIGNED:
             return BUILTIN_TYPES[TY_U64];
         default:
-            error_at(reg->src, ptype->span, "Invalid declaration type.");
+            error_at(reg->src, ptype->span, "Invalid declaration type (%d).", ptype->builtin_type);
             return NULL;
         }
     case PTY_DEFINED: {
@@ -886,7 +889,7 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
 
     switch (lit->type) {
     case LIT_NUM:
-        EXPR(lit, lit)->res_type = BUILTIN_TYPES[TY_I32];
+        EXPR(lit, lit)->res_type = type_from_ptype(reg, EXPR(lit, lit)->res_ptype);
         break;
     case LIT_STR: {
         // TODO: There really should be a separate resolution pass for this and other things like
@@ -899,8 +902,9 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
         Span      span        = SPAN(lit, expr.lit);
         Item*     global_decl = vertex_decl_new(
                 span, global_name,
-                ptype_array_new(span, ptype_builtin_new(span, PTY_CHAR),
-                                vertex_lit_num_new(span, BUILTIN_TYPES[TY_USIZE], lit->str.len + 1)));
+                ptype_array_new(
+                    span, ptype_builtin_new(span, PTY_CHAR),
+                    vertex_lit_num_new(span, ptype_builtin_new(span, PTY_USIZE), lit->str.len + 1)));
         A3_SLL_PUSH(&reg->current_unit->items, global_decl, link);
 
         Scope* current = reg->current_scope;
@@ -1152,7 +1156,7 @@ static bool type_init(AstVisitor* visitor, Init* init) {
             }
 
             Expr* lit =
-                vertex_lit_num_new(SPAN(init, init), init->expr->res_type, (uintmax_t)res.value);
+                vertex_num_new(SPAN(init, init), init->expr->res_type, (uintmax_t)res.value);
             *init->expr = *lit;
             free(VERTEX(lit, expr));
         }
@@ -1282,7 +1286,7 @@ static bool type_var(AstVisitor* visitor, Var* var) {
     }
 
     if (var->obj->is_named_literal) {
-        Expr* lit       = vertex_lit_num_new(SPAN(var, expr.var), var->obj->type, var->obj->value);
+        Expr* lit       = vertex_num_new(SPAN(var, expr.var), var->obj->type, var->obj->value);
         *EXPR(var, var) = *lit;
         free(VERTEX(lit, expr));
     } else {
@@ -1495,6 +1499,17 @@ static bool type_switch(AstVisitor* visitor, Switch* switch_stmt) {
     return vertex_visit(visitor, VERTEX(switch_stmt->body, item));
 }
 
+static bool type_mark(AstVisitor* visitor, Vertex* vertex) {
+    assert(visitor);
+    assert(vertex);
+
+    if (vertex->typed)
+        return false;
+
+    vertex->typed = true;
+    return true;
+}
+
 bool type(Registry* reg, A3CString src, Vertex* root) {
     assert(reg);
     assert(src.ptr);
@@ -1506,6 +1521,7 @@ bool type(Registry* reg, A3CString src, Vertex* root) {
     return vertex_visit(
         &(AstVisitor) {
             .ctx             = reg,
+            .pre             = type_mark,
             .visit_bin_op    = type_bin_op,
             .visit_unary_op  = type_unary_op,
             .visit_lit       = type_lit,

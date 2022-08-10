@@ -15,6 +15,7 @@
 
 #include <a3/str.h>
 
+#include "ast.h"
 #include "error.h"
 
 #define LEX_ERRORS_MAX 512
@@ -59,7 +60,6 @@ typedef enum TokenType {
     TOK_ISIZE,
     TOK_LBRACE,
     TOK_LBRACKET,
-    TOK_LIT_CHAR,
     TOK_LIT_NUM,
     TOK_LIT_STR,
     TOK_LONG,
@@ -121,11 +121,14 @@ typedef struct Token {
 
     union {
         A3CString lit_str;
-        uint8_t   lit_char;
 
         struct {
-            uintmax_t lit_num;
-            bool      lit_num_is_signed;
+            PType* lit_num_type;
+
+            union {
+                uintmax_t   lit_num;
+                long double lit_float;
+            };
         };
     };
 } Token;

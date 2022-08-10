@@ -509,13 +509,7 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
         break;
     case TOK_LIT_NUM: {
         lex_next(parser->lexer);
-        lhs = vertex_lit_num_new(
-            tok.lexeme, BUILTIN_TYPES[tok.lit_num_is_signed ? TY_ISIZE : TY_USIZE], tok.lit_num);
-        break;
-    }
-    case TOK_LIT_CHAR: {
-        lex_next(parser->lexer);
-        lhs = vertex_lit_num_new(tok.lexeme, BUILTIN_TYPES[TY_U8], tok.lit_char);
+        lhs = vertex_lit_num_new(tok.lexeme, tok.lit_num_type, tok.lit_num);
         break;
     }
     case TOK_LIT_STR:
@@ -566,7 +560,7 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
         lhs = vertex_bin_op_new(
             span, OP_ASSIGN, operand,
             vertex_bin_op_new(span, op.type == TOK_PLUS_PLUS ? OP_ADD : OP_SUB, operand,
-                              vertex_lit_num_new(op.lexeme, BUILTIN_TYPES[TY_U32], 1)));
+                              vertex_num_new(op.lexeme, BUILTIN_TYPES[TY_U8], 1)));
 
         break;
     }
@@ -608,7 +602,7 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
                 lex_next(parser->lexer);
 
                 Span  span    = parse_span_merge(SPAN(lhs, expr), tok_op.lexeme);
-                Expr* lit_one = vertex_lit_num_new(tok_op.lexeme, BUILTIN_TYPES[TY_U32], 1);
+                Expr* lit_one = vertex_num_new(tok_op.lexeme, BUILTIN_TYPES[TY_U8], 1);
                 // Suffix increment/decrement is expanded like so:
                 //     x++ -> (x = x + 1) - 1
                 //     x-- -> (x = x - 1) + 1

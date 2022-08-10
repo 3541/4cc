@@ -122,8 +122,8 @@ typedef struct Literal {
     Obj*        storage; // LIT_STR
 
     union {
-        uintmax_t num; // LIT_NUM
         A3CString str; // LIT_STR - pre-type.
+        uintmax_t num; // LIT_NUM
     };
 } Literal;
 
@@ -376,6 +376,7 @@ typedef struct Unit {
 typedef struct Vertex {
     VertexType type;
     Span       span;
+    bool       typed;
 
     union {
         Expr expr;
@@ -423,8 +424,9 @@ typedef struct AstVisitor {
 
 Expr*   vertex_bin_op_new(Span, BinOpType, Expr* lhs, Expr* rhs);
 Expr*   vertex_unary_op_new(Span, UnaryOpType, Expr* operand);
-Expr*   vertex_lit_num_new(Span, Type const*, uintmax_t);
+Expr*   vertex_lit_num_new(Span, PType*, uintmax_t);
 Expr*   vertex_lit_str_new(Span, A3CString);
+Expr*   vertex_num_new(Span, Type const*, uintmax_t);
 Expr*   vertex_var_new(Span, A3CString name);
 Expr*   vertex_call_new(Span, Expr* callee);
 Expr*   vertex_member_new(Span, Expr* lhs, A3CString rhs_name);

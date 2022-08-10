@@ -24,7 +24,9 @@
 #include <a3/str.h>
 #include <a3/util.h>
 
+#include "ast.h"
 #include "error.h"
+#include "parse.h"
 
 typedef struct Peek Peek;
 typedef struct Peek {
@@ -220,17 +222,29 @@ static Token lex_lit_num(Lexer* lexer) {
 
     lex_consume_any(lexer, (size_t)offset);
 
-    bool is_signed = false;
+    PTypeBuiltinType num_type = PTY_NOTHING;
     while (strchr("ul", tolower(lex_peek_byte(lexer)))) {
-        if (tolower(lex_peek_byte(lexer)) == 'u')
-            is_signed = true;
+        switch (lex_peek_byte(lexer)) {
+        case 'u':
+        case 'U':
+            num_type |= PTY_UNSIGNED;
+            break;
+        case 'l':
+        case 'L':
+            if (!(num_type & PTY_LONG_LONG))
+                num_type += PTY_LONG;
+            break;
+        }
 
         lex_consume_any(lexer, 1);
     }
 
-    Token ret             = tok_new(lexer, TOK_LIT_NUM, a3_cstring_new(s.ptr, (size_t)offset));
-    ret.lit_num_is_signed = is_signed;
-    ret.lit_num           = num;
+    if (!(num_type & (PTY_UNSIGNED | PTY_SIGNED)))
+        num_type |= PTY_SIGNED;
+
+    Token ret        = tok_new(lexer, TOK_LIT_NUM, a3_cstring_new(s.ptr, (size_t)offset));
+    ret.lit_num_type = ptype_builtin_new(ret.lexeme, num_type);
+    ret.lit_num      = num;
 
     return ret;
 }
@@ -668,8 +682,10 @@ static Token lex_lit_char(Lexer* lexer) {
 
     lex_consume_any(lexer, s.len);
 
-    Token ret    = tok_new(lexer, TOK_LIT_CHAR, s);
-    ret.lit_char = c;
+    Token ret        = tok_new(lexer, TOK_LIT_NUM, s);
+    ret.lit_num      = c;
+    ret.lit_num_type = ptype_builtin_new(ret.lexeme, PTY_UNSIGNED | PTY_CHAR);
+
     return ret;
 }
 
