@@ -12,7 +12,6 @@
 #pragma once
 
 #include <stdbool.h>
-#include <stdio.h>
 
 #include <a3/str.h>
 

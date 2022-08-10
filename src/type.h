@@ -10,6 +10,8 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
 #include <a3/sll.h>
 #include <a3/str.h>

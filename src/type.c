@@ -12,10 +12,14 @@
 #include <assert.h>
 #include <inttypes.h>
 #include <stdalign.h>
+#include <stdarg.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 #include <a3/buffer.h>
 #include <a3/ht.h>
+#include <a3/ll.h>
+#include <a3/sll.h>
 #include <a3/str.h>
 #include <a3/util.h>
 

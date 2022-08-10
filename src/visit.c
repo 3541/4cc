@@ -7,6 +7,13 @@
  * for details.
  */
 
+#include <assert.h>
+#include <stdbool.h>
+
+#include <a3/ll.h>
+#include <a3/sll.h>
+#include <a3/util.h>
+
 #include "ast.h"
 
 static bool visit_bin_op(AstVisitor* visitor, BinOp* op) {
@@ -111,7 +118,7 @@ static bool visit_call(AstVisitor* visitor, Call* call) {
     assert(visitor);
     assert(call);
 
-    A3_SLL_FOR_EACH (Arg, arg, &call->args, link) {
+    A3_LL_FOR_EACH (Arg, arg, &call->args, link) {
         A3_TRYB(vertex_visit(visitor, VERTEX(arg->expr, expr)));
     }
 

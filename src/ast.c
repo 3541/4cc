@@ -10,9 +10,10 @@
 #include "ast.h"
 
 #include <assert.h>
+#include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 
-#include <a3/ht.h>
 #include <a3/ll.h>
 #include <a3/sll.h>
 #include <a3/str.h>

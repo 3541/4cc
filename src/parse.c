@@ -11,10 +11,13 @@
 
 #include <assert.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 
 #include <a3/buffer.h>
+#include <a3/ll.h>
+#include <a3/sll.h>
 #include <a3/str.h>
 #include <a3/util.h>
 #include <a3/vec.h>

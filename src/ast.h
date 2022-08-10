@@ -10,6 +10,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include <a3/ll.h>
@@ -18,7 +19,6 @@
 #include <a3/util.h>
 
 #include "error.h"
-#include "lex.h"
 
 // type.h
 typedef struct Type Type;

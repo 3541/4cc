@@ -9,8 +9,6 @@
 
 #pragma once
 
-#include <stdbool.h>
-
 #include <a3/str.h>
 
 #define PARSE_ERRORS_MAX 512

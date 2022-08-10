@@ -9,11 +9,12 @@
 
 #include <assert.h>
 #include <fcntl.h>
-#include <inttypes.h>
 #include <libgen.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 
@@ -21,10 +22,8 @@
 #include <a3/str.h>
 #include <a3/vec.h>
 
-#include "ast.h"
 #include "config.h"
 #include "dump.h"
-#include "error.h"
 #include "gen.h"
 #include "lex.h"
 #include "parse.h"

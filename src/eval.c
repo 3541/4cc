@@ -10,7 +10,10 @@
 #include "eval.h"
 
 #include <assert.h>
-#include <stdarg.h>
+#include <stdbool.h>
+
+#include <a3/str.h>
+#include <a3/util.h>
 
 #include "ast.h"
 #include "error.h"

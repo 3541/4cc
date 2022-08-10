@@ -9,8 +9,13 @@
 
 #include "error.h"
 
+#include <assert.h>
+#include <ctype.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <a3/str.h>
