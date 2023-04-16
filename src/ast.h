@@ -20,6 +20,9 @@
 
 #include "error.h"
 
+// lex.h
+typedef struct LitNum LitNum;
+
 // type.h
 typedef struct Type Type;
 typedef struct Obj  Obj;
@@ -424,7 +427,7 @@ typedef struct AstVisitor {
 
 Expr*   vertex_bin_op_new(Span, BinOpType, Expr* lhs, Expr* rhs);
 Expr*   vertex_unary_op_new(Span, UnaryOpType, Expr* operand);
-Expr*   vertex_lit_num_new(Span, PType*, uintmax_t);
+Expr*   vertex_lit_num_new(Span, LitNum const*);
 Expr*   vertex_lit_str_new(Span, A3CString);
 Expr*   vertex_num_new(Span, Type const*, uintmax_t);
 Expr*   vertex_var_new(Span, A3CString name);

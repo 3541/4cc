@@ -18,8 +18,6 @@
 #include "ast.h"
 #include "error.h"
 
-#define LEX_ERRORS_MAX 512
-
 typedef enum TokenType {
     TOK_AMP,
     TOK_AMP_AMP,
@@ -115,22 +113,40 @@ typedef enum TokenType {
     TOK_COUNT
 } TokenType;
 
-typedef struct Token {
+typedef enum {
+    LIT_NUM_UNSIGNED  = 1,
+    LIT_NUM_CHAR      = 1 << 1,
+    LIT_NUM_LONG      = 1 << 2,
+    LIT_NUM_LONG_LONG = 1 << 3,
+    LIT_NUM_SIZE      = 1 << 4,
+    LIT_NUM_FLOAT     = 1 << 5,
+    LIT_NUM_DOUBLE    = 1 << 6,
+
+    LIT_NUM_INT_MASK =
+        LIT_NUM_UNSIGNED | LIT_NUM_CHAR | LIT_NUM_SIZE | LIT_NUM_LONG | LIT_NUM_LONG_LONG,
+    LIT_NUM_FLOAT_ONLY_MASK = LIT_NUM_FLOAT | LIT_NUM_DOUBLE,
+    LIT_NUM_FLOAT_MASK      = LIT_NUM_FLOAT_ONLY_MASK | LIT_NUM_LONG,
+} LitNumType;
+
+typedef struct LitNum {
+    LitNumType type;
+
+    union {
+        uintmax_t   integer;
+        long double fp;
+    };
+} LitNum;
+
+typedef union {
+    LitNum    num;
+    A3CString str;
+} TokLit;
+
+typedef struct {
     TokenType type;
     Span      lexeme;
 
-    union {
-        A3CString lit_str;
-
-        struct {
-            PType* lit_num_type;
-
-            union {
-                uintmax_t   lit_num;
-                long double lit_float;
-            };
-        };
-    };
+    TokLit lit; // TOK_LIT_NUM, TOK_LIT_STR.
 } Token;
 
 typedef struct Lexer Lexer;
@@ -138,7 +154,6 @@ typedef struct Lexer Lexer;
 Lexer* lex_new(A3CString src);
 void   lex_free(Lexer*);
 bool   lex_is_eof(Lexer const*);
-bool   lex_failed(Lexer const*);
 Token  lex_peek_n(Lexer*, size_t);
 Token  lex_peek(Lexer*);
 Token  lex_next(Lexer*);

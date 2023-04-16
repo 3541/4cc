@@ -26,6 +26,7 @@
 #include "ast.h"
 #include "error.h"
 #include "eval.h"
+#include "lex.h"
 #include "util.h"
 
 static int8_t key_eq(Type const* lhs, Type const* rhs) { return lhs == rhs ? 0 : 1; }
@@ -904,7 +905,8 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
                 span, global_name,
                 ptype_array_new(
                     span, ptype_builtin_new(span, PTY_CHAR),
-                    vertex_lit_num_new(span, ptype_builtin_new(span, PTY_USIZE), lit->str.len + 1)));
+                    vertex_lit_num_new(span, &(LitNum) { .type    = LIT_NUM_SIZE | LIT_NUM_UNSIGNED,
+                                                         .integer = lit->str.len + 1 })));
         A3_SLL_PUSH(&reg->current_unit->items, global_decl, link);
 
         Scope* current = reg->current_scope;

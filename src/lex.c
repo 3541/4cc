@@ -38,12 +38,32 @@ typedef struct Lexer {
     A3_SLL(peek, Peek) peek;
     A3Buffer           src;
     size_t             current_line;
-    size_t             error_depth;
 } Lexer;
+
+Lexer* lex_new(A3CString src) {
+    A3_UNWRAPNI(Lexer*, lexer, calloc(1, sizeof(*lexer)));
+
+    *lexer = (Lexer) { .src          = { .data = A3_CS_MUT(src), .tail = a3_string_len(src) },
+                       .current_line = 1 };
+    a3_buf_init(&lexer->src, a3_string_len(src), a3_string_len(src));
+    A3_SLL_INIT(&lexer->peek);
+
+    return lexer;
+}
+
+void lex_free(Lexer* lexer) {
+    assert(lexer);
+
+    free(lexer);
+}
+
+static Token tok_new(Lexer const* lexer, TokenType type, A3CString lexeme) {
+    return (Token) { .type = type, .lexeme = { .line = lexer->current_line, .text = lexeme } };
+}
 
 // Report a lexer error.
 A3_FORMAT_FN(2, 3)
-static void lex_error(Lexer const* lexer, char* fmt, ...) {
+static Token lex_error(Lexer* lexer, char* fmt, ...) {
     assert(lexer);
 
     va_list args;
@@ -54,23 +74,9 @@ static void lex_error(Lexer const* lexer, char* fmt, ...) {
     verror_at(A3_S_CONST(lexer->src.data), span, fmt, args);
 
     va_end(args);
-}
 
-Lexer* lex_new(A3CString src) {
-    A3_UNWRAPNI(Lexer*, ret, calloc(1, sizeof(*ret)));
-
-    *ret = (Lexer) { .src          = { .data = A3_CS_MUT(src), .tail = a3_string_len(src) },
-                     .current_line = 1,
-                     .error_depth  = 0 };
-    a3_buf_init(&ret->src, a3_string_len(src), a3_string_len(src));
-    A3_SLL_INIT(&ret->peek);
-    return ret;
-}
-
-void lex_free(Lexer* lexer) {
-    assert(lexer);
-
-    free(lexer);
+    lexer->src.head = lexer->src.tail = 0;
+    return tok_new(lexer, TOK_ERR, a3_buf_read_ptr(&lexer->src));
 }
 
 bool lex_is_eof(Lexer const* lexer) {
@@ -79,10 +85,11 @@ bool lex_is_eof(Lexer const* lexer) {
     return !a3_buf_len(&lexer->src);
 }
 
-bool lex_failed(Lexer const* lexer) {
+static Token lex_unexpected_eof(Lexer* lexer) {
     assert(lexer);
+    assert(lex_is_eof(lexer));
 
-    return lexer->error_depth;
+    return lex_error(lexer, "Unexpected EOF.");
 }
 
 static uint8_t lex_peek_byte(Lexer const* lexer) {
@@ -185,18 +192,6 @@ static void lex_consume_space(Lexer* lexer) {
     }
 }
 
-static Token tok_new(Lexer const* lexer, TokenType type, A3CString lexeme) {
-    return (Token) { .type = type, .lexeme = { .line = lexer->current_line, .text = lexeme } };
-}
-
-static Token lex_recover(Lexer* lexer) {
-    assert(lexer);
-
-    lex_consume_until(lexer, is_digit);
-    return (Token) { .type = TOK_ERR };
-    return lex_next(lexer);
-}
-
 static Token lex_lit_num(Lexer* lexer) {
     assert(lexer);
     assert(isdigit(lex_peek_byte(lexer)));
@@ -215,36 +210,48 @@ static Token lex_lit_num(Lexer* lexer) {
 
     if (res < 1) {
         s.len = 1;
-        lex_error(lexer, "Expected a numeric literal.");
-        return lex_recover(lexer);
+        return lex_error(lexer, "Expected a numeric literal.");
     }
     assert(offset > 0);
 
     lex_consume_any(lexer, (size_t)offset);
 
-    PTypeBuiltinType num_type = PTY_NOTHING;
-    while (strchr("ul", tolower(lex_peek_byte(lexer)))) {
+    LitNumType num_type = 0;
+    while (strchr("zul", tolower(lex_peek_byte(lexer)))) {
         switch (lex_peek_byte(lexer)) {
         case 'u':
         case 'U':
-            num_type |= PTY_UNSIGNED;
+            num_type |= LIT_NUM_UNSIGNED;
             break;
         case 'l':
         case 'L':
-            if (!(num_type & PTY_LONG_LONG))
-                num_type += PTY_LONG;
+            if (!(num_type & LIT_NUM_LONG_LONG))
+                num_type += LIT_NUM_LONG;
+            else if (num_type & LIT_NUM_SIZE)
+                return lex_error(lexer, "Cannot combine Z and L suffixes.");
+            else
+                return lex_error(lexer, "Too many longs.");
             break;
+        case 'z':
+        case 'Z':
+            if (num_type & (LIT_NUM_LONG | LIT_NUM_LONG_LONG))
+                return lex_error(lexer, "Cannot combine Z and L suffixes.");
+
+            num_type |= LIT_NUM_SIZE;
         }
 
         lex_consume_any(lexer, 1);
     }
 
-    if (!(num_type & (PTY_UNSIGNED | PTY_SIGNED)))
-        num_type |= PTY_SIGNED;
+    if ((num_type & LIT_NUM_INT_MASK) && (num_type & LIT_NUM_FLOAT_ONLY_MASK))
+        return lex_error(lexer, "Invalid combination of literal types.");
 
-    Token ret        = tok_new(lexer, TOK_LIT_NUM, a3_cstring_new(s.ptr, (size_t)offset));
-    ret.lit_num_type = ptype_builtin_new(ret.lexeme, num_type);
-    ret.lit_num      = num;
+    Token ret = tok_new(lexer, TOK_LIT_NUM, a3_cstring_new(s.ptr, (size_t)offset));
+    ret.lit   = (TokLit) { .num = { .type = num_type } };
+    if (num_type & LIT_NUM_INT_MASK || !num_type)
+        ret.lit.num.integer = num;
+    else
+        A3_PANIC("TODO");
 
     return ret;
 }
@@ -255,7 +262,7 @@ static Token lex_op(Lexer* lexer) {
     A3CString lexeme =
         lex_consume_one(lexer, A3_CS("unary or binary operator"), A3_CS("+-*/=!<>&~|.?:%^"));
     if (!a3_string_cptr(lexeme))
-        return lex_recover(lexer);
+        return lex_unexpected_eof(lexer);
 
     TokenType type;
     switch (lexeme.ptr[0]) {
@@ -469,7 +476,7 @@ static Token lex_paren(Lexer* lexer) {
 
     A3CString lexeme = lex_consume_one(lexer, A3_CS("parenthesis or brace"), A3_CS("(){}[]"));
     if (!a3_string_cptr(lexeme))
-        return lex_recover(lexer);
+        return lex_unexpected_eof(lexer);
 
     switch (a3_string_cptr(lexeme)[0]) {
     case '(':
@@ -494,7 +501,7 @@ static Token lex_semi(Lexer* lexer) {
 
     A3CString lexeme = lex_consume_one(lexer, A3_CS("semicolon"), A3_CS(";"));
     if (!a3_string_cptr(lexeme))
-        return lex_recover(lexer);
+        return lex_unexpected_eof(lexer);
 
     return tok_new(lexer, TOK_SEMI, lexeme);
 }
@@ -529,7 +536,7 @@ static Token lex_ident_or_kw(Lexer* lexer) {
 
     A3CString lexeme = lex_consume_until(lexer, is_not_ident);
     if (!a3_string_cptr(lexeme))
-        return lex_recover(lexer);
+        return lex_unexpected_eof(lexer);
 
     for (size_t i = 0; i < sizeof(KEYWORDS) / sizeof(KEYWORDS[0]); i++) {
         if (a3_string_cmp(lexeme, KEYWORDS[i].name) == 0)
@@ -632,8 +639,7 @@ static Token lex_lit_str(Lexer* lexer) {
             size_t len;
             if (i >= s.len ||
                 !(len = lex_escape(A3_S_CONST(a3_string_offset(A3_CS_MUT(s), i)), &c))) {
-                lex_error(lexer, "Invalid escape sequence.");
-                return lex_recover(lexer);
+                return lex_error(lexer, "Invalid escape sequence.");
             }
 
             a3_buf_write_byte(buf, c);
@@ -645,15 +651,13 @@ static Token lex_lit_str(Lexer* lexer) {
         }
     }
 
-    if (s.ptr[s.len - 1] != '"') {
-        lex_error(lexer, "Bad string literal.");
-        return lex_recover(lexer);
-    }
+    if (s.ptr[s.len - 1] != '"')
+        return lex_error(lexer, "Bad string literal.");
 
     lex_consume_any(lexer, s.len);
 
     Token ret   = tok_new(lexer, TOK_LIT_STR, s);
-    ret.lit_str = a3_buf_read_ptr(buf);
+    ret.lit.str = a3_buf_read_ptr(buf);
     return ret;
 }
 
@@ -666,25 +670,20 @@ static Token lex_lit_char(Lexer* lexer) {
     size_t    len = 3;
 
     if (c == '\\') {
-        if (!(len = lex_escape(A3_S_CONST(a3_string_offset(A3_CS_MUT(s), 2)), &c))) {
-            lex_error(lexer, "Invalid escape sequence.");
-            return lex_recover(lexer);
-        }
+        if (!(len = lex_escape(A3_S_CONST(a3_string_offset(A3_CS_MUT(s), 2)), &c)))
+            return lex_error(lexer, "Invalid escape sequence.");
 
         len += 3;
     }
 
-    if (s.len < len || s.ptr[len - 1] != '\'') {
-        lex_error(lexer, "Bad character literal.");
-        return lex_recover(lexer);
-    }
+    if (s.len < len || s.ptr[len - 1] != '\'')
+        return lex_error(lexer, "Bad character literal.");
     s.len = len;
 
     lex_consume_any(lexer, s.len);
 
-    Token ret        = tok_new(lexer, TOK_LIT_NUM, s);
-    ret.lit_num      = c;
-    ret.lit_num_type = ptype_builtin_new(ret.lexeme, PTY_UNSIGNED | PTY_CHAR);
+    Token ret   = tok_new(lexer, TOK_LIT_NUM, s);
+    ret.lit.num = (LitNum) { .type = LIT_NUM_CHAR | LIT_NUM_UNSIGNED, .integer = c };
 
     return ret;
 }
@@ -702,9 +701,6 @@ Token lex_peek_n(Lexer* lexer, size_t n) {
     assert(lexer);
     assert(n > 0);
 
-    if (lexer->error_depth >= LEX_ERRORS_MAX)
-        return tok_new(lexer, TOK_EOF, A3_CS_NULL);
-
     Peek*  ret = A3_SLL_HEAD(&lexer->peek);
     size_t i   = 1;
     for (; i < n && ret && ret->tok.type != TOK_EOF; i++)
@@ -716,7 +712,7 @@ Token lex_peek_n(Lexer* lexer, size_t n) {
     lex_consume_space(lexer);
 
     Token tok;
-    for (; i <= n && !lex_is_eof(lexer) && lexer->error_depth <= LEX_ERRORS_MAX; i++) {
+    for (; i <= n && !lex_is_eof(lexer); i++) {
         uint8_t next = lex_peek_byte(lexer);
 
         switch (next) {
@@ -768,16 +764,12 @@ Token lex_peek_n(Lexer* lexer, size_t n) {
                 break;
             }
 
-            lex_error(lexer,
-                      "Expected a numeric literal, binary operator, keyword, or identifier.");
-            return lex_recover(lexer);
+            return lex_error(
+                lexer, "Expected a numeric literal, binary operator, keyword, or identifier.");
         }
 
         lex_tok_enqueue(lexer, tok);
     }
-
-    if (lexer->error_depth >= LEX_ERRORS_MAX)
-        return tok_new(lexer, TOK_EOF, A3_CS_NULL);
 
     if (lex_is_eof(lexer)) {
         lex_tok_enqueue(lexer, tok_new(lexer, TOK_EOF, A3_CS_NULL));

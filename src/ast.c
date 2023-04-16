@@ -19,6 +19,7 @@
 #include <a3/str.h>
 #include <a3/util.h>
 
+#include "lex.h"
 #include "type.h"
 #include "util.h"
 
@@ -49,16 +50,23 @@ Expr* vertex_unary_op_new(Span span, UnaryOpType type, Expr* operand) {
     return &ret->expr;
 }
 
-Expr* vertex_lit_num_new(Span span, PType* type, uintmax_t num) {
+Expr* vertex_lit_num_new(Span span, LitNum const* lit) {
     assert(span.text.ptr);
-    assert(type);
+    assert(lit);
+
+    PTypeBuiltinType type =
+        (lit->type & LIT_NUM_UNSIGNED ? PTY_UNSIGNED : PTY_SIGNED) |
+        (lit->type & LIT_NUM_CHAR ? PTY_CHAR
+                                  : (PTY_INT | (lit->type & LIT_NUM_LONG        ? PTY_LONG
+                                                : lit->type & LIT_NUM_LONG_LONG ? PTY_LONG_LONG
+                                                                                : 0)));
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
-    *ret = (Vertex) {
-        .span = span,
-        .type = V_EXPR,
-        .expr = { .type = EXPR_LIT, .res_ptype = type, .lit = { .type = LIT_NUM, .num = num } }
-    };
+    *ret = (Vertex) { .span = span,
+                      .type = V_EXPR,
+                      .expr = { .type      = EXPR_LIT,
+                                .res_ptype = ptype_builtin_new(span, type),
+                                .lit       = { .type = LIT_NUM, .num = lit->integer } } };
 
     return &ret->expr;
 }

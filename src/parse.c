@@ -335,16 +335,16 @@ static Expr* parse_lit_str(Parser* parser) {
     assert(tok.type == TOK_LIT_STR);
 
     if (lex_peek(parser->lexer).type != TOK_LIT_STR)
-        return vertex_lit_str_new(tok.lexeme, tok.lit_str);
+        return vertex_lit_str_new(tok.lexeme, tok.lit.str);
 
     A3Buffer* buf = a3_buf_new(tok.lexeme.text.len, 1024);
-    a3_buf_write_str(buf, tok.lit_str);
+    a3_buf_write_str(buf, tok.lit.str);
 
     Span span = tok.lexeme;
     while (lex_peek(parser->lexer).type == TOK_LIT_STR) {
         Token next = lex_next(parser->lexer);
         span       = parse_span_merge(span, next.lexeme);
-        a3_buf_write_str(buf, next.lit_str);
+        a3_buf_write_str(buf, next.lit.str);
     }
 
     return vertex_lit_str_new(span, a3_buf_read_ptr(buf));
@@ -509,7 +509,7 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
         break;
     case TOK_LIT_NUM: {
         lex_next(parser->lexer);
-        lhs = vertex_lit_num_new(tok.lexeme, tok.lit_num_type, tok.lit_num);
+        lhs = vertex_lit_num_new(tok.lexeme, &tok.lit.num);
         break;
     }
     case TOK_LIT_STR:
