@@ -476,113 +476,161 @@ static Expr* parse_compound_assign(Parser* parser, Token tok, Expr* lhs, Expr* r
     return vertex_bin_op_new(SPAN(rhs, expr), OP_ASSIGN, lhs, rhs);
 }
 
-static Expr* parse_expr(Parser* parser, uint8_t precedence) {
+static Expr* parse_cast(Parser* parser, Token tok) {
     assert(parser);
 
-    Expr* lhs = NULL;
+    PType* type = parse_anon_type(parser);
+    if (!type)
+        return NULL;
+
+    if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
+        return NULL;
+
+    Expr* operand = parse_expr(parser, PREFIX_PRECEDENCE[TOK_LPAREN]);
+    if (!operand)
+        return NULL;
+
+    return vertex_bin_op_new(parse_span_merge(tok.lexeme, SPAN(operand, expr)), OP_CAST,
+                             vertex_expr_type_new(type->span, type), operand);
+}
+
+static Expr* parse_sizeof(Parser* parser, Token tok) {
+    assert(parser);
+
+    lex_next(parser->lexer);
+    bool paren = lex_peek(parser->lexer).type == TOK_LPAREN;
+    if (paren)
+        lex_next(parser->lexer);
+
+    Expr* operand = NULL;
+    if (parse_has_decl(parser)) {
+        PType* type = parse_anon_type(parser);
+        if (!type)
+            return NULL;
+
+        operand = vertex_expr_type_new(type->span, type);
+    } else {
+        operand = parse_expr(parser, PREFIX_PRECEDENCE[TOK_SIZEOF]);
+    }
+    if (!operand)
+        return NULL;
+
+    if (paren && !parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
+        return NULL;
+
+    return vertex_unary_op_new(parse_span_merge(tok.lexeme, SPAN(operand, expr)), OP_SIZEOF,
+                               operand);
+}
+
+static Expr* parse_prefix_inc_dec(Parser* parser) {
+    assert(parser);
+
+    Token op = lex_next(parser->lexer);
+    assert(op.type == TOK_PLUS_PLUS || op.type == TOK_MINUS_MINUS);
+
+    Expr* operand = parse_expr(parser, PREFIX_PRECEDENCE[op.type]);
+    if (!operand)
+        return NULL;
+
+    Span span = parse_span_merge(op.lexeme, SPAN(operand, expr));
+    // Prefix increment/decrement is expanded like so:
+    //     x++ -> x = x + 1
+    //     x-- -> x = x - 1
+    return vertex_bin_op_new(span, OP_ASSIGN, operand,
+                             vertex_bin_op_new(span, op.type == TOK_PLUS_PLUS ? OP_ADD : OP_SUB,
+                                               operand,
+                                               vertex_num_new(op.lexeme, BUILTIN_TYPES[TY_U8], 1)));
+}
+
+static Expr* parse_prefix_unary_op(Parser* parser, Token tok) {
+    assert(parser);
+
+    if (!PREFIX_PRECEDENCE[tok.type]) {
+        parse_error(parser, lex_next(parser->lexer),
+                    "Expected a literal, opening parenthesis, or unary operator.");
+
+        return NULL;
+    }
+
+    lex_next(parser->lexer);
+
+    Expr* rhs = parse_expr(parser, PREFIX_PRECEDENCE[tok.type]);
+    if (!rhs)
+        return NULL;
+
+    return vertex_unary_op_new(parse_span_merge(tok.lexeme, SPAN(rhs, expr)),
+                               parse_unary_op(tok.type), rhs);
+}
+
+static Expr* parse_expr_lhs(Parser* parser) {
+    assert(parser);
+
     Token tok = lex_peek(parser->lexer);
     switch (tok.type) {
     case TOK_LPAREN:
         lex_next(parser->lexer);
 
-        if (parse_has_decl(parser)) {
-            PType* type = parse_anon_type(parser);
-            if (!type)
-                return NULL;
+        if (parse_has_decl(parser))
+            return parse_cast(parser, tok);
 
-            if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
-                return NULL;
+        Expr* res = parse_expr(parser, 0);
 
-            Expr* operand = parse_expr(parser, PREFIX_PRECEDENCE[TOK_LPAREN]);
-            if (!operand)
-                return NULL;
+        if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
+            return NULL;
 
-            lhs = vertex_bin_op_new(parse_span_merge(tok.lexeme, SPAN(operand, expr)), OP_CAST,
-                                    vertex_expr_type_new(type->span, type), operand);
-        } else {
-            lhs = parse_expr(parser, 0);
-
-            if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
-                return NULL;
-        }
-
-        break;
-    case TOK_LIT_NUM: {
+        return res;
+    case TOK_LIT_NUM:
         lex_next(parser->lexer);
-        lhs = vertex_lit_num_new(tok.lexeme, &tok.lit.num);
-        break;
-    }
+        return vertex_lit_num_new(tok.lexeme, &tok.lit.num);
     case TOK_LIT_STR:
-        lhs = parse_lit_str(parser);
-        break;
+        return parse_lit_str(parser);
     case TOK_IDENT:
-        lhs = parse_var(parser);
-        break;
-    case TOK_SIZEOF: {
-        lex_next(parser->lexer);
-        bool paren = lex_peek(parser->lexer).type == TOK_LPAREN;
-        if (paren)
-            lex_next(parser->lexer);
-
-        Expr* operand = NULL;
-        if (parse_has_decl(parser)) {
-            PType* type = parse_anon_type(parser);
-            if (!type)
-                return NULL;
-
-            operand = vertex_expr_type_new(type->span, type);
-        } else {
-            operand = parse_expr(parser, PREFIX_PRECEDENCE[TOK_SIZEOF]);
-        }
-        if (!operand)
-            return NULL;
-
-        if (paren && !parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
-            return NULL;
-
-        lhs = vertex_unary_op_new(parse_span_merge(tok.lexeme, SPAN(operand, expr)), OP_SIZEOF,
-                                  operand);
-        break;
+        return parse_var(parser);
+    case TOK_SIZEOF:
+        return parse_sizeof(parser, tok);
+    case TOK_PLUS_PLUS:
+    case TOK_MINUS_MINUS:
+        return parse_prefix_inc_dec(parser);
+    default:
+        return parse_prefix_unary_op(parser, tok);
     }
+}
+
+static Expr* parse_postfix(Parser* parser, Expr* lhs, Token tok_op) {
+    assert(parser);
+    assert(lhs);
+
+    switch (tok_op.type) {
+    case TOK_LPAREN:
+        return parse_call(parser, lhs);
+    case TOK_LBRACKET:
+        return parse_index(parser, lhs);
     case TOK_PLUS_PLUS:
     case TOK_MINUS_MINUS: {
-        Token op = lex_next(parser->lexer);
-        assert(op.type == TOK_PLUS_PLUS || op.type == TOK_MINUS_MINUS);
-
-        Expr* operand = parse_expr(parser, PREFIX_PRECEDENCE[op.type]);
-        if (!operand)
-            return NULL;
-
-        Span span = parse_span_merge(op.lexeme, SPAN(operand, expr));
-        // Prefix increment/decrement is expanded like so:
-        //     x++ -> x = x + 1
-        //     x-- -> x = x - 1
-        lhs = vertex_bin_op_new(
-            span, OP_ASSIGN, operand,
-            vertex_bin_op_new(span, op.type == TOK_PLUS_PLUS ? OP_ADD : OP_SUB, operand,
-                              vertex_num_new(op.lexeme, BUILTIN_TYPES[TY_U8], 1)));
-
-        break;
-    }
-    default:
-        if (!PREFIX_PRECEDENCE[tok.type]) {
-            parse_error(parser, lex_next(parser->lexer),
-                        "Expected a literal, opening parenthesis, or unary operator.");
-
-            return NULL;
-        }
-
         lex_next(parser->lexer);
 
-        Expr* rhs = parse_expr(parser, PREFIX_PRECEDENCE[tok.type]);
-        if (!rhs)
-            return NULL;
-
-        lhs = vertex_unary_op_new(parse_span_merge(tok.lexeme, SPAN(rhs, expr)),
-                                  parse_unary_op(tok.type), rhs);
-        break;
+        Span  span    = parse_span_merge(SPAN(lhs, expr), tok_op.lexeme);
+        Expr* lit_one = vertex_num_new(tok_op.lexeme, BUILTIN_TYPES[TY_U8], 1);
+        // Suffix increment/decrement is expanded like so:
+        //     x++ -> (x = x + 1) - 1
+        //     x-- -> (x = x - 1) + 1
+        return vertex_bin_op_new(
+            span, tok_op.type == TOK_PLUS_PLUS ? OP_SUB : OP_ADD,
+            vertex_bin_op_new(span, OP_ASSIGN, lhs,
+                              vertex_bin_op_new(span,
+                                                tok_op.type == TOK_PLUS_PLUS ? OP_ADD : OP_SUB, lhs,
+                                                lit_one)),
+            lit_one);
     }
+    default:
+        A3_PANIC("Todo: other postfix operators.");
+    }
+}
 
+static Expr* parse_expr(Parser* parser, uint8_t precedence) {
+    assert(parser);
+
+    Expr* lhs = parse_expr_lhs(parser);
     while (true) {
         Token tok_op = lex_peek(parser->lexer);
 
@@ -590,35 +638,7 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
             if (POSTFIX_PRECEDENCE[tok_op.type] < precedence)
                 break;
 
-            switch (tok_op.type) {
-            case TOK_LPAREN:
-                lhs = parse_call(parser, lhs);
-                break;
-            case TOK_LBRACKET:
-                lhs = parse_index(parser, lhs);
-                break;
-            case TOK_PLUS_PLUS:
-            case TOK_MINUS_MINUS: {
-                lex_next(parser->lexer);
-
-                Span  span    = parse_span_merge(SPAN(lhs, expr), tok_op.lexeme);
-                Expr* lit_one = vertex_num_new(tok_op.lexeme, BUILTIN_TYPES[TY_U8], 1);
-                // Suffix increment/decrement is expanded like so:
-                //     x++ -> (x = x + 1) - 1
-                //     x-- -> (x = x - 1) + 1
-                lhs = vertex_bin_op_new(
-                    span, tok_op.type == TOK_PLUS_PLUS ? OP_SUB : OP_ADD,
-                    vertex_bin_op_new(
-                        span, OP_ASSIGN, lhs,
-                        vertex_bin_op_new(span, tok_op.type == TOK_PLUS_PLUS ? OP_ADD : OP_SUB, lhs,
-                                          lit_one)),
-                    lit_one);
-                break;
-            }
-            default:
-                A3_PANIC("Todo: other postfix operators.");
-            }
-
+            lhs = parse_postfix(parser, lhs, tok_op);
             continue;
         }
 
