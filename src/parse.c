@@ -1,7 +1,7 @@
 /*
  * PARSE -- Parser.
  *
- * Copyright (c) 2022, Alex O'Brien <3541@3541.website>
+ * Copyright (c) 2022, 2024, Alex O'Brien <3541@3541.website>
  *
  * This file is licensed under the BSD 3-clause license. See the LICENSE file in the project root
  * for details.
@@ -562,6 +562,57 @@ static Expr* parse_prefix_unary_op(Parser* parser, Token tok) {
                                parse_unary_op(tok.type), rhs);
 }
 
+static Expr* parse_generic(Parser* parser, Token tok) {
+    assert(parser);
+
+    if (!parse_consume(parser, A3_CS("generic selection"), TOK_GENERIC))
+        return NULL;
+
+    Token tok_left = lex_next(parser->lexer);
+    if (tok_left.type != TOK_LPAREN) {
+        parse_error(parser, tok_left, "Expected an opening parenthesis");
+        return NULL;
+    }
+
+    Expr* control = parse_expr(parser, 0);
+    if (!control)
+        return NULL;
+
+    Expr* ret = vertex_generic_new(parse_span_merge(tok.lexeme, tok_left.lexeme), control);
+    while (parse_has_next(parser) && lex_peek(parser->lexer).type != TOK_RPAREN) {
+        if (!parse_consume(parser, A3_CS("comma"), TOK_COMMA))
+            return NULL;
+
+        PType* type = NULL;
+        if (lex_peek(parser->lexer).type != TOK_DEFAULT) {
+            type = parse_anon_type(parser);
+            if (!type)
+                return NULL;
+        } else {
+            lex_next(parser->lexer);
+        }
+
+        if (!parse_consume(parser, A3_CS("colon"), TOK_COLON))
+            return NULL;
+
+        Expr* expr = parse_expr(parser, 0);
+        if (!expr)
+            return NULL;
+
+        GenericAssoc* assoc = generic_assoc_new(type, expr);
+        A3_SLL_ENQUEUE(&ret->generic.args, assoc, link);
+    }
+
+    Token tok_right = lex_next(parser->lexer);
+    if (tok_right.type != TOK_RPAREN) {
+        parse_error(parser, tok_right, "Expected a closing parenthesis.");
+        return NULL;
+    }
+
+    SPAN(ret, expr) = parse_span_merge(SPAN(ret, expr), tok_right.lexeme);
+    return ret;
+}
+
 static Expr* parse_expr_lhs(Parser* parser) {
     assert(parser);
 
@@ -591,6 +642,8 @@ static Expr* parse_expr_lhs(Parser* parser) {
     case TOK_PLUS_PLUS:
     case TOK_MINUS_MINUS:
         return parse_prefix_inc_dec(parser);
+    case TOK_GENERIC:
+        return parse_generic(parser, tok);
     default:
         return parse_prefix_unary_op(parser, tok);
     }
@@ -631,6 +684,9 @@ static Expr* parse_expr(Parser* parser, uint8_t precedence) {
     assert(parser);
 
     Expr* lhs = parse_expr_lhs(parser);
+    if (!lhs)
+        return NULL;
+
     while (true) {
         Token tok_op = lex_peek(parser->lexer);
 

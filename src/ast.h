@@ -1,7 +1,7 @@
 /*
  * AST -- Syntax tree.
  *
- * Copyright (c) 2022, Alex O'Brien <3541@3541.website>
+ * Copyright (c) 2022, 2024, Alex O'Brien <3541@3541.website>
  *
  * This file is licensed under the BSD 3-clause license. See the LICENSE file in the project root
  * for details.
@@ -94,6 +94,7 @@ typedef enum ExprType {
     EXPR_CALL,
     EXPR_COND,
     EXPR_LIT,
+    EXPR_GENERIC,
     EXPR_MEMBER,
     EXPR_TYPE,
     EXPR_UNARY_OP,
@@ -160,6 +161,23 @@ typedef struct CondExpr {
     Expr* res_false;
 } CondExpr;
 
+typedef struct GenericAssoc GenericAssoc;
+typedef struct GenericAssoc {
+    union {
+        PType*      ptype;
+        Type const* type;
+    }; // NULL for default.
+
+    Expr* expr;
+    A3_SLL_LINK(GenericAssoc) link;
+} GenericAssoc;
+
+typedef struct GenericExpr {
+    Expr*                      control;
+    Expr*                      selected;
+    A3_SLL(assoc, GenericAssoc) args;
+} GenericExpr;
+
 typedef struct Expr {
     ExprType type;
     union {
@@ -175,6 +193,7 @@ typedef struct Expr {
         Call         call;
         MemberAccess member;
         CondExpr     cond;
+        GenericExpr  generic;
     };
 } Expr;
 
@@ -409,6 +428,7 @@ typedef struct AstVisitor {
     bool (*visit_member)(AstVisitor*, MemberAccess*);
     bool (*visit_expr_cond)(AstVisitor*, CondExpr*);
     bool (*visit_expr_type)(AstVisitor*, Expr*);
+    bool (*visit_generic)(AstVisitor*, GenericExpr*);
     bool (*visit_expr_stmt)(AstVisitor*, Item*);
     bool (*visit_ret)(AstVisitor*, Item*);
     bool (*visit_break_continue)(AstVisitor*, Item*);
@@ -435,6 +455,7 @@ Expr*   vertex_call_new(Span, Expr* callee);
 Expr*   vertex_member_new(Span, Expr* lhs, A3CString rhs_name);
 Expr*   vertex_expr_cond_new(Span, Expr* cond, Expr* res_true, Expr* res_false);
 Expr*   vertex_expr_type_new(Span, PType*);
+Expr*   vertex_generic_new(Span, Expr* control);
 Item*   vertex_expr_stmt_new(Span, Expr* expr);
 Item*   vertex_ret_new(Span, Expr* expr);
 Item*   vertex_empty_new(Span);
@@ -460,5 +481,6 @@ PType* ptype_array_new(Span, PType*, Expr* len);
 PType* ptype_aggregate_new(Span, PTypeType, Span name);
 PType* ptype_defined_new(Span name);
 
-Arg*    arg_new(Expr*);
-Member* member_new(A3CString name, PType*);
+Arg*          arg_new(Expr*);
+Member*       member_new(A3CString name, PType*);
+GenericAssoc* generic_assoc_new(PType*, Expr*);

@@ -1,7 +1,7 @@
 /*
  * AST -- Syntax tree.
  *
- * Copyright (c) 2022, Alex O'Brien <3541@3541.website>
+ * Copyright (c) 2022, 2024, Alex O'Brien <3541@3541.website>
  *
  * This file is licensed under the BSD 3-clause license. See the LICENSE file in the project root
  * for details.
@@ -107,6 +107,19 @@ Expr* vertex_expr_type_new(Span span, PType* type) {
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret =
         (Vertex) { .span = span, .type = V_EXPR, .expr = { .type = EXPR_TYPE, .res_ptype = type } };
+
+    return &ret->expr;
+}
+
+Expr* vertex_generic_new(Span span, Expr* control) {
+    assert(span.text.ptr);
+    assert(control);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .span = span,
+                      .type = V_EXPR,
+                      .expr = { .type = EXPR_GENERIC, .generic = { .control = control } } };
+    A3_SLL_INIT(&ret->expr.generic.args);
 
     return &ret->expr;
 }
@@ -439,6 +452,15 @@ Member* member_new(A3CString name, PType* type) {
 
     A3_UNWRAPNI(Member*, ret, calloc(1, sizeof(*ret)));
     *ret = (Member) { .name = name, .ptype = type };
+
+    return ret;
+}
+
+GenericAssoc* generic_assoc_new(PType* type, Expr* expr) {
+    assert(expr);
+
+    A3_UNWRAPNI(GenericAssoc*, ret, calloc(1, sizeof(*ret)));
+    *ret = (GenericAssoc) { .ptype = type, .expr = expr };
 
     return ret;
 }

@@ -902,10 +902,10 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
         A3CString global_name = type_lit_name(reg);
         Span      span        = SPAN(lit, expr.lit);
         Item*     global_decl = vertex_decl_new(
-                span, global_name,
-                ptype_array_new(
-                    span, ptype_builtin_new(span, PTY_CHAR),
-                    vertex_lit_num_new(span, &(LitNum) { .type    = LIT_NUM_SIZE | LIT_NUM_UNSIGNED,
+            span, global_name,
+            ptype_array_new(
+                span, ptype_builtin_new(span, PTY_CHAR),
+                vertex_lit_num_new(span, &(LitNum) { .type    = LIT_NUM_SIZE | LIT_NUM_UNSIGNED,
                                                          .integer = lit->str.len + 1 })));
         A3_SLL_PUSH(&reg->current_unit->items, global_decl, link);
 
@@ -1397,6 +1397,56 @@ static bool type_expr_type(AstVisitor* visitor, Expr* expr) {
     return (expr->res_type = type_from_ptype(visitor->ctx, expr->res_ptype));
 }
 
+static bool type_generic(AstVisitor* visitor, GenericExpr* gen) {
+    assert(visitor);
+    assert(gen);
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(gen->control, expr)));
+
+    Vertex*     v    = VERTEX(EXPR(gen, generic), expr);
+    Type const* type = gen->control->res_type;
+    Expr*       def  = NULL;
+
+    A3_SLL_FOR_EACH (GenericAssoc, assoc, &gen->args, link) {
+        A3_TRYB(vertex_visit(visitor, VERTEX(assoc->expr, expr)));
+
+        if (!assoc->ptype) {
+            if (def) {
+                type_error(visitor->ctx, v, "Generic selection cannot have more than one default.");
+                return false;
+            }
+
+            def = assoc->expr;
+            continue;
+        }
+
+        assoc->type = type_from_ptype(visitor->ctx, assoc->ptype);
+        A3_TRYB(assoc->type);
+
+        if (assoc->type == type) {
+            if (gen->selected) {
+                type_error(visitor->ctx, v, "Generic selection has multiple matches.");
+                return false;
+            }
+
+            gen->selected = assoc->expr;
+        }
+    }
+
+    if (!gen->selected) {
+        if (!def) {
+            type_error(visitor->ctx, v,
+                       "No option matched control expression, and no default provided.");
+            return false;
+        }
+
+        gen->selected = def;
+    }
+
+    EXPR(gen, generic)->res_type = gen->selected->res_type;
+    return true;
+}
+
 static bool type_block(AstVisitor* visitor, Block* block) {
     assert(visitor);
     assert(block);
@@ -1532,6 +1582,7 @@ bool type(Registry* reg, A3CString src, Vertex* root) {
             .visit_member    = type_member,
             .visit_expr_cond = type_expr_cond,
             .visit_expr_type = type_expr_type,
+            .visit_generic   = type_generic,
             .visit_block     = type_block,
             .visit_loop      = type_loop,
             .visit_decl      = type_decl,

@@ -1,7 +1,7 @@
 /*
  * DUMP -- AST printing.
  *
- * Copyright (c) 2022, Alex O'Brien <3541@3541.website>
+ * Copyright (c) 2022, 2024, Alex O'Brien <3541@3541.website>
  *
  * This file is licensed under the BSD 3-clause license. See the LICENSE file in the project root
  * for details.
@@ -271,6 +271,31 @@ static bool dump_expr_type(AstVisitor* visitor, Expr* expr) {
     return true;
 }
 
+static bool dump_generic(AstVisitor* visitor, GenericExpr* expr) {
+    assert(visitor);
+    assert(expr);
+
+    Dumper* d = visitor->ctx;
+
+    dump_print(d, "GENERIC");
+    A3_TRYB(dump_child(visitor, VERTEX(expr->control, expr)));
+
+    A3_SLL_FOR_EACH (GenericAssoc, assoc, &expr->args, link) {
+        A3String type =
+            assoc->type ? dump_get_type(assoc->type) : a3_string_clone(A3_CS("default"));
+
+        ++d->indent;
+        dump_print(d, A3_S_F "%s: ", A3_S_FORMAT(type),
+                   expr->selected && expr->selected == assoc->expr ? "*" : "");
+        A3_TRYB(dump_child(visitor, VERTEX(assoc->expr, expr)));
+        --d->indent;
+
+        a3_string_free(&type);
+    }
+
+    return true;
+}
+
 static bool dump_expr_stmt(AstVisitor* visitor, Item* stmt) {
     assert(visitor);
     assert(stmt->type == STMT_EXPR_STMT);
@@ -449,6 +474,7 @@ bool dump(Vertex* root) {
             .visit_member    = dump_member,
             .visit_expr_cond = dump_expr_cond,
             .visit_expr_type = dump_expr_type,
+            .visit_generic   = dump_generic,
             .visit_expr_stmt = dump_expr_stmt,
             .visit_ret       = dump_ret,
             .visit_decl      = dump_decl,

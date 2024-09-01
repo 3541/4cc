@@ -1,7 +1,7 @@
 /*
  * VISIT -- Syntax tree traversal.
  *
- * Copyright (c) 2022, Alex O'Brien <3541@3541.website>
+ * Copyright (c) 2022, 2024, Alex O'Brien <3541@3541.website>
  *
  * This file is licensed under the BSD 3-clause license. See the LICENSE file in the project root
  * for details.
@@ -118,6 +118,8 @@ static bool visit_call(AstVisitor* visitor, Call* call) {
     assert(visitor);
     assert(call);
 
+    A3_TRYB(vertex_visit(visitor, VERTEX(call->callee, expr)));
+
     A3_LL_FOR_EACH (Arg, arg, &call->args, link) {
         A3_TRYB(vertex_visit(visitor, VERTEX(arg->expr, expr)));
     }
@@ -150,6 +152,19 @@ static bool visit_expr_type(AstVisitor* visitor, Expr* expr) {
 
     (void)visitor;
     (void)expr;
+
+    return true;
+}
+
+static bool visit_generic(AstVisitor* visitor, GenericExpr* expr) {
+    assert(visitor);
+    assert(expr);
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(expr->control, expr)));
+
+    A3_SLL_FOR_EACH (GenericAssoc, assoc, &expr->args, link) {
+        A3_TRYB(vertex_visit(visitor, VERTEX(assoc->expr, expr)));
+    }
 
     return true;
 }
@@ -243,6 +258,9 @@ bool vertex_visit(AstVisitor* visitor, Vertex* vertex) {
             break;
         case EXPR_TYPE:
             A3_TRYB(VISIT(visitor, visit_expr_type, &vertex->expr));
+            break;
+        case EXPR_GENERIC:
+            A3_TRYB(VISIT(visitor, visit_generic, &vertex->expr.generic));
             break;
         }
         break;

@@ -31,6 +31,7 @@ tests = {
     'ge_lt',
     'ge_eq',
     'ge_gt',
+    'generic',
     'multiple_stmts',
     'mod',
     'i32',

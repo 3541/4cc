@@ -1,7 +1,7 @@
 /*
  * GEN -- x86_64 Codegen.
  *
- * Copyright (c) 2022, Alex O'Brien <3541@3541.website>
+ * Copyright (c) 2022, 2024, Alex O'Brien <3541@3541.website>
  *
  * This file is licensed under the BSD 3-clause license. See the LICENSE file in the project root
  * for details.
@@ -416,6 +416,14 @@ static bool gen_expr_cond(AstVisitor* visitor, CondExpr* expr) {
     gen_asm(visitor->ctx, ".end_cond%zu:", label);
 
     return true;
+}
+
+static bool gen_generic(AstVisitor* visitor, GenericExpr* expr) {
+    assert(visitor);
+    assert(expr);
+    assert(expr->selected);
+
+    return vertex_visit(visitor, VERTEX(expr->selected, expr));
 }
 
 static bool gen_cast(AstVisitor* visitor, BinOp* op) {
@@ -1236,6 +1244,7 @@ bool gen(Config const* cfg, File* file, A3CString src, A3CString dst, Vertex* ro
             .visit_call           = gen_call,
             .visit_member         = gen_member,
             .visit_expr_cond      = gen_expr_cond,
+            .visit_generic        = gen_generic,
             .visit_break_continue = gen_break_continue,
             .visit_ret            = gen_ret,
             .visit_if             = gen_if,
