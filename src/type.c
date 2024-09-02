@@ -993,6 +993,8 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
 
         if (decl->attributes.is_variadic) {
             stack_depth = align_up(stack_depth, 8);
+
+            // sizeof(__va_list) + 48 (register save area).
             stack_depth += 72;
             scope_add(reg->current_scope,
                       obj_new(A3_CS("__va__"), type_array_of(BUILTIN_TYPES[TY_U8], 72), NULL,
