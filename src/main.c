@@ -1,7 +1,7 @@
 /*
  * 4CC -- C compiler.
  *
- * Copyright (c) 2022, Alex O'Brien <3541@3541.website>
+ * Copyright (c) 2022, 2024, Alex O'Brien <3541@3541.website>
  *
  * This file is licensed under the BSD 3-clause license. See the LICENSE file in the project root
  * for details.
@@ -91,6 +91,8 @@ static void preprocess_args_init(char const* bin, A3Vec* args) {
     A3_VEC_PUSH(args, &A3_CS("-undef"));
     A3_VEC_PUSH(args, &A3_CS("-U_FORTIFY_SOURCE"));
     A3_VEC_PUSH(args, &A3_CS("-U__STDC_VERSION__"));
+    A3_VEC_PUSH(args, &A3_CS("-U__GNUC__"));
+    A3_VEC_PUSH(args, &A3_CS("-D__has_builtin(x)=0"));
     A3_VEC_PUSH(args, &A3_CS("-D__x86_64__"));
     A3_VEC_PUSH(args, &A3_CS("-Dfloat=int"));
     A3_VEC_PUSH(args, &A3_CS("-Ddouble=long"));
