@@ -921,6 +921,28 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
         vertex_init_lit_str_to_list(global_decl->obj->init);
         break;
     }
+    case LIT_COMPOUND: {
+        PType* ptype             = EXPR(lit, lit)->res_ptype;
+        EXPR(lit, lit)->res_type = type_from_ptype(reg, ptype);
+
+        reg->init_type = EXPR(lit, lit)->res_type;
+        A3_TRYB(vertex_visit(visitor, VERTEX(lit->init, init)));
+        reg->init_type = NULL;
+
+        if (!reg->current_scope || !reg->current_scope->fn) {
+            type_error(reg, VERTEX(lit, expr.lit),
+                       "TODO: Compound literals not yet supported at global scope.");
+            return false;
+        }
+
+        A3CString name = type_lit_name(reg);
+        Item*     decl = vertex_decl_new(SPAN(lit, expr.lit), name, ptype);
+        decl->init     = lit->init;
+        lit->decl      = decl;
+        A3_TRYB(vertex_visit(visitor, VERTEX(decl, item)));
+
+        break;
+    }
     }
 
     return true;

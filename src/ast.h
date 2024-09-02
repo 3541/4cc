@@ -32,6 +32,7 @@ typedef struct Scope  Scope;
 typedef struct Item   Item;
 typedef struct Vertex Vertex;
 typedef struct PType  PType;
+typedef struct Init   Init;
 typedef struct Member Member;
 
 typedef enum VertexType {
@@ -101,7 +102,7 @@ typedef enum ExprType {
     EXPR_VAR,
 } ExprType;
 
-typedef enum LiteralType { LIT_NUM, LIT_STR } LiteralType;
+typedef enum LiteralType { LIT_NUM, LIT_STR, LIT_COMPOUND } LiteralType;
 
 typedef A3_SLL(Items, Item) Items;
 
@@ -123,11 +124,17 @@ typedef struct UnaryOp {
 
 typedef struct Literal {
     LiteralType type;
-    Obj*        storage; // LIT_STR
+    Obj*        storage; // LIT_STR and LIT_COMPOUND.
 
     union {
         A3CString str; // LIT_STR - pre-type.
         uintmax_t num; // LIT_NUM
+
+        // LIT_COMPOUND
+        union {
+            Init* init;
+            Item* decl;
+        };
     };
 } Literal;
 
@@ -310,7 +317,6 @@ typedef struct PType {
 
 typedef enum InitType { INIT_EXPR, INIT_LIST } InitType;
 
-typedef struct Init Init;
 typedef struct Init {
     InitType type;
     A3_SLL_LINK(Init) link;
@@ -450,6 +456,7 @@ Expr*   vertex_bin_op_new(Span, BinOpType, Expr* lhs, Expr* rhs);
 Expr*   vertex_unary_op_new(Span, UnaryOpType, Expr* operand);
 Expr*   vertex_lit_num_new(Span, LitNum const*);
 Expr*   vertex_lit_str_new(Span, A3CString);
+Expr*   vertex_lit_compound_new(Span, PType*, Init*);
 Expr*   vertex_num_new(Span, Type const*, uintmax_t);
 Expr*   vertex_var_new(Span, A3CString name);
 Expr*   vertex_call_new(Span, Expr* callee);

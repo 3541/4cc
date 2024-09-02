@@ -196,6 +196,20 @@ static bool dump_lit(AstVisitor* visitor, Literal* lit) {
     case LIT_STR:
         dump_print(visitor->ctx, "LITERAL(\"" A3_S_F "\")", A3_S_FORMAT(lit->str));
         break;
+    case LIT_COMPOUND: {
+        if (VERTEX(lit, expr.lit)->typed) {
+            A3String type = dump_get_type(EXPR(lit, lit)->res_type);
+            dump_print(visitor->ctx, "LITERAL<" A3_S_F ">", A3_S_FORMAT(type));
+            a3_string_free(&type);
+
+            A3_TRYB(dump_child(visitor, VERTEX(lit->decl, item)));
+        } else {
+            dump_print(visitor->ctx, "LITERAL");
+            A3_TRYB(dump_child(visitor, VERTEX(lit->init, init)));
+        }
+
+        break;
+    }
     }
 
     return true;

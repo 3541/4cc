@@ -51,6 +51,7 @@ static Item*  parse_declarator(Parser*, PType*);
 static PType* parse_decl_suffix(Parser*, PType*);
 static PType* parse_declspec(Parser*);
 static bool   parse_decl(Parser*, Items*);
+static Init*  parse_init_list(Parser*);
 static Init*  parse_init(Parser*);
 
 static void parse_scope_push(Parser* parser) {
@@ -476,8 +477,33 @@ static Expr* parse_compound_assign(Parser* parser, Token tok, Expr* lhs, Expr* r
     return vertex_bin_op_new(SPAN(rhs, expr), OP_ASSIGN, lhs, rhs);
 }
 
-static Expr* parse_cast(Parser* parser, Token tok) {
+static Expr* parse_cast(Parser* parser, Token tok, PType* type) {
     assert(parser);
+    assert(type);
+
+    Expr* operand = parse_expr(parser, PREFIX_PRECEDENCE[TOK_LPAREN]);
+    if (!operand)
+        return NULL;
+
+    return vertex_bin_op_new(parse_span_merge(tok.lexeme, SPAN(operand, expr)), OP_CAST,
+                             vertex_expr_type_new(type->span, type), operand);
+}
+
+static Expr* parse_compound_literal(Parser* parser, Token tok, PType* type) {
+    assert(parser);
+    assert(type);
+    assert(lex_peek(parser->lexer).type == TOK_LBRACE);
+
+    Init* init = parse_init_list(parser);
+    if (!init)
+        return NULL;
+
+    return vertex_lit_compound_new(parse_span_merge(tok.lexeme, SPAN(init, init)), type, init);
+}
+
+static Expr* parse_cast_or_compound_lit(Parser* parser, Token tok) {
+    assert(parser);
+    assert(tok.type == TOK_LPAREN);
 
     PType* type = parse_anon_type(parser);
     if (!type)
@@ -486,12 +512,10 @@ static Expr* parse_cast(Parser* parser, Token tok) {
     if (!parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
         return NULL;
 
-    Expr* operand = parse_expr(parser, PREFIX_PRECEDENCE[TOK_LPAREN]);
-    if (!operand)
-        return NULL;
+    if (lex_peek(parser->lexer).type == TOK_LBRACE)
+        return parse_compound_literal(parser, tok, type);
 
-    return vertex_bin_op_new(parse_span_merge(tok.lexeme, SPAN(operand, expr)), OP_CAST,
-                             vertex_expr_type_new(type->span, type), operand);
+    return parse_cast(parser, tok, type);
 }
 
 static Expr* parse_sizeof(Parser* parser, Token tok) {
@@ -622,7 +646,7 @@ static Expr* parse_expr_lhs(Parser* parser) {
         lex_next(parser->lexer);
 
         if (parse_has_decl(parser))
-            return parse_cast(parser, tok);
+            return parse_cast_or_compound_lit(parser, tok);
 
         Expr* res = parse_expr(parser, 0);
 

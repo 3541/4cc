@@ -237,24 +237,6 @@ static bool gen_line(AstVisitor* visitor, Vertex* vertex) {
     return true;
 }
 
-static bool gen_lit(AstVisitor* visitor, Literal* lit) {
-    assert(visitor);
-
-    switch (lit->type) {
-    case LIT_NUM:
-        gen_asm(visitor->ctx, "mov rax, %" PRId64, lit->num);
-        break;
-    case LIT_STR:
-        assert(lit->storage);
-        assert(lit->storage->is_global);
-
-        gen_asm(visitor->ctx, "lea rax, [rel " A3_S_F "]", A3_S_FORMAT(lit->storage->name));
-        break;
-    }
-
-    return true;
-}
-
 static void gen_addr_obj(Generator* gen, Obj* obj) {
     assert(gen);
     assert(obj);
@@ -285,10 +267,44 @@ static bool gen_addr(AstVisitor* visitor, Expr* lvalue) {
             break;
         }
 
+        gen_error(visitor->ctx, VERTEX(lvalue, expr), "Expected an lvalue.");
+        return false;
+    case EXPR_LIT:
+        if (lvalue->lit.type == LIT_COMPOUND) {
+            A3_TRYB(vertex_visit(visitor, VERTEX(lvalue, expr)));
+            break;
+        }
+
         // fallthrough
     default:
         gen_error(visitor->ctx, VERTEX(lvalue, expr), "Expected an lvalue.");
         return false;
+    }
+
+    return true;
+}
+
+static bool gen_lit(AstVisitor* visitor, Literal* lit) {
+    assert(visitor);
+
+    switch (lit->type) {
+    case LIT_NUM:
+        gen_asm(visitor->ctx, "mov rax, %" PRId64, lit->num);
+        break;
+    case LIT_STR:
+        assert(lit->storage);
+        assert(lit->storage->is_global);
+
+        gen_asm(visitor->ctx, "lea rax, [rel " A3_S_F "]", A3_S_FORMAT(lit->storage->name));
+        break;
+    case LIT_COMPOUND:
+        assert(lit->decl);
+        assert(lit->decl->obj);
+
+        A3_TRYB(vertex_visit(visitor, VERTEX(lit->decl, item)));
+        gen_addr_obj(visitor->ctx, lit->decl->obj);
+        gen_load(visitor->ctx, lit->decl->obj->type);
+        break;
     }
 
     return true;

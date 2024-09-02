@@ -49,7 +49,8 @@ tests = {
     'hex',
     'octal',
     'unsigned_literal',
-    'long_suffix'
+    'long_suffix',
+    'compound_literal'
   ],
   'var': [
     'simple',

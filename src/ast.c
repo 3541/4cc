@@ -100,6 +100,21 @@ Expr* vertex_lit_str_new(Span span, A3CString str) {
     return &ret->expr;
 }
 
+Expr* vertex_lit_compound_new(Span span, PType* type, Init* init) {
+    assert(span.text.ptr);
+    assert(type);
+    assert(init);
+
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .span = span,
+                      .type = V_EXPR,
+                      .expr = { .type      = EXPR_LIT,
+                                .res_ptype = type,
+                                .lit       = { .type = LIT_COMPOUND, .init = init } } };
+
+    return &ret->expr;
+}
+
 Expr* vertex_expr_type_new(Span span, PType* type) {
     assert(span.text.ptr);
     assert(type);
