@@ -273,6 +273,7 @@ typedef struct DeclAttributes {
     bool is_extern;
     bool is_variadic;
     bool is_static;
+    bool is_inline;
 } DeclAttributes;
 
 typedef struct PType {

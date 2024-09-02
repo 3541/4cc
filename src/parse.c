@@ -181,7 +181,7 @@ static bool parse_has_decl_typename(Parser* parser) {
 
     Token next = lex_peek(parser->lexer);
     return parse_has_decl_builtin(parser) || next.type == TOK_EXTERN || next.type == TOK_CONST ||
-           next.type == TOK_STATIC || next.type == TOK_VOLATILE;
+           next.type == TOK_STATIC || next.type == TOK_VOLATILE || next.type == TOK_INLINE;
 }
 
 static bool parse_has_decl_aggregate(Parser* parser) {
@@ -1197,6 +1197,11 @@ static bool parse_decl_flag(Parser* parser, Token tok, PTypeBuiltinType* type,
             parse_error(parser, tok, "Duplicate use of extern in type declaration.");
             return false;
         }
+        if (attrib->is_inline) {
+            parse_error(parser, tok,
+                        "Conflicting use of both inline and extern in type declaration.");
+            return false;
+        }
         attrib->is_extern = true;
         break;
     case TOK_STATIC:
@@ -1205,6 +1210,18 @@ static bool parse_decl_flag(Parser* parser, Token tok, PTypeBuiltinType* type,
             return false;
         }
         attrib->is_static = true;
+        break;
+    case TOK_INLINE:
+        if (attrib->is_inline) {
+            parse_error(parser, tok, "Duplicate use of inline in type declaration.");
+            return false;
+        }
+        if (attrib->is_extern) {
+            parse_error(parser, tok,
+                        "Conflicting use of both inline and extern in type declaration.");
+            return false;
+        }
+        attrib->is_inline = true;
         break;
     case TOK_VOID:
         if (*type != PTY_NOTHING) {
@@ -1399,7 +1416,8 @@ static PType* parse_declspec(Parser* parser) {
             if (attrib.is_typedef) {
                 builtin_type = PTY_INT;
             } else {
-                error_at(parser->src, first.lexeme, "Type declaration without actual type.");
+                error_at(parser->src, parse_span_merge(first.lexeme, next.lexeme),
+                         "Type declaration without actual type.");
                 return NULL;
             }
         }

@@ -55,6 +55,7 @@ typedef enum TokenType {
     TOK_I8,
     TOK_IDENT,
     TOK_IF,
+    TOK_INLINE,
     TOK_INT,
     TOK_ISIZE,
     TOK_LBRACE,

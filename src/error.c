@@ -55,7 +55,7 @@ static char const* severity_name(Severity sev) {
         return "Warning";
     }
 
-    assert(false);
+    A3_UNREACHABLE();
 }
 
 static Color severity_color(Severity sev) {
@@ -66,7 +66,7 @@ static Color severity_color(Severity sev) {
         return C_ORANGE;
     }
 
-    assert(false);
+    A3_UNREACHABLE();
 }
 
 A3_FORMAT_FN(3, 0)
