@@ -58,7 +58,7 @@ static void usage(char const* name, int status) {
     assert(name);
 
     fprintf(stderr,
-            "Usage: %s [-hcCSE] [--dump-ast] [--preserve-tmpfiles] [-I <FILE>] [-o <FILE>] "
+            "Usage: %s [-hcCSE] [--dump-ast] [--preserve-tmpfiles] [-I <DIRECTORY>] [-D <MACRO[=<VALUE>]>] [-o <FILE>] "
             "<FILES...>\n",
             name);
     exit(status);
@@ -176,13 +176,14 @@ static Config arg_parse(size_t argc, char const* argv[]) {
         case 'E':
             ret.output_preprocessed = true;
             break;
+        case 'D':
         case 'I': {
             A3CString flag = a3_cstring_from(argv[i]);
             A3_VEC_PUSH(&ret.preprocess_args, &flag);
 
             if (!argv[i][2]) {
                 if (i + 1 >= argc || !*argv[i + 1]) {
-                    fprintf(stderr, "Missing path argument to -I.\n");
+                    fprintf(stderr, "Missing path argument to -%c.\n", argv[i][1]);
                     exit(-1);
                 }
 
