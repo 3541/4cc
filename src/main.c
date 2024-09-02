@@ -183,7 +183,7 @@ static Config arg_parse(size_t argc, char const* argv[]) {
 
             if (!argv[i][2]) {
                 if (i + 1 >= argc || !*argv[i + 1]) {
-                    fprintf(stderr, "Missing path argument to -%c.\n", argv[i][1]);
+                    fprintf(stderr, "Missing argument to -%c.\n", argv[i][1]);
                     exit(-1);
                 }
 
