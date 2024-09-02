@@ -776,7 +776,7 @@ static Item* parse_ret(Parser* parser) {
     assert(tok.type == TOK_RET);
 
     Expr* expr = NULL;
-    Span span = tok.lexeme;
+    Span  span = tok.lexeme;
     if (lex_peek(parser->lexer).type != TOK_SEMI) {
         expr = parse_expr(parser, 0);
         if (!expr)
