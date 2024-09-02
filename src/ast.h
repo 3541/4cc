@@ -173,8 +173,8 @@ typedef struct GenericAssoc {
 } GenericAssoc;
 
 typedef struct GenericExpr {
-    Expr*                      control;
-    Expr*                      selected;
+    Expr*                       control;
+    Expr*                       selected;
     A3_SLL(assoc, GenericAssoc) args;
 } GenericExpr;
 
@@ -357,7 +357,7 @@ typedef struct Item {
         struct {
             StmtType type;
             union {
-                Expr*  expr;        // STMT_EXPR_STMT and STMT_RET.
+                Expr*  expr;        // STMT_EXPR_STMT and STMT_RET. NULL for void return.
                 Block  block;       // STMT_BLOCK
                 If     if_stmt;     // STMT_IF
                 Loop   loop;        // STMT_LOOP

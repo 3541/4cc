@@ -135,8 +135,6 @@ Item* vertex_expr_stmt_new(Span span, Expr* expr) {
 }
 
 Item* vertex_ret_new(Span span, Expr* expr) {
-    assert(expr);
-
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret = (Vertex) { .span = span, .type = V_STMT, .item = { .type = STMT_RET, .expr = expr } };
 

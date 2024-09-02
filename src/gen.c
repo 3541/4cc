@@ -647,7 +647,9 @@ static bool gen_ret(AstVisitor* visitor, Item* ret) {
     assert(ret);
     assert(ret->type == STMT_RET);
 
-    A3_TRYB(vertex_visit(visitor, VERTEX(ret->expr, expr)));
+    if (ret->expr)
+        A3_TRYB(vertex_visit(visitor, VERTEX(ret->expr, expr)));
+
     gen_asm(visitor->ctx, "jmp .ret");
     return true;
 }

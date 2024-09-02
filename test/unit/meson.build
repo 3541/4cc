@@ -67,7 +67,8 @@ tests = {
   'return': [
     'early',
     'mid',
-    'last'
+    'last',
+    'void'
   ],
   'stmt': [
     'block',

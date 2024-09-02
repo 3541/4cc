@@ -311,6 +311,9 @@ static bool dump_ret(AstVisitor* visitor, Item* ret) {
 
     dump_print(visitor->ctx, "RET");
 
+    if (!ret->expr)
+        return true;
+
     return dump_child(visitor, VERTEX(ret->expr, expr));
 }
 

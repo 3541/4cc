@@ -1447,6 +1447,36 @@ static bool type_generic(AstVisitor* visitor, GenericExpr* gen) {
     return true;
 }
 
+static bool type_ret(AstVisitor* visitor, Item* ret) {
+    assert(visitor);
+    assert(ret);
+    assert(ret->type == STMT_RET);
+
+    if (ret->expr)
+        A3_TRYB(vertex_visit(visitor, VERTEX(ret->expr, expr)));
+
+    Registry* reg = visitor->ctx;
+    assert(reg->current_scope->fn);
+    Type const* type = reg->current_scope->fn->type->ret;
+    assert(type);
+
+    if (!ret->expr) {
+        if (type != BUILTIN_TYPES[TY_VOID]) {
+            type_error(reg, VERTEX(ret, item),
+                       "Missing return value in function with non-void return type " A3_S_F ".",
+                       A3_S_FORMAT(type_name(type)));
+            return false;
+        }
+    } else {
+        if (!type_expr_is_assignable(type, ret->expr)) {
+            type_error_mismatch(reg, VERTEX(ret->expr, expr), type, ret->expr->res_type);
+            return false;
+        }
+    }
+
+    return true;
+}
+
 static bool type_block(AstVisitor* visitor, Block* block) {
     assert(visitor);
     assert(block);
@@ -1583,6 +1613,7 @@ bool type(Registry* reg, A3CString src, Vertex* root) {
             .visit_expr_cond = type_expr_cond,
             .visit_expr_type = type_expr_type,
             .visit_generic   = type_generic,
+            .visit_ret       = type_ret,
             .visit_block     = type_block,
             .visit_loop      = type_loop,
             .visit_decl      = type_decl,

@@ -775,9 +775,15 @@ static Item* parse_ret(Parser* parser) {
     Token tok = lex_next(parser->lexer);
     assert(tok.type == TOK_RET);
 
-    Expr* expr = parse_expr(parser, 0);
-    if (!expr)
-        return NULL;
+    Expr* expr = NULL;
+    Span span = tok.lexeme;
+    if (lex_peek(parser->lexer).type != TOK_SEMI) {
+        expr = parse_expr(parser, 0);
+        if (!expr)
+            return NULL;
+
+        span = parse_span_merge(span, SPAN(expr, expr));
+    }
 
     Token next = lex_next(parser->lexer);
     if (next.type == TOK_EOF)
@@ -787,7 +793,7 @@ static Item* parse_ret(Parser* parser) {
         return NULL;
     }
 
-    return vertex_ret_new(parse_span_merge(tok.lexeme, SPAN(expr, expr)), expr);
+    return vertex_ret_new(span, expr);
 }
 
 static Item* parse_if(Parser* parser) {

@@ -64,6 +64,9 @@ static bool visit_ret(AstVisitor* visitor, Item* stmt) {
     assert(stmt);
     assert(stmt->type == STMT_RET);
 
+    if (!stmt->expr)
+        return true;
+
     return vertex_visit(visitor, VERTEX(stmt->expr, expr));
 }
 
