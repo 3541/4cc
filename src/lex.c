@@ -61,7 +61,6 @@ static Token tok_new(Lexer const* lexer, TokenType type, A3CString lexeme) {
     return (Token) { .type = type, .lexeme = { .line = lexer->current_line, .text = lexeme } };
 }
 
-// Report a lexer error.
 A3_FORMAT_FN(2, 3)
 static Token lex_error(Lexer* lexer, char* fmt, ...) {
     assert(lexer);
@@ -77,6 +76,20 @@ static Token lex_error(Lexer* lexer, char* fmt, ...) {
 
     lexer->src.head = lexer->src.tail = 0;
     return tok_new(lexer, TOK_ERR, a3_buf_read_ptr(&lexer->src));
+}
+
+A3_FORMAT_FN(2, 3)
+static void lex_warn(Lexer* lexer, char* fmt, ...) {
+    assert(lexer);
+
+    va_list args;
+    va_start(args, fmt);
+
+    Span span     = { .text = a3_buf_read_ptr(&lexer->src), .line = lexer->current_line };
+    span.text.len = 1;
+    vwarn_at(A3_S_CONST(lexer->src.data), span, fmt, args);
+
+    va_end(args);
 }
 
 bool lex_is_eof(Lexer const* lexer) {
@@ -698,6 +711,31 @@ static void lex_tok_enqueue(Lexer* lexer, Token tok) {
     A3_SLL_ENQUEUE(&lexer->peek, peek, link);
 }
 
+static Token lex_unexpanded_preproc(Lexer* lexer) {
+    assert(lexer);
+
+    A3CString hash = lex_consume_one(lexer, A3_CS("hash"), A3_CS("#"));
+    if (!a3_string_cptr(hash))
+        return lex_unexpected_eof(lexer);
+    lex_consume_space(lexer);
+
+    A3CString directive = lex_consume_until(lexer, is_not_ident);
+    if (a3_string_cmp(directive, A3_CS("pragma")) != 0) {
+        return lex_error(lexer,
+                         "Unexpected unexpanded preprocessor directive: " A3_S_F
+                         ". Valid directives: pragma.",
+                         A3_S_FORMAT(directive));
+    }
+
+    A3CString rest = lex_consume_until(lexer, is_newline);
+    if (!a3_string_cptr(rest))
+        return lex_unexpected_eof(lexer);
+
+    lex_warn(lexer, "Unhandled pragma.");
+
+    return (Token) { .type = TOK_SKIP };
+}
+
 Token lex_peek_n(Lexer* lexer, size_t n) {
     assert(lexer);
     assert(n > 0);
@@ -754,6 +792,12 @@ Token lex_peek_n(Lexer* lexer, size_t n) {
             break;
         case '\'':
             tok = lex_lit_char(lexer);
+            break;
+        case '#':
+            tok = lex_unexpanded_preproc(lexer);
+            if (tok.type == TOK_SKIP)
+                continue;
+
             break;
         default:
             if (is_digit(next)) {

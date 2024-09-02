@@ -1,7 +1,7 @@
 /*
  * ERROR -- Error reporting utilities.
  *
- * Copyright (c) 2022, Alex O'Brien <3541@3541.website>
+ * Copyright (c) 2022, 2024, Alex O'Brien <3541@3541.website>
  *
  * This file is licensed under the BSD 3-clause license. See the LICENSE file in the project root
  * for details.
@@ -23,8 +23,11 @@
 
 typedef enum Color {
     C_RED,
+    C_ORANGE,
     C_NONE,
 } Color;
+
+typedef enum Severity { S_ERROR, S_WARNING } Severity;
 
 #define COLOR_ESCAPE(C) "\033[" #C "m"
 
@@ -35,6 +38,8 @@ static char const* color(Color color) {
     switch (color) {
     case C_RED:
         return COLOR_ESCAPE(31);
+    case C_ORANGE:
+        return COLOR_ESCAPE(33);
     case C_NONE:
         return COLOR_ESCAPE(0);
     }
@@ -42,21 +47,43 @@ static char const* color(Color color) {
     A3_UNREACHABLE();
 }
 
-A3_FORMAT_FN(2, 0)
-static void verror_at_eof(A3CString src, char* fmt, va_list args) {
+static char const* severity_name(Severity sev) {
+    switch (sev) {
+    case S_ERROR:
+        return "Error";
+    case S_WARNING:
+        return "Warning";
+    }
+
+    assert(false);
+}
+
+static Color severity_color(Severity sev) {
+    switch (sev) {
+    case S_ERROR:
+        return C_RED;
+    case S_WARNING:
+        return C_ORANGE;
+    }
+
+    assert(false);
+}
+
+A3_FORMAT_FN(3, 0)
+static void vlog_at_eof(Severity sev, A3CString src, char const* fmt, va_list args) {
     assert(src.ptr);
 
-    fputs("Error: At EOF: ", stderr);
+    fprintf(stderr, "%s: At EOF: ", severity_name(sev));
     vfprintf(stderr, fmt, args);
     fputc('\n', stderr);
 }
 
-A3_FORMAT_FN(3, 0)
-void verror_at(A3CString src, Span span, char* fmt, va_list args) {
+A3_FORMAT_FN(4, 0)
+static void vlog_at(Severity sev, A3CString src, Span span, char const* fmt, va_list args) {
     assert(src.ptr);
 
     if (!span.text.ptr) {
-        verror_at_eof(src, fmt, args);
+        vlog_at_eof(sev, src, fmt, args);
         return;
     }
     assert(a3_string_cptr(span.text) >= a3_string_cptr(src));
@@ -81,7 +108,8 @@ void verror_at(A3CString src, Span span, char* fmt, va_list args) {
     if (chunk.ptr[chunk.len - 1] == '\n')
         chunk.len--;
 
-    fprintf(stderr, "%sError%s (%zu):\n", color(C_RED), color(C_NONE), span.line);
+    char const* col = color(severity_color(sev));
+    fprintf(stderr, "%s%s%s (%zu):\n", col, severity_name(sev), color(C_NONE), span.line);
     do {
         size_t offset = 0;
         while (isspace(chunk.ptr[offset]) && chunk.ptr[offset] != '\n')
@@ -109,15 +137,15 @@ void verror_at(A3CString src, Span span, char* fmt, va_list args) {
                                        .len = MIN(span.text.len, len - line_before_span.len) };
 
         fprintf(stderr, A3_S_F "%s" A3_S_F "%s" A3_S_F "\n" A3_S_F, A3_S_FORMAT(line_before_span),
-                color(C_RED), A3_S_FORMAT(line_in_span), color(C_NONE),
-                A3_S_FORMAT(line_after_span), A3_S_FORMAT(whitespace));
+                col, A3_S_FORMAT(line_in_span), color(C_NONE), A3_S_FORMAT(line_after_span),
+                A3_S_FORMAT(whitespace));
 
         if (line.ptr + line.len >= span.text.ptr) {
             int caret_offset = line.ptr < span.text.ptr
                                    ? (int)((size_t)(span.text.ptr - line.ptr) - whitespace.len)
                                    : 0;
             assert(caret_offset >= 0);
-            fprintf(stderr, "%*s%s", caret_offset, "", color(C_RED));
+            fprintf(stderr, "%*s%s", caret_offset, "", col);
             for (size_t j = 0; j < line_in_span.len; j++)
                 fputc(!j || eol_count ? '^' : '~', stderr);
             fprintf(stderr, "%s", color(C_NONE));
@@ -135,10 +163,29 @@ void verror_at(A3CString src, Span span, char* fmt, va_list args) {
     } while (eol_count-- > 0);
 }
 
+A3_FORMAT_FN(3, 0)
+void verror_at(A3CString src, Span span, char const* fmt, va_list args) {
+    vlog_at(S_ERROR, src, span, fmt, args);
+}
+
 A3_FORMAT_FN(3, 4)
-void error_at(A3CString src, Span span, char* fmt, ...) {
+void error_at(A3CString src, Span span, char const* fmt, ...) {
     va_list args;
     va_start(args, fmt);
     verror_at(src, span, fmt, args);
+    va_end(args);
+}
+
+
+A3_FORMAT_FN(3, 0)
+void vwarn_at(A3CString src, Span span, char const* fmt, va_list args) {
+    vlog_at(S_WARNING, src, span, fmt, args);
+}
+
+A3_FORMAT_FN(3, 4)
+void warn_at(A3CString src, Span span, char const* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    vwarn_at(src, span, fmt, args);
     va_end(args);
 }

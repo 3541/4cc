@@ -1,7 +1,7 @@
 /*
  * ERROR -- Error reporting utilities.
  *
- * Copyright (c) 2022, Alex O'Brien <3541@3541.website>
+ * Copyright (c) 2022, 2024, Alex O'Brien <3541@3541.website>
  *
  * This file is licensed under the BSD 3-clause license. See the LICENSE file in the project root
  * for details.
@@ -19,5 +19,7 @@ typedef struct Span {
     A3CString text;
 } Span;
 
-void verror_at(A3CString src, Span, char* fmt, va_list);
-void error_at(A3CString src, Span, char* fmt, ...);
+void verror_at(A3CString src, Span, char const* fmt, va_list);
+void vwarn_at(A3CString src, Span, char const* fmt, va_list);
+void error_at(A3CString src, Span, char const* fmt, ...);
+void warn_at(A3CString src, Span, char const* fmt, ...);

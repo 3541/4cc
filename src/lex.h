@@ -110,6 +110,7 @@ typedef enum TokenType {
 
     TOK_EOF,
     TOK_ERR,
+    TOK_SKIP,
 
     TOK_COUNT
 } TokenType;
