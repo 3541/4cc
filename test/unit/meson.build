@@ -276,7 +276,8 @@ tests = {
     'nothing'
   ],
   'bug': [
-    'field_name_corruption'
+    'field_name_corruption',
+    'sizeof_consteval'
   ]
 }
 

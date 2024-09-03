@@ -77,7 +77,7 @@ Type const* BUILTIN_TYPES[] = {
     [TY_U64]  = &(Type) { .type = TY_U64, .size = 8, .align = 8, .is_signed = false },
 };
 
-static Type const* type_from_ptype(Registry*, PType*);
+static Type const* type_from_ptype(AstVisitor*, PType*);
 
 #define OBJ_GLOBAL true
 #define OBJ_LOCAL  false
@@ -464,23 +464,25 @@ static Param* param_new(Type const* type) {
     return ret;
 }
 
-static Type const* type_fn_from_ptype(Registry* reg, PType const* ptype) {
-    assert(reg);
+static Type const* type_fn_from_ptype(AstVisitor* visitor, PType const* ptype) {
+    assert(visitor);
     assert(ptype);
     assert(ptype->type == PTY_FN);
+
+    Registry* reg = visitor->ctx;
 
     A3_UNWRAPNI(Type*, ret, calloc(1, sizeof(*ret)));
     *ret = (Type) { .type        = TY_FN,
                     .size        = sizeof(void (*)(void)),
                     .align       = alignof(void (*)(void)),
-                    .ret         = type_from_ptype(reg, ptype->ret),
+                    .ret         = type_from_ptype(visitor, ptype->ret),
                     .is_variadic = ptype->attributes.is_variadic };
     A3_SLL_INIT(&ret->params);
 
     A3_SLL_FOR_EACH (Item, decl, &ptype->params, link) {
         assert(VERTEX(decl, item)->type == V_DECL);
 
-        Type const* type = type_from_ptype(reg, decl->decl_ptype);
+        Type const* type = type_from_ptype(visitor, decl->decl_ptype);
         if (type->type == TY_VOID)
             break;
         if (type->type == TY_ARRAY)
@@ -506,11 +508,13 @@ static Type const* type_fn_from_ptype(Registry* reg, PType const* ptype) {
     return ret;
 }
 
-static bool type_enum_members_from_ptype(Registry* reg, PType* ptype, Type* out) {
-    assert(reg);
+static bool type_enum_members_from_ptype(AstVisitor* visitor, PType* ptype, Type* out) {
+    assert(visitor);
     assert(ptype);
     assert(ptype->type == PTY_ENUM);
     assert(out);
+
+    Registry* reg = visitor->ctx;
 
     int32_t value = 0;
     while (!A3_SLL_IS_EMPTY(&ptype->members)) {
@@ -519,6 +523,13 @@ static bool type_enum_members_from_ptype(Registry* reg, PType* ptype, Type* out)
         A3_SLL_ENQUEUE(&out->members, member, link);
 
         if (member->init) {
+            A3_TRYB(vertex_visit(visitor, VERTEX(member->init, expr)));
+            if (!type_is_assignable(BUILTIN_TYPES[TY_I32], member->init->res_type)) {
+                type_error_mismatch(visitor->ctx, VERTEX(member->init, expr), BUILTIN_TYPES[TY_I32],
+                                    member->init->res_type);
+                return false;
+            }
+
             EvalResult res = eval(reg->src, member->init);
             A3_TRYB(res.ok);
 
@@ -536,8 +547,8 @@ static bool type_enum_members_from_ptype(Registry* reg, PType* ptype, Type* out)
     return true;
 }
 
-static bool type_members_from_ptype(Registry* reg, PType* ptype, Type* out) {
-    assert(reg);
+static bool type_members_from_ptype(AstVisitor* visitor, PType* ptype, Type* out) {
+    assert(visitor);
     assert(ptype);
     assert(ptype->type == PTY_STRUCT || ptype->type == PTY_UNION);
     assert(out);
@@ -549,7 +560,7 @@ static bool type_members_from_ptype(Registry* reg, PType* ptype, Type* out) {
         A3_SLL_ENQUEUE(&out->members, member, link);
 
         member->offset = 0;
-        member->type   = type_from_ptype(reg, member->ptype);
+        member->type   = type_from_ptype(visitor, member->ptype);
         if (!member->type)
             return false;
 
@@ -569,14 +580,15 @@ static bool type_members_from_ptype(Registry* reg, PType* ptype, Type* out) {
     return true;
 }
 
-static Type const* type_aggregate_from_ptype(Registry* reg, PType* ptype) {
-    assert(reg);
+static Type const* type_aggregate_from_ptype(AstVisitor* visitor, PType* ptype) {
+    assert(visitor);
     assert(ptype);
     assert(ptype->type == PTY_STRUCT || ptype->type == PTY_UNION || ptype->type == PTY_ENUM);
 
-    TypeType type = ptype->type == PTY_STRUCT  ? TY_STRUCT
-                    : ptype->type == PTY_UNION ? TY_UNION
-                                               : TY_ENUM;
+    Registry* reg  = visitor->ctx;
+    TypeType  type = ptype->type == PTY_STRUCT  ? TY_STRUCT
+                     : ptype->type == PTY_UNION ? TY_UNION
+                                                : TY_ENUM;
 
     Type* ret        = NULL;
     bool  found_prev = false;
@@ -616,13 +628,13 @@ static Type const* type_aggregate_from_ptype(Registry* reg, PType* ptype) {
 
     if (type == TY_ENUM) {
         ret->is_signed = true;
-        if (!type_enum_members_from_ptype(reg, ptype, ret))
+        if (!type_enum_members_from_ptype(visitor, ptype, ret))
             return NULL;
 
         ret->size  = BUILTIN_TYPES[TY_I32]->size;
         ret->align = BUILTIN_TYPES[TY_I32]->align;
     } else {
-        if (!type_members_from_ptype(reg, ptype, ret))
+        if (!type_members_from_ptype(visitor, ptype, ret))
             return NULL;
     }
 
@@ -632,16 +644,26 @@ static Type const* type_aggregate_from_ptype(Registry* reg, PType* ptype) {
     return ret;
 }
 
-static Type const* type_from_ptype(Registry* reg, PType* ptype) {
-    assert(reg);
+static Type const* type_from_ptype(AstVisitor* visitor, PType* ptype) {
+    assert(visitor);
     assert(ptype);
+
+    Registry* reg = visitor->ctx;
 
     switch (ptype->type) {
     case PTY_PTR:
-        return type_ptr_to(reg, type_from_ptype(reg, ptype->parent));
+        return type_ptr_to(reg, type_from_ptype(visitor, ptype->parent));
     case PTY_ARRAY: {
         if (!ptype->len)
-            return type_array_of(type_from_ptype(reg, ptype->parent), TYPE_ARRAY_UNSIZED);
+            return type_array_of(type_from_ptype(visitor, ptype->parent), TYPE_ARRAY_UNSIZED);
+
+        if (!vertex_visit(visitor, VERTEX(ptype->len, expr)))
+            return NULL;
+        if (!type_is_assignable(BUILTIN_TYPES[TY_USIZE], ptype->len->res_type)) {
+            type_error_mismatch(reg, VERTEX(ptype->len, expr), BUILTIN_TYPES[TY_USIZE],
+                                ptype->len->res_type);
+            return NULL;
+        }
 
         EvalResult res = eval(reg->src, ptype->len);
         if (!res.ok)
@@ -652,14 +674,14 @@ static Type const* type_from_ptype(Registry* reg, PType* ptype) {
             return NULL;
         }
 
-        return type_array_of(type_from_ptype(reg, ptype->parent), (size_t)res.value);
+        return type_array_of(type_from_ptype(visitor, ptype->parent), (size_t)res.value);
     }
     case PTY_FN:
-        return type_fn_from_ptype(reg, ptype);
+        return type_fn_from_ptype(visitor, ptype);
     case PTY_STRUCT:
     case PTY_UNION:
     case PTY_ENUM:
-        return type_aggregate_from_ptype(reg, ptype);
+        return type_aggregate_from_ptype(visitor, ptype);
     case PTY_BUILTIN:
         switch (ptype->builtin_type) {
         case PTY_VOID:
@@ -919,7 +941,7 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
 
     switch (lit->type) {
     case LIT_NUM:
-        EXPR(lit, lit)->res_type = type_from_ptype(reg, EXPR(lit, lit)->res_ptype);
+        EXPR(lit, lit)->res_type = type_from_ptype(visitor, EXPR(lit, lit)->res_ptype);
         break;
     case LIT_STR: {
         // TODO: There really should be a separate resolution pass for this and other things like
@@ -952,7 +974,7 @@ static bool type_lit(AstVisitor* visitor, Literal* lit) {
     }
     case LIT_COMPOUND: {
         PType* ptype             = EXPR(lit, lit)->res_ptype;
-        EXPR(lit, lit)->res_type = type_from_ptype(reg, ptype);
+        EXPR(lit, lit)->res_type = type_from_ptype(visitor, ptype);
 
         reg->init_type = EXPR(lit, lit)->res_type;
         A3_TRYB(vertex_visit(visitor, VERTEX(lit->init, init)));
@@ -990,7 +1012,7 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
         return false;
     }
 
-    Type const* fn_type = type_from_ptype(reg, decl->decl_ptype);
+    Type const* fn_type = type_from_ptype(visitor, decl->decl_ptype);
     if (prev && fn_type != prev->type) {
         type_error_mismatch(reg, VERTEX(decl, item), prev->type, decl->decl_type);
         return false;
@@ -1021,7 +1043,7 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
 
         size_t count = 0;
         A3_SLL_FOR_EACH (Item, param, &decl->decl_ptype->params, link) {
-            param->decl_type = type_from_ptype(reg, param->decl_ptype);
+            param->decl_type = type_from_ptype(visitor, param->decl_ptype);
             if (param->decl_type->type == TY_ARRAY)
                 param->decl_type = type_ptr_to(reg, param->decl_type->parent);
 
@@ -1110,7 +1132,10 @@ static bool type_typedef(AstVisitor* visitor, Item* decl) {
     }
 
     Type const* prev = scope_find_typedef_in(reg->current_scope, decl->name);
-    Type const* type = type_from_ptype(reg, decl->decl_ptype);
+    Type const* type = type_from_ptype(visitor, decl->decl_ptype);
+    if (!type)
+        return NULL;
+
     if (prev) {
         if (type != prev) {
             type_error_mismatch(reg, VERTEX(decl, item), prev, type);
@@ -1255,7 +1280,7 @@ static bool type_decl(AstVisitor* visitor, Item* decl) {
     if (decl->decl_ptype->type == PTY_ARRAY && decl->decl_ptype->len)
         A3_TRYB(vertex_visit(visitor, VERTEX(decl->decl_ptype->len, expr)));
 
-    Type const* type = type_from_ptype(reg, decl->decl_ptype);
+    Type const* type = type_from_ptype(visitor, decl->decl_ptype);
     if (!type)
         return false;
     decl->decl_type = type;
@@ -1343,7 +1368,7 @@ static bool type_var(AstVisitor* visitor, Var* var) {
     }
 
     if (var->obj->is_named_literal) {
-        Expr* lit       = vertex_num_new(SPAN(var, expr.var), var->obj->type, (uintmax_t)var->obj->value);
+        Expr* lit = vertex_num_new(SPAN(var, expr.var), var->obj->type, (uintmax_t)var->obj->value);
         *EXPR(var, var) = *lit;
         free(VERTEX(lit, expr));
     } else {
@@ -1449,7 +1474,7 @@ static bool type_expr_type(AstVisitor* visitor, Expr* expr) {
     assert(expr);
     assert(expr->type == EXPR_TYPE);
 
-    return (expr->res_type = type_from_ptype(visitor->ctx, expr->res_ptype));
+    return (expr->res_type = type_from_ptype(visitor, expr->res_ptype));
 }
 
 static bool type_generic(AstVisitor* visitor, GenericExpr* gen) {
@@ -1475,7 +1500,7 @@ static bool type_generic(AstVisitor* visitor, GenericExpr* gen) {
             continue;
         }
 
-        assoc->type = type_from_ptype(visitor->ctx, assoc->ptype);
+        assoc->type = type_from_ptype(visitor, assoc->ptype);
         A3_TRYB(assoc->type);
 
         if (assoc->type == type) {
