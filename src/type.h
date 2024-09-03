@@ -109,7 +109,7 @@ typedef struct Obj {
             A3_SLL(, Label) labels;
         };
 
-        uint32_t value; // TY_ENUM_CONSTANT
+        int32_t value; // TY_ENUM_CONSTANT
     };
 } Obj;
 

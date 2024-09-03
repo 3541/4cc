@@ -113,7 +113,7 @@ static Obj* obj_fn_new(A3CString name, Type const* type, DeclAttributes attrs, b
     return ret;
 }
 
-static Obj* obj_enum_const_new(A3CString name, Type const* type, uint32_t value) {
+static Obj* obj_enum_const_new(A3CString name, Type const* type, int32_t value) {
     assert(name.ptr);
     assert(type);
 
@@ -506,6 +506,69 @@ static Type const* type_fn_from_ptype(Registry* reg, PType const* ptype) {
     return ret;
 }
 
+static bool type_enum_members_from_ptype(Registry* reg, PType* ptype, Type* out) {
+    assert(reg);
+    assert(ptype);
+    assert(ptype->type == PTY_ENUM);
+    assert(out);
+
+    int32_t value = 0;
+    while (!A3_SLL_IS_EMPTY(&ptype->members)) {
+        Member* member = A3_SLL_HEAD(&ptype->members);
+        A3_SLL_DEQUEUE(&ptype->members, link);
+        A3_SLL_ENQUEUE(&out->members, member, link);
+
+        if (member->init) {
+            EvalResult res = eval(reg->src, member->init);
+            A3_TRYB(res.ok);
+
+            if (res.value < INT32_MIN || INT32_MAX < res.value) {
+                error_at(reg->src, SPAN(member->init, expr), "Invalid enum constant value.");
+                return false;
+            }
+
+            value = (int32_t)res.value;
+        }
+
+        scope_add(reg->current_scope, obj_enum_const_new(member->name, out, value++));
+    }
+
+    return true;
+}
+
+static bool type_members_from_ptype(Registry* reg, PType* ptype, Type* out) {
+    assert(reg);
+    assert(ptype);
+    assert(ptype->type == PTY_STRUCT || ptype->type == PTY_UNION);
+    assert(out);
+
+    size_t offset = 0;
+    while (!A3_SLL_IS_EMPTY(&ptype->members)) {
+        Member* member = A3_SLL_HEAD(&ptype->members);
+        A3_SLL_DEQUEUE(&ptype->members, link);
+        A3_SLL_ENQUEUE(&out->members, member, link);
+
+        member->offset = 0;
+        member->type   = type_from_ptype(reg, member->ptype);
+        if (!member->type)
+            return false;
+
+        if (ptype->type == PTY_STRUCT) {
+            member->offset = offset = align_up(offset, member->type->align);
+            offset += member->type->size;
+        } else {
+            out->size = MAX(out->size, member->type->size);
+        }
+
+        out->align = MAX(out->align, member->type->align);
+    }
+
+    if (ptype->type == PTY_STRUCT)
+        out->size = align_up(offset, out->align);
+
+    return true;
+}
+
 static Type const* type_aggregate_from_ptype(Registry* reg, PType* ptype) {
     assert(reg);
     assert(ptype);
@@ -551,49 +614,16 @@ static Type const* type_aggregate_from_ptype(Registry* reg, PType* ptype) {
     ret->name = ptype->name.text;
     A3_SLL_INIT(&ret->members);
 
-    if (type == TY_ENUM)
+    if (type == TY_ENUM) {
         ret->is_signed = true;
+        if (!type_enum_members_from_ptype(reg, ptype, ret))
+            return NULL;
 
-    size_t offset = 0;
-    while (!A3_SLL_IS_EMPTY(&ptype->members)) {
-        Member* member = A3_SLL_HEAD(&ptype->members);
-        A3_SLL_DEQUEUE(&ptype->members, link);
-        A3_SLL_ENQUEUE(&ret->members, member, link);
-
-        if (type == TY_ENUM) {
-            if (member->init) {
-                EvalResult res = eval(reg->src, member->init);
-                if (!res.ok)
-                    return NULL;
-                if (res.value < 0 || res.value > UINT32_MAX) {
-                    error_at(reg->src, ptype->span, "Invalid enum constant value.");
-                    return NULL;
-                }
-
-                offset = (size_t)res.value;
-            }
-
-            scope_add(reg->current_scope,
-                      obj_enum_const_new(member->name, ret, (uint32_t)offset++));
-            continue;
-        }
-
-        member->type   = type_from_ptype(reg, member->ptype);
-        member->offset = 0;
-        if (type == TY_STRUCT) {
-            member->offset = offset = align_up(offset, member->type->align);
-            offset += member->type->size;
-        } else {
-            ret->size = MAX(ret->size, member->type->size);
-        }
-
-        ret->align = MAX(ret->align, member->type->align);
-    }
-    if (type == TY_STRUCT) {
-        ret->size = align_up(offset, ret->align);
-    } else if (type == TY_ENUM) {
         ret->size  = BUILTIN_TYPES[TY_I32]->size;
         ret->align = BUILTIN_TYPES[TY_I32]->align;
+    } else {
+        if (!type_members_from_ptype(reg, ptype, ret))
+            return NULL;
     }
 
     if (ret->name.ptr && !found_prev)
@@ -1313,7 +1343,7 @@ static bool type_var(AstVisitor* visitor, Var* var) {
     }
 
     if (var->obj->is_named_literal) {
-        Expr* lit       = vertex_num_new(SPAN(var, expr.var), var->obj->type, var->obj->value);
+        Expr* lit       = vertex_num_new(SPAN(var, expr.var), var->obj->type, (uintmax_t)var->obj->value);
         *EXPR(var, var) = *lit;
         free(VERTEX(lit, expr));
     } else {

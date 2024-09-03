@@ -289,7 +289,10 @@ static bool gen_lit(AstVisitor* visitor, Literal* lit) {
 
     switch (lit->type) {
     case LIT_NUM:
-        gen_asm(visitor->ctx, "mov rax, %" PRId64, lit->num);
+        if (EXPR(lit, lit)->res_type->is_signed)
+            gen_asm(visitor->ctx, "mov rax, %" PRIdMAX, (intmax_t)lit->num);
+        else
+            gen_asm(visitor->ctx, "mov rax, %" PRIuMAX, lit->num);
         break;
     case LIT_STR:
         assert(lit->storage);
