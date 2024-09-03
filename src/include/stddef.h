@@ -36,4 +36,6 @@ typedef __usize size_t;
 typedef __isize ptrdiff_t;
 typedef __u32   wchar_t;
 
+#define NULL ((void*) 0)
+
 #endif
