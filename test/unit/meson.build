@@ -249,8 +249,16 @@ tests = {
   'std': [
     'assert',
     'ctype',
+    'errno',
+    'inttypes',
+    'iso646',
+    'limits',
+    'locale',
+    'signal',
     'stdio',
-    'string'
+    'stdlib',
+    'string',
+    'time'
   ],
   'enum': [
     'simple',
