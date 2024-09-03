@@ -83,7 +83,6 @@ static Type const* type_from_ptype(Registry*, PType*);
 #define OBJ_LOCAL  false
 static Obj* obj_new(A3CString name, Type const* type, Init* init, DeclAttributes attrs,
                     ssize_t stack_offset, bool global) {
-    assert(name.ptr);
     assert(type);
 
     A3_UNWRAPNI(Obj*, ret, calloc(1, sizeof(*ret)));
@@ -1008,7 +1007,9 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
 
             param->obj =
                 obj_new(param->name, param->decl_type, NULL, param->attributes, offset, OBJ_LOCAL);
-            scope_add(reg->current_scope, param->obj);
+
+            if (param->name.ptr)
+                scope_add(reg->current_scope, param->obj);
 
             count++;
         }

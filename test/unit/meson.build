@@ -128,7 +128,8 @@ tests = {
     'simple',
     'multiple',
     'params',
-    'recursive'
+    'recursive',
+    'unnamed_params'
   ],
   'array': [
     'simple',
