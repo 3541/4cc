@@ -51,7 +51,8 @@ tests = {
     'unsigned_literal',
     'long_suffix',
     'compound_literal',
-    'bool'
+    'bool',
+    'alignof'
   ],
   'var': [
     'simple',

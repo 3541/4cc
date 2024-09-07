@@ -269,6 +269,8 @@ static UnaryOpType parse_unary_op(TokenType type) {
         return OP_BW_NOT;
     case TOK_SIZEOF:
         return OP_SIZEOF;
+    case TOK_ALIGNOF:
+        return OP_ALIGNOF;
     default:
         A3_PANIC("Not a unary operator.");
     }
@@ -387,7 +389,7 @@ static PType* parse_anon_type(Parser* parser) {
 static uint8_t PREFIX_PRECEDENCE[TOK_COUNT] = {
     [TOK_PLUS] = 25,      [TOK_MINUS] = 25,       [TOK_AMP] = 25,    [TOK_STAR] = 25,
     [TOK_BANG] = 25,      [TOK_TILDE] = 25,       [TOK_SIZEOF] = 25, [TOK_LPAREN] = 25,
-    [TOK_PLUS_PLUS] = 25, [TOK_MINUS_MINUS] = 25,
+    [TOK_PLUS_PLUS] = 25, [TOK_MINUS_MINUS] = 25, [TOK_ALIGNOF] = 25
 };
 
 static uint8_t INFIX_PRECEDENCE[TOK_COUNT][2] = {
@@ -526,10 +528,12 @@ static Expr* parse_cast_or_compound_lit(Parser* parser, Token tok) {
     return parse_cast(parser, tok, type);
 }
 
-static Expr* parse_sizeof(Parser* parser, Token tok) {
+static Expr* parse_sizeof_alignof(Parser* parser) {
     assert(parser);
 
-    lex_next(parser->lexer);
+    Token tok = lex_next(parser->lexer);
+    assert(tok.type == TOK_SIZEOF || tok.type == TOK_ALIGNOF);
+
     bool paren = lex_peek(parser->lexer).type == TOK_LPAREN;
     if (paren)
         lex_next(parser->lexer);
@@ -542,7 +546,7 @@ static Expr* parse_sizeof(Parser* parser, Token tok) {
 
         operand = vertex_expr_type_new(type->span, type);
     } else {
-        operand = parse_expr(parser, PREFIX_PRECEDENCE[TOK_SIZEOF]);
+        operand = parse_expr(parser, PREFIX_PRECEDENCE[tok.type]);
     }
     if (!operand)
         return NULL;
@@ -550,8 +554,8 @@ static Expr* parse_sizeof(Parser* parser, Token tok) {
     if (paren && !parse_consume(parser, A3_CS("closing parenthesis"), TOK_RPAREN))
         return NULL;
 
-    return vertex_unary_op_new(parse_span_merge(tok.lexeme, SPAN(operand, expr)), OP_SIZEOF,
-                               operand);
+    return vertex_unary_op_new(parse_span_merge(tok.lexeme, SPAN(operand, expr)),
+                               parse_unary_op(tok.type), operand);
 }
 
 static Expr* parse_prefix_inc_dec(Parser* parser) {
@@ -680,7 +684,8 @@ static Expr* parse_expr_lhs(Parser* parser) {
     case TOK_IDENT:
         return parse_var(parser);
     case TOK_SIZEOF:
-        return parse_sizeof(parser, tok);
+    case TOK_ALIGNOF:
+        return parse_sizeof_alignof(parser);
     case TOK_PLUS_PLUS:
     case TOK_MINUS_MINUS:
         return parse_prefix_inc_dec(parser);

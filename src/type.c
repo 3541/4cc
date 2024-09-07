@@ -912,14 +912,16 @@ static bool type_unary_op(AstVisitor* visitor, UnaryOp* op) {
         EXPR(op, unary_op)->res_type = op->operand->res_type;
         break;
     case OP_SIZEOF:
+    case OP_ALIGNOF:
         if (op->operand->res_type->type == TY_ARRAY &&
             op->operand->res_type->size == TYPE_ARRAY_UNSIZED) {
             type_error(visitor->ctx, VERTEX(op, expr.unary_op),
-                       "Operand of sizeof cannot be an incomplete type.");
+                       "Operand of %s cannot be an incomplete type.",
+                       op->type == OP_SIZEOF ? "sizeof" : "alignof");
             return false;
         }
 
-        EXPR(op, unary_op)->res_type = BUILTIN_TYPES[TY_U64];
+        EXPR(op, unary_op)->res_type = BUILTIN_TYPES[TY_USIZE];
         break;
     }
 

@@ -548,6 +548,7 @@ static Token lex_ident_or_kw(Lexer* lexer) {
         { A3_CS("_Generic"), TOK_GENERIC },  { A3_CS("inline"), TOK_INLINE },
         { A3_CS("_Bool"), TOK_BOOL },        { A3_CS("bool"), TOK_BOOL },
         { A3_CS("true"), TOK_TRUE },         { A3_CS("false"), TOK_FALSE },
+        { A3_CS("_Alignof"), TOK_ALIGNOF },  { A3_CS("alignof"), TOK_ALIGNOF },
     };
 
     A3CString lexeme = lex_consume_until(lexer, is_not_ident);

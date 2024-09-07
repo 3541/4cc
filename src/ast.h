@@ -82,6 +82,7 @@ typedef enum StmtType {
 
 typedef enum UnaryOpType {
     OP_ADDR,
+    OP_ALIGNOF,
     OP_BW_NOT,
     OP_DEREF,
     OP_NEG,

@@ -176,7 +176,10 @@ static bool eval_unary_op(AstVisitor* visitor, UnaryOp* op) {
         ctx->ret = ~ctx->ret;
         break;
     case OP_SIZEOF:
-        ctx->ret = (int64_t)op->operand->res_type->size;
+        ctx->ret = (intmax_t)op->operand->res_type->size;
+        break;
+    case OP_ALIGNOF:
+        ctx->ret = (intmax_t)op->operand->res_type->align;
         break;
     case OP_DEREF:
     case OP_ADDR:

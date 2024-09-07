@@ -19,6 +19,7 @@
 #include "error.h"
 
 typedef enum TokenType {
+    TOK_ALIGNOF,
     TOK_AMP,
     TOK_AMP_AMP,
     TOK_AMP_EQ,

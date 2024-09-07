@@ -652,6 +652,9 @@ static bool gen_unary_op(AstVisitor* visitor, UnaryOp* op) {
     case OP_SIZEOF:
         gen_asm(visitor->ctx, "mov rax, %zu", op->operand->res_type->size);
         break;
+    case OP_ALIGNOF:
+        gen_asm(visitor->ctx, "mov rax, %zu", op->operand->res_type->align);
+        break;
     case OP_ADDR:
         // Handled earlier.
         A3_UNREACHABLE();

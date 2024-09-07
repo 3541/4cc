@@ -176,6 +176,9 @@ static bool dump_unary_op(AstVisitor* visitor, UnaryOp* op) {
     case OP_SIZEOF:
         op_str = "sizeof";
         break;
+    case OP_ALIGNOF:
+        op_str = "alignof";
+        break;
     }
 
     A3String type = dump_get_type(EXPR(op, unary_op)->res_type);
