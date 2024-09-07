@@ -50,7 +50,8 @@ tests = {
     'octal',
     'unsigned_literal',
     'long_suffix',
-    'compound_literal'
+    'compound_literal',
+    'bool'
   ],
   'var': [
     'simple',

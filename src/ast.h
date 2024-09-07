@@ -253,20 +253,22 @@ typedef enum PTypeBuiltin {
     PTY_LONG      = 1 << 4,
     PTY_LONG_LONG = 1 << 5,
 
-    PTY_I8    = 1 << 6,
-    PTY_I16   = 1 << 7,
-    PTY_I32   = 1 << 8,
-    PTY_I64   = 1 << 9,
-    PTY_ISIZE = 1 << 10,
+    PTY_BOOL = 1 << 6,
 
-    PTY_U8    = 1 << 11,
-    PTY_U16   = 1 << 12,
-    PTY_U32   = 1 << 13,
-    PTY_U64   = 1 << 14,
-    PTY_USIZE = 1 << 15,
+    PTY_I8    = 1 << 7,
+    PTY_I16   = 1 << 8,
+    PTY_I32   = 1 << 9,
+    PTY_I64   = 1 << 10,
+    PTY_ISIZE = 1 << 11,
 
-    PTY_SIGNED   = 1 << 16,
-    PTY_UNSIGNED = 1 << 17,
+    PTY_U8    = 1 << 12,
+    PTY_U16   = 1 << 13,
+    PTY_U32   = 1 << 14,
+    PTY_U64   = 1 << 15,
+    PTY_USIZE = 1 << 16,
+
+    PTY_SIGNED   = 1 << 17,
+    PTY_UNSIGNED = 1 << 18,
 
     PTY_TYPE_QUALIFIERS = PTY_SHORT | PTY_LONG | PTY_LONG_LONG,
     PTY_TYPES = PTY_I8 | PTY_I16 | PTY_I32 | PTY_I64 | PTY_ISIZE | PTY_U8 | PTY_U16 | PTY_U32 |
@@ -328,7 +330,7 @@ typedef struct Designator {
         Expr*     index;
 
         Member const* resolved_member;
-        uintmax_t resolved_index;
+        uintmax_t     resolved_index;
     };
 } Designator;
 

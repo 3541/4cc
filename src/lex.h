@@ -24,6 +24,7 @@ typedef enum TokenType {
     TOK_AMP_EQ,
     TOK_BANG,
     TOK_BANG_EQ,
+    TOK_BOOL,
     TOK_BREAK,
     TOK_CASE,
     TOK_CHAR,
@@ -40,6 +41,7 @@ typedef enum TokenType {
     TOK_EQ,
     TOK_EQ_EQ,
     TOK_EXTERN,
+    TOK_FALSE,
     TOK_FOR,
     TOK_GENERIC,
     TOK_GOTO,
@@ -97,6 +99,7 @@ typedef enum TokenType {
     TOK_STRUCT,
     TOK_SWITCH,
     TOK_TILDE,
+    TOK_TRUE,
     TOK_TYPEDEF,
     TOK_U16,
     TOK_U32,
@@ -124,6 +127,7 @@ typedef enum {
     LIT_NUM_SIZE      = 1 << 4,
     LIT_NUM_FLOAT     = 1 << 5,
     LIT_NUM_DOUBLE    = 1 << 6,
+    LIT_NUM_BOOL      = 1 << 7,
 
     LIT_NUM_INT_MASK =
         LIT_NUM_UNSIGNED | LIT_NUM_CHAR | LIT_NUM_SIZE | LIT_NUM_LONG | LIT_NUM_LONG_LONG,

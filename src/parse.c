@@ -169,12 +169,12 @@ static bool parse_has_decl_builtin(Parser* parser) {
     assert(parser);
 
     Token next = lex_peek(parser->lexer);
-    return next.type == TOK_VOID || next.type == TOK_I8 || next.type == TOK_I16 ||
-           next.type == TOK_I32 || next.type == TOK_I64 || next.type == TOK_ISIZE ||
-           next.type == TOK_U8 || next.type == TOK_U16 || next.type == TOK_U32 ||
-           next.type == TOK_U64 || next.type == TOK_USIZE || next.type == TOK_CHAR ||
-           next.type == TOK_SHORT || next.type == TOK_INT || next.type == TOK_LONG ||
-           next.type == TOK_SIGNED || next.type == TOK_UNSIGNED;
+    return next.type == TOK_VOID || next.type == TOK_BOOL || next.type == TOK_I8 ||
+           next.type == TOK_I16 || next.type == TOK_I32 || next.type == TOK_I64 ||
+           next.type == TOK_ISIZE || next.type == TOK_U8 || next.type == TOK_U16 ||
+           next.type == TOK_U32 || next.type == TOK_U64 || next.type == TOK_USIZE ||
+           next.type == TOK_CHAR || next.type == TOK_SHORT || next.type == TOK_INT ||
+           next.type == TOK_LONG || next.type == TOK_SIGNED || next.type == TOK_UNSIGNED;
 }
 
 static bool parse_has_defined_type(Parser* parser) {
@@ -645,6 +645,16 @@ static Expr* parse_generic(Parser* parser, Token tok) {
     return ret;
 }
 
+static Expr* parse_lit_bool(Parser* parser) {
+    assert(parser);
+
+    Token tok = lex_next(parser->lexer);
+    assert(tok.type == TOK_TRUE || tok.type == TOK_FALSE);
+
+    return vertex_lit_num_new(
+        tok.lexeme, &(LitNum) { .type = LIT_NUM_BOOL, .integer = tok.type == TOK_TRUE ? 1 : 0 });
+}
+
 static Expr* parse_expr_lhs(Parser* parser) {
     assert(parser);
 
@@ -676,6 +686,9 @@ static Expr* parse_expr_lhs(Parser* parser) {
         return parse_prefix_inc_dec(parser);
     case TOK_GENERIC:
         return parse_generic(parser, tok);
+    case TOK_TRUE:
+    case TOK_FALSE:
+        return parse_lit_bool(parser);
     default:
         return parse_prefix_unary_op(parser, tok);
     }
@@ -1373,6 +1386,13 @@ static bool parse_decl_flag(Parser* parser, Token tok, PTypeBuiltinType* type,
             return false;
         }
         *type |= PTY_UNSIGNED;
+        break;
+    case TOK_BOOL:
+        if (*type & (PTY_TYPES | PTY_TYPE_QUALIFIERS)) {
+            parse_error(parser, tok, "Duplicate types in type declaration.");
+            return false;
+        }
+        *type |= PTY_BOOL;
         break;
     default:
         A3_UNREACHABLE();

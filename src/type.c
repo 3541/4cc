@@ -66,6 +66,7 @@ typedef struct Registry {
 
 Type const* BUILTIN_TYPES[] = {
     [TY_VOID] = &(Type) { .type = TY_VOID, .size = 0, .align = 0 },
+    [TY_BOOL] = &(Type) { .type = TY_BOOL, .size = 1, .align = 1, .is_signed = false },
     [TY_I8]   = &(Type) { .type = TY_I8, .size = 1, .align = 1, .is_signed = true },
     [TY_I16]  = &(Type) { .type = TY_I16, .size = 2, .align = 2, .is_signed = true },
     [TY_I32]  = &(Type) { .type = TY_I32, .size = 4, .align = 4, .is_signed = true },
@@ -73,7 +74,7 @@ Type const* BUILTIN_TYPES[] = {
     [TY_U8]   = &(Type) { .type = TY_U8, .size = 1, .align = 1, .is_signed = false },
     [TY_U16]  = &(Type) { .type = TY_U16, .size = 2, .align = 2, .is_signed = false },
     [TY_U32]  = &(Type) { .type = TY_U32, .size = 4, .align = 4, .is_signed = false },
-    [TY_U64]  = &(Type) { .type = TY_U64, .size = 8, .align = 8, .is_signed = false },
+    [TY_U64]  = &(Type) { .type = TY_U64, .size = 8, .align = 8, .is_signed = false }
 };
 
 static Type const* type_from_ptype(AstVisitor*, PType*);
@@ -257,6 +258,8 @@ A3String type_name(Type const* type) {
     switch (type->type) {
     case TY_VOID:
         return a3_string_clone(A3_CS("void"));
+    case TY_BOOL:
+        return a3_string_clone(A3_CS("bool"));
     case TY_I8:
         return a3_string_clone(A3_CS("__i8"));
     case TY_I16:
@@ -350,7 +353,7 @@ A3String type_name(Type const* type) {
 bool type_is_scalar(Type const* type) {
     assert(type);
 
-    return (TY_I8 <= type->type && type->type <= TY_U64) || type->type == TY_ENUM;
+    return (TY_BOOL <= type->type && type->type <= TY_U64) || type->type == TY_ENUM;
 }
 
 bool type_is_scalar_value(Type const* type) {
@@ -686,6 +689,8 @@ static Type const* type_from_ptype(AstVisitor* visitor, PType* ptype) {
         switch (ptype->builtin_type) {
         case PTY_VOID:
             return BUILTIN_TYPES[TY_VOID];
+        case PTY_BOOL:
+            return BUILTIN_TYPES[TY_BOOL];
         case PTY_I8:
         case PTY_I8 | PTY_SIGNED:
         case PTY_U8 | PTY_SIGNED:

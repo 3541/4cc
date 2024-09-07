@@ -55,11 +55,14 @@ Expr* vertex_lit_num_new(Span span, LitNum const* lit) {
     assert(lit);
 
     PTypeBuiltinType type =
-        (lit->type & LIT_NUM_UNSIGNED ? PTY_UNSIGNED : PTY_SIGNED) |
-        (lit->type & LIT_NUM_CHAR ? PTY_CHAR
-                                  : (PTY_INT | (lit->type & LIT_NUM_LONG        ? PTY_LONG
-                                                : lit->type & LIT_NUM_LONG_LONG ? PTY_LONG_LONG
-                                                                                : 0)));
+        (lit->type & LIT_NUM_BOOL)
+            ? PTY_BOOL
+            : ((lit->type & LIT_NUM_UNSIGNED ? PTY_UNSIGNED : PTY_SIGNED) |
+               (lit->type & LIT_NUM_CHAR
+                    ? PTY_CHAR
+                    : (PTY_INT | (lit->type & LIT_NUM_LONG        ? PTY_LONG
+                                  : lit->type & LIT_NUM_LONG_LONG ? PTY_LONG_LONG
+                                                                  : 0))));
 
     A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
     *ret = (Vertex) { .span = span,
