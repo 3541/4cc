@@ -437,6 +437,9 @@ static bool dump_init(AstVisitor* visitor, Init* init) {
     case INIT_LIST:
         type = "LIST";
         break;
+    case INIT_DESIGNATOR:
+        type = "DESIGNATED";
+        break;
     }
 
     dump_print(visitor->ctx, "INIT<%s>", type);
@@ -448,6 +451,19 @@ static bool dump_init(AstVisitor* visitor, Init* init) {
         A3_SLL_FOR_EACH (Init, elem, &init->list, link)
             A3_TRYB(dump_child(visitor, VERTEX(elem, init)));
         return true;
+    case INIT_DESIGNATOR:
+        A3_SLL_FOR_EACH (Designator, d, &init->designated.designator, link) {
+            switch (d->type) {
+            case DESIGNATOR_NAME:
+                dump_print(visitor->ctx, "." A3_S_F, A3_S_FORMAT(d->resolved_member->name));
+                break;
+            case DESIGNATOR_INDEX:
+                dump_print(visitor->ctx, "[%zu]", d->resolved_index);
+                break;
+            }
+        }
+
+        return dump_child(visitor, VERTEX(init->designated.init, init));
     }
 
     A3_UNREACHABLE();

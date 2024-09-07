@@ -305,6 +305,14 @@ Init* vertex_init_list_new(void) {
     return &ret->init;
 }
 
+Init* vertex_init_designated_new(void) {
+    A3_UNWRAPNI(Vertex*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Vertex) { .type = V_INIT, .init.type = INIT_DESIGNATOR };
+    A3_SLL_INIT(&ret->init.designated.designator);
+
+    return &ret->init;
+}
+
 Item* vertex_goto_new(Span span, A3CString label) {
     assert(span.text.ptr);
     assert(label.ptr);
@@ -474,6 +482,13 @@ GenericAssoc* generic_assoc_new(PType* type, Expr* expr) {
 
     A3_UNWRAPNI(GenericAssoc*, ret, calloc(1, sizeof(*ret)));
     *ret = (GenericAssoc) { .ptype = type, .expr = expr };
+
+    return ret;
+}
+
+Designator* designator_new(DesignatorType type) {
+    A3_UNWRAPNI(Designator*, ret, calloc(1, sizeof(*ret)));
+    *ret = (Designator) { .type = type };
 
     return ret;
 }

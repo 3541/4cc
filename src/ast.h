@@ -315,7 +315,22 @@ typedef struct PType {
     };
 } PType;
 
-typedef enum InitType { INIT_EXPR, INIT_LIST } InitType;
+typedef enum InitType { INIT_EXPR, INIT_LIST, INIT_DESIGNATOR } InitType;
+typedef enum DesignatorType { DESIGNATOR_INDEX, DESIGNATOR_NAME } DesignatorType;
+
+typedef struct Designator Designator;
+typedef struct Designator {
+    DesignatorType type;
+    A3_SLL_LINK(Designator) link;
+
+    union {
+        A3CString name;
+        Expr*     index;
+
+        Member const* resolved_member;
+        uintmax_t resolved_index;
+    };
+} Designator;
 
 typedef struct Init {
     InitType type;
@@ -324,6 +339,11 @@ typedef struct Init {
     union {
         Expr* expr;
         A3_SLL(, Init) list;
+
+        struct {
+            A3_SLL(, Designator) designator;
+            Init* init;
+        } designated;
     };
 } Init;
 
@@ -475,6 +495,7 @@ Loop*   vertex_loop_new(Span, bool cond_pos, Item* init, Expr* cond, Expr* post,
 Unit*   vertex_unit_new(void);
 Init*   vertex_init_expr_new(Span, Expr*);
 Init*   vertex_init_list_new(void);
+Init*   vertex_init_designated_new(void);
 Item*   vertex_goto_new(Span, A3CString label);
 Item*   vertex_label_new(Span, A3CString label);
 Item*   vertex_case_label_new(Span, Expr*);
@@ -492,3 +513,4 @@ PType* ptype_defined_new(Span name);
 Arg*          arg_new(Expr*);
 Member*       member_new(A3CString name, PType*);
 GenericAssoc* generic_assoc_new(PType*, Expr*);
+Designator*   designator_new(DesignatorType);

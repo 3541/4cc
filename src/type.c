@@ -61,7 +61,6 @@ typedef struct Registry {
     Scope*                    current_scope;
     Unit*                     current_unit;
     A3CString                 src;
-    size_t                    init_depth;
     Type const*               init_type;
 } Registry;
 
@@ -78,6 +77,7 @@ Type const* BUILTIN_TYPES[] = {
 };
 
 static Type const* type_from_ptype(AstVisitor*, PType*);
+static bool        type_init(AstVisitor*, Init*);
 
 #define OBJ_GLOBAL true
 #define OBJ_LOCAL  false
@@ -1154,20 +1154,28 @@ static bool type_init_list_array(AstVisitor* visitor, Init* init) {
     Type const* decl_type = reg->init_type;
     assert(decl_type->type == TY_ARRAY);
 
-    size_t count_max = decl_type->len;
-    size_t count     = 0;
-    reg->init_type   = decl_type->parent;
+    size_t count = 0;
     A3_SLL_FOR_EACH (Init, elem, &init->list, link) {
-        A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
-
-        count++;
-        if (count > count_max) {
+        if (count > decl_type->len) {
             type_error(reg, VERTEX(init, init), "Initializer list is too long (%zu > %zu).", count,
-                       count_max);
+                       decl_type->len);
             return false;
         }
+
+        if (elem->type == INIT_DESIGNATOR) {
+            A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
+
+            Designator const* first = A3_SLL_HEAD(&elem->designated.designator);
+            assert(first->type == DESIGNATOR_INDEX);
+            count = first->resolved_index + 1;
+        } else {
+            reg->init_type = decl_type->parent;
+            A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
+            reg->init_type = decl_type;
+
+            ++count;
+        }
     }
-    reg->init_type = decl_type;
 
     if (decl_type->len == TYPE_ARRAY_UNSIZED) {
         ((Type*)decl_type)->len  = count;
@@ -1182,21 +1190,107 @@ static bool type_init_list_struct(AstVisitor* visitor, Init* init) {
     Type const* decl_type = reg->init_type;
     assert(decl_type->type == TY_STRUCT);
 
-    Member* mem = A3_SLL_HEAD(&decl_type->members);
+    Member const* mem = A3_SLL_HEAD(&decl_type->members);
     A3_SLL_FOR_EACH (Init, elem, &init->list, link) {
         if (!mem) {
             type_error(reg, VERTEX(elem, init), "Initializer list is too long.");
             return false;
         }
 
-        reg->init_type = mem->type;
-        A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
-        reg->init_type = decl_type;
+        if (elem->type == INIT_DESIGNATOR) {
+            A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
 
-        mem = A3_SLL_NEXT(mem, link);
+            Designator const* first = A3_SLL_HEAD(&elem->designated.designator);
+            assert(first->type == DESIGNATOR_NAME);
+            mem = A3_SLL_NEXT(first->resolved_member, link);
+        } else {
+            reg->init_type = mem->type;
+            A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
+            reg->init_type = decl_type;
+
+            mem = A3_SLL_NEXT(mem, link);
+        }
     }
 
     return true;
+}
+
+static bool type_init_designated(AstVisitor* visitor, Init* init) {
+    assert(visitor);
+    assert(init);
+
+    Registry*   reg            = visitor->ctx;
+    Type const* enclosing_type = reg->init_type;
+    Type const* target_type    = enclosing_type;
+
+    A3_SLL_FOR_EACH (Designator, d, &init->designated.designator, link) {
+        switch (d->type) {
+        case DESIGNATOR_INDEX:
+            if (target_type->type != TY_ARRAY) {
+                A3String name = type_name(target_type);
+                type_error(reg, VERTEX(init, init),
+                           "Designator [" A3_S_F "] applies to non-array type " A3_S_F ".",
+                           A3_S_FORMAT(SPAN(d->index, expr).text), A3_S_FORMAT(name));
+                a3_string_free(&name);
+                return false;
+            }
+
+            EvalResult res = eval(reg->src, d->index);
+            if (!res.ok) {
+                type_error(reg, VERTEX(d->index, expr), "Failed to evaluate designated index.");
+                return false;
+            }
+            if (res.value < 0) {
+                type_error(reg, VERTEX(d->index, expr),
+                           "Designator index must be nonnegative. Evaluated to %" PRId64 ".",
+                           res.value);
+                return false;
+            }
+            if ((uintmax_t)res.value >= target_type->len) {
+                A3String name = type_name(target_type);
+                type_error(reg, VERTEX(d->index, expr),
+                           "Designator index is out of array bounds of " A3_S_F ". %" PRId64
+                           " >= %zu.",
+                           A3_S_FORMAT(name), res.value, target_type->len);
+                a3_string_free(&name);
+                return false;
+            }
+
+            d->resolved_index = (uintmax_t)res.value;
+            target_type       = target_type->parent;
+            break;
+
+        case DESIGNATOR_NAME:
+            if (target_type->type != TY_STRUCT && target_type->type != TY_UNION) {
+                A3String name = type_name(target_type);
+                type_error(reg, VERTEX(init, init),
+                           "Designator ." A3_S_F " applies to non-aggregate type " A3_S_F ".",
+                           A3_S_FORMAT(d->name), A3_S_FORMAT(name));
+                a3_string_free(&name);
+                return false;
+            }
+
+            Member const* member = type_struct_member_find(target_type, d->name);
+            if (!member) {
+                A3String name = type_name(target_type);
+                type_error(reg, VERTEX(init, init),
+                           "Designator ." A3_S_F " refers to nonexistent member of type " A3_S_F
+                           ".",
+                           A3_S_FORMAT(d->name), A3_S_FORMAT(name));
+                a3_string_free(&name);
+                return false;
+            }
+
+            d->resolved_member = member;
+            target_type        = member->type;
+            break;
+        }
+    }
+
+    reg->init_type = target_type;
+    bool res       = type_init(visitor, init->designated.init);
+    reg->init_type = enclosing_type;
+    return res;
 }
 
 static bool type_init(AstVisitor* visitor, Init* init) {
@@ -1258,6 +1352,8 @@ static bool type_init(AstVisitor* visitor, Init* init) {
             return false;
         }
         }
+    case INIT_DESIGNATOR:
+        return type_init_designated(visitor, init);
     }
 
     A3_UNREACHABLE();

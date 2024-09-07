@@ -852,6 +852,64 @@ static void gen_zero_fill(Generator* gen, size_t n) {
     }
 }
 
+static bool gen_init_designator(AstVisitor* visitor, Init* init) {
+    assert(visitor);
+    assert(init);
+    assert(init->type == INIT_DESIGNATOR);
+
+    Generator*  gen            = visitor->ctx;
+    Type const* enclosing_type = gen->init_decl_type;
+    Type const* target_type    = enclosing_type;
+    size_t      offset         = 0;
+
+    A3_SLL_FOR_EACH (Designator, d, &init->designated.designator, link) {
+        switch (d->type) {
+        case DESIGNATOR_INDEX:
+            assert(target_type->type == TY_ARRAY);
+            target_type = target_type->parent;
+            offset += d->resolved_index * target_type->size;
+            break;
+        case DESIGNATOR_NAME:
+            assert(target_type->type == TY_STRUCT || target_type->type == TY_UNION);
+            offset += d->resolved_member->offset;
+            target_type = d->resolved_member->type;
+        }
+    }
+
+    gen_asm(gen, "add rax, %zu", offset);
+    gen_stack_push(gen);
+    gen->init_decl_type = target_type;
+    A3_TRYB(vertex_visit(visitor, VERTEX(init->designated.init, init)));
+    gen->init_decl_type = enclosing_type;
+    return true;
+}
+
+static size_t gen_init_designator_array(AstVisitor* visitor, Init* init) {
+    assert(visitor);
+    assert(init);
+    assert(init->type == INIT_DESIGNATOR);
+
+    Designator const* first = A3_SLL_HEAD(&init->designated.designator);
+    assert(first->type == DESIGNATOR_INDEX);
+    if (!gen_init_designator(visitor, init))
+        return 0;
+
+    return first->resolved_index + 1;
+}
+
+static Member const* gen_init_designator_aggregate(AstVisitor* visitor, Init* init) {
+    assert(visitor);
+    assert(init);
+    assert(init->type == INIT_DESIGNATOR);
+
+    Designator const* first = A3_SLL_HEAD(&init->designated.designator);
+    assert(first->type == DESIGNATOR_NAME);
+    if (!gen_init_designator(visitor, init))
+        return NULL;
+
+    return A3_SLL_NEXT(first->resolved_member, link);
+}
+
 static bool gen_init(AstVisitor* visitor, Init* init) {
     assert(visitor);
     assert(init);
@@ -870,33 +928,56 @@ static bool gen_init(AstVisitor* visitor, Init* init) {
         switch (decl_type->type) {
         case TY_ARRAY: {
             size_t i = 0;
-            A3_SLL_FOR_EACH (Init, elem, &init->list, link) {
+
+            A3_SLL_FOR_EACH(Init, elem, &init->list, link) {
                 gen_asm(gen, "mov rax, [rsp]");
-                if (i)
-                    gen_asm(gen, "add rax, %zu", i * decl_type->parent->size);
-                i++;
-                gen_stack_push(gen);
-                gen->init_decl_type = decl_type->parent;
-                A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
-                gen->init_decl_type = decl_type;
+
+                if (elem->type != INIT_DESIGNATOR) {
+                    if (i > decl_type->len) {
+                        A3String name = type_name(decl_type);
+                        gen_error(gen, VERTEX(elem, init),
+                                  "Index %zu is out of bounds of length (%zu) of type " A3_S_F ".",
+                                  i, decl_type->len, A3_S_FORMAT(name));
+                        a3_string_free(&name);
+                        return false;
+                    }
+
+                    if (i)
+                        gen_asm(gen, "add rax, %zu", i * decl_type->parent->size);
+
+                    gen_stack_push(gen);
+                    gen->init_decl_type = decl_type->parent;
+                    A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
+                    gen->init_decl_type = decl_type;
+                    i++;
+                } else {
+                    i = gen_init_designator_array(visitor, elem);
+                    A3_TRYB(i);
+                }
             }
+
+            A3_SLL_FOR_EACH (Init, elem, &init->list, link) {}
 
             break;
         }
         case TY_STRUCT: {
-            Init* elem = A3_SLL_HEAD(&init->list);
-            A3_SLL_FOR_EACH (Member, mem, &decl_type->members, link) {
-                gen_asm(gen, "mov rax, [rsp]");
-                if (mem->offset)
-                    gen_asm(gen, "add rax, %zu", mem->offset);
+            Member const* mem = A3_SLL_HEAD(&decl_type->members);
+            A3_SLL_FOR_EACH (Init, elem, &init->list, link) {
+                A3_TRYB(mem);
 
-                if (elem) {
+                gen_asm(gen, "mov rax, [rsp]");
+
+                if (elem->type != INIT_DESIGNATOR) {
+                    if (mem->offset)
+                        gen_asm(gen, "add rax, %zu", mem->offset);
+
                     gen_stack_push(gen);
                     gen->init_decl_type = mem->type;
                     A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
                     gen->init_decl_type = decl_type;
-
-                    elem = A3_SLL_NEXT(elem, link);
+                    mem = A3_SLL_NEXT(mem, link);
+                } else {
+                    mem = gen_init_designator_aggregate(visitor, elem);
                 }
             }
 
@@ -908,6 +989,9 @@ static bool gen_init(AstVisitor* visitor, Init* init) {
 
         gen_stack_pop(gen, REG_A);
         break;
+    case INIT_DESIGNATOR:
+        // Handled within lists above.
+        A3_UNREACHABLE();
     }
 
     return true;
@@ -1106,6 +1190,8 @@ static bool gen_data_item(Generator* gen, Type const* type, Init* init) {
         return gen_data_expr(gen, type, init->expr);
     case INIT_LIST:
         return gen_data_list(gen, type, init);
+    case INIT_DESIGNATOR:
+        A3_PANIC("TODO: Designated init at global scope.");
     }
 
     A3_UNREACHABLE();

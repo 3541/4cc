@@ -128,16 +128,24 @@ static void parse_error(Parser* parser, Token tok, char* fmt, ...) {
     va_end(args);
 }
 
-static bool parse_consume(Parser* parser, A3CString name, TokenType token) {
+static bool parse_consume_(Parser* parser, A3CString name, TokenType token, char const* article) {
     assert(parser);
 
     Token t = lex_next(parser->lexer);
     if (t.type != token) {
-        parse_error(parser, t, "Expected a " A3_S_F ".", A3_S_FORMAT(name));
+        parse_error(parser, t, "Expected %s " A3_S_F ".", article, A3_S_FORMAT(name));
         return false;
     }
 
     return true;
+}
+
+static bool parse_consume(Parser* parser, A3CString name, TokenType token) {
+    return parse_consume_(parser, name, token, "a");
+}
+
+static bool parse_consume_an(Parser* parser, A3CString name, TokenType token) {
+    return parse_consume_(parser, name, token, "an");
 }
 
 static Span parse_span_merge(Span lhs, Span rhs) {
@@ -1649,6 +1657,64 @@ static bool parse_fn(Parser* parser, Item* decl) {
     return true;
 }
 
+static bool parse_designator(Parser* parser, Init* out) {
+    assert(parser);
+    assert(out);
+    assert(out->type == INIT_DESIGNATOR);
+
+    for (TokenType next = lex_peek(parser->lexer).type;
+         parse_has_next(parser) && (next == TOK_DOT || next == TOK_LBRACKET);
+         next = lex_peek(parser->lexer).type) {
+        lex_next(parser->lexer);
+
+        Designator* d = NULL;
+        if (next == TOK_DOT) {
+            d           = designator_new(DESIGNATOR_NAME);
+            Token ident = lex_next(parser->lexer);
+            if (ident.type != TOK_IDENT) {
+                parse_error(parser, ident, "Expected an identifier.");
+                return false;
+            }
+
+            d->name = ident.lexeme.text;
+        } else {
+            d           = designator_new(DESIGNATOR_INDEX);
+            Expr* index = parse_expr(parser, 0);
+            A3_TRYB(index);
+
+            if (!parse_consume(parser, A3_CS("closing bracket"), TOK_RBRACKET))
+                return false;
+
+            d->index = index;
+        }
+
+        A3_SLL_ENQUEUE(&out->designated.designator, d, link);
+    }
+
+    return true;
+}
+
+static Init* parse_designated_init(Parser* parser) {
+    assert(parser);
+
+    Token first = lex_peek(parser->lexer);
+    assert(first.type == TOK_DOT || first.type == TOK_LBRACKET);
+
+    Init* ret = vertex_init_designated_new();
+    if (!parse_designator(parser, ret))
+        return NULL;
+
+    if (!parse_consume_an(parser, A3_CS("'='"), TOK_EQ))
+        return NULL;
+
+    ret->designated.init = parse_init(parser);
+    if (!ret->designated.init)
+        return NULL;
+
+    SPAN(ret, init) = parse_span_merge(first.lexeme, SPAN(ret->designated.init, init));
+    return ret;
+}
+
 static Init* parse_init_list(Parser* parser) {
     assert(parser);
 
@@ -1663,10 +1729,16 @@ static Init* parse_init_list(Parser* parser) {
             return false;
         first = false;
 
-        if (lex_peek(parser->lexer).type == TOK_RBRACE)
+        TokenType next = lex_peek(parser->lexer).type;
+        if (next == TOK_RBRACE)
             break;
 
-        Init* elem = parse_init(parser);
+        Init* elem = NULL;
+        if (next == TOK_DOT || next == TOK_LBRACKET)
+            elem = parse_designated_init(parser);
+        else
+            elem = parse_init(parser);
+
         if (!elem)
             return NULL;
 

@@ -192,6 +192,13 @@ static bool visit_init(AstVisitor* visitor, Init* init) {
         A3_SLL_FOR_EACH (Init, elem, &init->list, link)
             A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
         return true;
+    case INIT_DESIGNATOR:
+        A3_SLL_FOR_EACH (Designator, d, &init->designated.designator, link) {
+            if (d->type == DESIGNATOR_INDEX)
+                A3_TRYB(vertex_visit(visitor, VERTEX(d->index, expr)));
+        }
+
+        return vertex_visit(visitor, VERTEX(init->designated.init, init));
     }
 
     A3_UNREACHABLE();

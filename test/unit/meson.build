@@ -271,7 +271,10 @@ tests = {
     'struct',
     'struct_nested',
     'struct_partial',
-    'struct_global'
+    'struct_global',
+    'designated',
+    'array_designated',
+    'nested_designated'
   ],
   'goto': [
     'simple',
