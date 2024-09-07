@@ -58,7 +58,8 @@ static void usage(char const* name, int status) {
     assert(name);
 
     fprintf(stderr,
-            "Usage: %s [-hcCSE] [--dump-ast] [--preserve-tmpfiles] [-I <DIRECTORY>] [-D <MACRO[=<VALUE>]>] [-o <FILE>] "
+            "Usage: %s [-hcCSE] [--dump-ast] [--preserve-tmpfiles] [-I <DIRECTORY>] [-D "
+            "<MACRO[=<VALUE>]>] [-o <FILE>] "
             "<FILES...>\n",
             name);
     exit(status);
@@ -125,7 +126,7 @@ static Config arg_parse(size_t argc, char const* argv[]) {
     if (argc < 2)
         usage(argv[0], -1);
 
-    Config ret = { 0 };
+    Config ret = {};
     preprocess_args_init(argv[0], &ret.preprocess_args);
     A3_VEC_INIT(File, &ret.files);
 
