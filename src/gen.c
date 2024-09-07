@@ -864,6 +864,9 @@ static bool gen_init(AstVisitor* visitor, Init* init) {
         A3_TRYB(gen_assign_to(visitor, init->expr, decl_type));
         break;
     case INIT_LIST:
+        gen_asm(gen, "mov rax, [rsp]");
+        gen_zero_fill(gen, decl_type->size);
+
         switch (decl_type->type) {
         case TY_ARRAY: {
             size_t i = 0;
@@ -876,13 +879,6 @@ static bool gen_init(AstVisitor* visitor, Init* init) {
                 gen->init_decl_type = decl_type->parent;
                 A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
                 gen->init_decl_type = decl_type;
-            }
-
-            if (i < decl_type->len) {
-                gen_asm(gen, "mov rax, [rsp]");
-                if (i)
-                    gen_asm(gen, "add rax, %zu", i * decl_type->parent->size);
-                gen_zero_fill(gen, (decl_type->len - i) * decl_type->parent->size);
             }
 
             break;
@@ -901,8 +897,6 @@ static bool gen_init(AstVisitor* visitor, Init* init) {
                     gen->init_decl_type = decl_type;
 
                     elem = A3_SLL_NEXT(elem, link);
-                } else {
-                    gen_zero_fill(gen, mem->type->size);
                 }
             }
 
