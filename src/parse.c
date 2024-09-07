@@ -1771,11 +1771,6 @@ static Init* parse_init_list(Parser* parser) {
         return NULL;
     }
 
-    if (A3_SLL_IS_EMPTY(&ret->list)) {
-        parse_error(parser, open, "Empty initializer list.");
-        return NULL;
-    }
-
     SPAN(ret, init) = parse_span_merge(open.lexeme, close.lexeme);
     return ret;
 }
