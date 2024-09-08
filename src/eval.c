@@ -159,9 +159,21 @@ static bool eval_unary_op(AstVisitor* visitor, UnaryOp* op) {
     assert(visitor);
     assert(op);
 
-    A3_TRYB(vertex_visit(visitor, VERTEX(op->operand, expr)));
-
     EvalCtx* ctx = visitor->ctx;
+
+    // Operand might not be evaluatable, but only the type is needed.
+    switch (op->type) {
+    case OP_SIZEOF:
+        ctx->ret = (intmax_t)op->operand->res_type->size;
+        return true;
+    case OP_ALIGNOF:
+        ctx->ret = (intmax_t)op->operand->res_type->align;
+        return true;
+    default:
+        break;
+    }
+
+    A3_TRYB(vertex_visit(visitor, VERTEX(op->operand, expr)));
 
     switch (op->type) {
     case OP_UNARY_ADD:
@@ -175,16 +187,13 @@ static bool eval_unary_op(AstVisitor* visitor, UnaryOp* op) {
     case OP_BW_NOT:
         ctx->ret = ~ctx->ret;
         break;
-    case OP_SIZEOF:
-        ctx->ret = (intmax_t)op->operand->res_type->size;
-        break;
-    case OP_ALIGNOF:
-        ctx->ret = (intmax_t)op->operand->res_type->align;
-        break;
     case OP_DEREF:
     case OP_ADDR:
         eval_error(ctx, VERTEX(op, expr.unary_op));
         return false;
+    case OP_SIZEOF:
+    case OP_ALIGNOF:
+        A3_UNREACHABLE();
     }
 
     return true;

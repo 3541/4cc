@@ -187,7 +187,8 @@ tests = {
     'unsigned',
     'signed',
     'type',
-    'int_lit'
+    'int_lit',
+    'consteval'
   ],
   'comment': [
     'line',
@@ -289,8 +290,7 @@ tests = {
     'nothing'
   ],
   'bug': [
-    'field_name_corruption',
-    'sizeof_consteval'
+    'field_name_corruption'
   ]
 }
 
