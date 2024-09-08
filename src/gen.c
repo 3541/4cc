@@ -932,7 +932,7 @@ static bool gen_init(AstVisitor* visitor, Init* init) {
         case TY_ARRAY: {
             size_t i = 0;
 
-            A3_SLL_FOR_EACH(Init, elem, &init->list, link) {
+            A3_SLL_FOR_EACH (Init, elem, &init->list, link) {
                 gen_asm(gen, "mov rax, [rsp]");
 
                 if (elem->type != INIT_DESIGNATOR) {
@@ -978,7 +978,7 @@ static bool gen_init(AstVisitor* visitor, Init* init) {
                     gen->init_decl_type = mem->type;
                     A3_TRYB(vertex_visit(visitor, VERTEX(elem, init)));
                     gen->init_decl_type = decl_type;
-                    mem = A3_SLL_NEXT(mem, link);
+                    mem                 = A3_SLL_NEXT(mem, link);
                 } else {
                     mem = gen_init_designator_aggregate(visitor, elem);
                 }
@@ -1174,8 +1174,12 @@ static bool gen_data_list(Generator* gen, Type const* type, Init* list) {
             gen_zeros(gen, mem->offset - i);
             i = mem->offset;
 
-            A3_TRYB(gen_data_item(gen, mem->type, elem));
-            elem = A3_SLL_NEXT(elem, link);
+            if (elem) {
+                A3_TRYB(gen_data_item(gen, mem->type, elem));
+                elem = A3_SLL_NEXT(elem, link);
+            } else {
+                gen_zeros(gen, mem->type->size);
+            }
             i += mem->type->size;
         }
     }
