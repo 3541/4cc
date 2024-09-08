@@ -775,6 +775,16 @@ static Type const* type_from_ptype(AstVisitor* visitor, PType* ptype) {
     A3_UNREACHABLE();
 }
 
+static Type const* type_lvalue_convert(Registry* reg, Type const* type) {
+    assert(reg);
+    assert(type);
+
+    if (type->type == TY_ARRAY)
+        return type_ptr_to(reg, type->parent);
+
+    return type;
+}
+
 static bool type_bin_op(AstVisitor* visitor, BinOp* op) {
     assert(visitor);
     assert(op);
@@ -1050,9 +1060,8 @@ static bool type_fn(AstVisitor* visitor, Item* decl) {
 
         size_t count = 0;
         A3_SLL_FOR_EACH (Item, param, &decl->decl_ptype->params, link) {
-            param->decl_type = type_from_ptype(visitor, param->decl_ptype);
-            if (param->decl_type->type == TY_ARRAY)
-                param->decl_type = type_ptr_to(reg, param->decl_type->parent);
+            param->decl_type =
+                type_lvalue_convert(visitor->ctx, type_from_ptype(visitor, param->decl_ptype));
 
             ssize_t offset = -1;
             if (count < 6) {
@@ -1561,8 +1570,9 @@ static bool type_expr_cond(AstVisitor* visitor, CondExpr* expr) {
         A3_TRYB(vertex_visit(visitor, VERTEX(expr->res_true, expr)));
     A3_TRYB(vertex_visit(visitor, VERTEX(expr->res_false, expr)));
 
-    Type const* res_true  = (expr->res_true ?: expr->cond)->res_type;
-    Type const* res_false = expr->res_false->res_type;
+    Type const* res_true =
+        type_lvalue_convert(visitor->ctx, (expr->res_true ?: expr->cond)->res_type);
+    Type const* res_false = type_lvalue_convert(visitor->ctx, expr->res_false->res_type);
     if (!type_expr_is_assignable(res_true, expr->res_false)) {
         type_error_mismatch(visitor->ctx, VERTEX(expr, expr.cond), res_true, res_false);
         return false;

@@ -225,7 +225,8 @@ tests = {
   'ternary': [
     'simple',
     'nested',
-    'omit_true'
+    'omit_true',
+    'decay'
   ],
   'decl': [
     'simple',
