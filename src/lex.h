@@ -86,6 +86,7 @@ typedef enum TokenType {
     TOK_QUERY,
     TOK_RBRACE,
     TOK_RBRACKET,
+    TOK_RESTRICT,
     TOK_RET,
     TOK_RPAREN,
     TOK_SEMI,

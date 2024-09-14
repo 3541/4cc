@@ -190,7 +190,8 @@ static bool parse_has_decl_typename(Parser* parser) {
 
     Token next = lex_peek(parser->lexer);
     return parse_has_decl_builtin(parser) || next.type == TOK_EXTERN || next.type == TOK_CONST ||
-           next.type == TOK_STATIC || next.type == TOK_VOLATILE || next.type == TOK_INLINE;
+           next.type == TOK_STATIC || next.type == TOK_VOLATILE || next.type == TOK_INLINE ||
+           next.type == TOK_RESTRICT;
 }
 
 static bool parse_has_decl_aggregate(Parser* parser) {
@@ -1426,7 +1427,7 @@ static PType* parse_declspec(Parser* parser) {
     Token            next         = lex_peek(parser->lexer);
     while (parse_has_decl(parser)) {
         next = lex_peek(parser->lexer);
-        if (next.type == TOK_CONST || next.type == TOK_VOLATILE) {
+        if (next.type == TOK_CONST || next.type == TOK_VOLATILE || next.type == TOK_RESTRICT) {
             lex_next(parser->lexer);
             continue;
         }
@@ -1595,9 +1596,10 @@ static Item* parse_declarator(Parser* parser, PType* type) {
     assert(type);
 
     while (lex_peek(parser->lexer).type == TOK_STAR || lex_peek(parser->lexer).type == TOK_CONST ||
-           lex_peek(parser->lexer).type == TOK_VOLATILE) {
+           lex_peek(parser->lexer).type == TOK_VOLATILE ||
+           lex_peek(parser->lexer).type == TOK_RESTRICT) {
         Token next = lex_next(parser->lexer);
-        if (next.type == TOK_CONST || next.type == TOK_VOLATILE)
+        if (next.type == TOK_CONST || next.type == TOK_VOLATILE || next.type == TOK_RESTRICT)
             continue;
 
         type = ptype_ptr_new(parse_span_merge(type->span, next.lexeme), type);
