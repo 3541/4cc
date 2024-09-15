@@ -131,7 +131,8 @@ tests = {
     'multiple',
     'params',
     'recursive',
-    'unnamed_params'
+    'unnamed_params',
+    'func'
   ],
   'array': [
     'simple',
