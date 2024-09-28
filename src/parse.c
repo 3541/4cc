@@ -295,8 +295,9 @@ static Expr* parse_builtin_var(Parser* parser, Token tok) {
             tok.lexeme, A3_CS("__func__"),
             ptype_array_new(
                 tok.lexeme, ptype_builtin_new(tok.lexeme, PTY_CHAR),
-                vertex_lit_num_new(tok.lexeme, &(LitNum) { .type = LIT_NUM_UNSIGNED | LIT_NUM_LONG,
-                                                           .integer = tok.lexeme.text.len + 1 })));
+                vertex_lit_num_new(tok.lexeme,
+                                   &(LitNum) { .type    = LIT_NUM_UNSIGNED | LIT_NUM_LONG,
+                                               .integer = parser->current_fn->name.len + 1 })));
         decl->init = vertex_init_expr_new(tok.lexeme,
                                           vertex_lit_str_new(tok.lexeme, parser->current_fn->name));
         A3_SLL_PUSH(&parser->current_fn->body->body, decl, link);
