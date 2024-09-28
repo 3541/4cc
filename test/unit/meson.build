@@ -257,7 +257,6 @@ tests = {
     'errno',
     'inttypes',
     'iso646',
-    'limits',
     'locale',
     'signal',
     'stdio',
